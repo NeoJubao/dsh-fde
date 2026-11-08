@@ -69,7 +69,9 @@ const FORBIDDEN = [
 
 let stdout = '';
 try {
-  stdout = execFileSync('npm', ['pack', '--dry-run', '--json', '--cache', NPM_CACHE], {
+  /* --ignore-scripts：prepack 的 stdout 会混进 --json 输出，导致解析失败（CI 上实测）；
+   * 产物一致性由 open-source.mjs 与 build 步骤单独校验。 */
+  stdout = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts', '--cache', NPM_CACHE], {
     cwd: ROOT,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -86,11 +88,42 @@ let meta = {};
 try {
   /* npm 12 输出"以包名为 key 的对象"，旧版 npm 输出数组；两种都接受。 */
   const text = stdout.trim();
+  /* 容错解析：stdout 可能夹带 prepack 输出或多个 JSON 文档（npm 版本差异）。
+   * 逐个扫描顶层 JSON 值（字符串/转义感知），取最后一个含 files 的对象/数组。 */
+  const extractJsonValues = (src) => {
+    const out = [];
+    for (let i = 0; i < src.length; i++) {
+      const ch = src[i];
+      if (ch !== '{' && ch !== '[') continue;
+      let depth = 0;
+      let inStr = false;
+      let esc = false;
+      for (let j = i; j < src.length; j++) {
+        const c = src[j];
+        if (inStr) {
+          if (esc) esc = false;
+          else if (c === '\\') esc = true;
+          else if (c === '"') inStr = false;
+          continue;
+        }
+        if (c === '"') { inStr = true; continue; }
+        if (c === '{' || c === '[') depth++;
+        else if (c === '}' || c === ']') {
+          depth--;
+          if (depth === 0) {
+            try { out.push(JSON.parse(src.slice(i, j + 1))); } catch { /* 不是完整 JSON，跳过 */ }
+            break;
+          }
+        }
+      }
+    }
+    return out;
+  };
   let parsed;
   try { parsed = JSON.parse(text); } catch {
-    const at = text.indexOf('{');
-    if (at === -1) throw new Error('输出里没有 JSON 对象');
-    parsed = JSON.parse(text.slice(at));
+    const vals = extractJsonValues(text);
+    parsed = vals.reverse().find((v) => v && (Array.isArray(v) ? v[0] && v[0].files : v.files)) || vals[0];
+    if (!parsed) throw new Error('输出里没有 JSON 对象');
   }
   const entry = Array.isArray(parsed) ? parsed[0] : (parsed.files ? parsed : Object.values(parsed)[0]);
   meta = entry && entry.name ? entry : {};
