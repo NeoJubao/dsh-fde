@@ -1,5 +1,7 @@
 # FDE 工作站（`dsh-fde`）· DSH 插件
 
+[![verify](https://github.com/NeoJubao/dsh-fde/actions/workflows/verify.yml/badge.svg)](https://github.com/NeoJubao/dsh-fde/actions/workflows/verify.yml) [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![docs: CC BY 4.0](https://img.shields.io/badge/docs-CC_BY_4.0-lightgrey.svg)](LICENSE-docs)
+
 > 把「客户经营」从线索到采用做成**一屏可看、可推进、可验证、可复盘**的作战台：客户看板 + 今日注意力 + 8 阶段门禁 + 任务泳道 + FDE 方法库 + 资料库 + 招采关联。
 > 跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里，中文界面，纯 JS，零运行时依赖。
 > **版本：v1.3.0** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
@@ -19,14 +21,14 @@
 前置：DSH `0.2.0-rc.2`（含 Web GUI），Node ≥ 20。
 
 ```bash
-# 方式一：npm 包（推荐）
-dsh plugin --profile web add dsh-fde
-
-# 方式二：本地 checkout
+# 方式一：GitHub 直装（当前可用）
 git clone https://github.com/NeoJubao/dsh-fde.git
 dsh plugin --profile web add ./dsh-fde
 
-# 方式三：tarball / git 地址
+# 方式二：npm 包（v1.3.0 发布后可用）
+dsh plugin --profile web add dsh-fde
+
+# 方式三：tarball
 npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.3.0.tgz
 ```
 
