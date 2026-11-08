@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-04",
+  "currency": "CNY",
+  "defaults": {
+    "ratePerPersonDay": 940,
+    "contingencyPct": 15,
+    "taxPct": 6,
+    "marginPct": 35,
+    "discountPct": 0,
+    "sweetSpotMin": 50000,
+    "sweetSpotMax": 200000
+  },
+  "rateCard": [
+    { "key": "fde", "label": "FDE/交付负责人", "ratePerPersonDay": 1200 },
+    { "key": "engineer", "label": "工程师", "ratePerPersonDay": 940 },
+    { "key": "data", "label": "数据/评测", "ratePerPersonDay": 800 },
+    { "key": "pm", "label": "项目管理", "ratePerPersonDay": 1100 }
+  ],
+  "notes": [
+    "defaults 全部为方法默认值（不是行业标准）：费率、预备费 15%、税率 6%、毛利率 35%、甜点区 5–20 万，均需按实际项目调整。",
+    "费率为内部成本费率，不是对外报价；对外报价 = 成本 ÷ (1 − 毛利)。",
+    "毛利率 35%–50% 为经验区间（待验证）；低于 20% 需人工确认。",
+    "5–20 万为单兵/小团队 FDE 甜点区（作者实践经验区间，B/C 级，非行业统计；待验证）。",
+    "税率按现行税目与财务确认，工具默认 6% 仅为示例；税按价外税计入报价，不重复计入成本。",
+    "费率卡按角色取值；未匹配到角色的用工行使用 defaults.ratePerPersonDay；本项目费率由人按实际项目调整。"
+  ],
+  "disclaimer": "费率为方法默认值，按实际项目调整；不构成对外报价。"
+}

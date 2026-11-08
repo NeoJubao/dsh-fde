@@ -1,0 +1,90 @@
+{
+  "name": "dsh-fde",
+  "version": "1.3.0",
+  "type": "module",
+  "description": "FDE 工作站：跑在 DeepSeek Harness 里的单机插件——把客户经营从线索到采用做成可推进、可验证、可复盘的一屏作战台（看板 + 今日 + 8 阶段门禁 + FDE 方法库 + 资料库 + 招采关联）。",
+  "license": "MIT",
+  "author": {
+    "name": "Neo Jubao",
+    "url": "https://github.com/NeoJubao"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NeoJubao/dsh-fde.git"
+  },
+  "homepage": "https://github.com/NeoJubao/dsh-fde#readme",
+  "bugs": {
+    "url": "https://github.com/NeoJubao/dsh-fde/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "fde",
+    "forward-deployed-engineer",
+    "customer-workstation",
+    "kanban",
+    "research-workflow",
+    "methodology"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.0-rc.2 <0.3.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "src/host",
+    "methods",
+    "reference",
+    "templates",
+    "scripts",
+    "skills",
+    "locale",
+    "icon.svg",
+    "LICENSE",
+    "LICENSE-docs",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "icon": "./icon.svg",
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "verify": "node verify/all.mjs",
+    "check:readme": "node scripts/check-readme-version.mjs",
+    "prepack": "node build.mjs && node scripts/check-readme-version.mjs",
+    "check:ui": "node docs/ui-contract/audit-ui-contract.mjs",
+    "release:preflight": "node scripts/release-preflight.mjs"
+  }
+}

@@ -1,0 +1,18 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.tgz
+
+# 系统与编辑器
+.DS_Store
+
+# 测试与本地证据（本地保留，不进仓库）
+verify/tmp-ws/
+reference/samples/
+docs/research/
+verify/*-report.md
+
+# 外部来源（上游仓库 / 测试样本，绝不进仓库）
+_external/
+
+# 说明：research/ 是工作区（客户卷不在本插件仓库内），不要在这里忽略它。

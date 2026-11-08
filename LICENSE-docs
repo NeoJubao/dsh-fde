@@ -1,0 +1,32 @@
+# 内容许可（CC BY 4.0）
+
+本仓库的**内容**采用 [Creative Commons Attribution 4.0 International（CC BY 4.0）](https://creativecommons.org/licenses/by/4.0/deed.zh-Hans) 许可。
+
+适用于：
+
+- `methods/`（FDE 方法论）
+- `skills/`（编排技能与方法库技能）
+- `templates/`（项目档案、场景评估表、成本测算与报价单）
+- `reference/`（数据源、雷区、模板库、PDF 核查、定价默认值、资料库策展目录）
+- `docs/`（规格、ADR、复盘、研究底稿——其中研究底稿与历史报告不随开源仓库分发）
+- `README.md` 与其它说明性文本
+
+你可以自由复制、分发、改编，用于商业用途，条件是**保留署名与来源链接**：
+
+> 来源：dsh-fde（FDE 工作站）https://github.com/NeoJubao/dsh-fde ，作者 Neo Jubao，CC BY 4.0。
+
+## 与代码许可的关系
+
+- 代码（`index.js`、`src/`、`tools/`、`scripts/`、`verify/`、`build.mjs`、`icon.svg`）采用 **MIT**，见 `LICENSE`。
+- 同一份文件同时含代码与内容时，按用途分别适用；不确定时按 MIT 处理代码片段、按 CC BY 4.0 处理文字与方法。
+
+## 第三方内容与出处
+
+- **ASD-STE100**：`reference/ASD-STE100-简写标准-brief.md` 是本项目编写的规则摘要，**不包含**该标准原文或词典，**ASD 未审阅本摘要、未背书**；标准本身受版权保护，请从官方渠道获取。
+- **生财有术（生财 FDE 蓝皮书）**：定价默认值等经验参数来自作者在社区的学习与实践，仅作方法默认值，不代表该社区官方标准或背书；引用标注见 `reference/fde-pricing.json` 与 `src/host/fde-calc.js`。
+- **资料库目录**（`reference/fde-library/catalog.json`）：条目摘要为本项目原创编译，链接内容版权归原发布者。
+- 其它外部资料在文件内单独标注来源；未标注者可提 Issue 更正。
+
+## 不构成什么
+
+本仓库的方法、评分、报价、门禁与规则均为**方法默认值与实践总结**，不构成行业标准、法律意见、投资建议或对外承诺。对外报价、客户交付与合规判断须由人复核。

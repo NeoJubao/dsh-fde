@@ -1,0 +1,3439 @@
+{
+ "version": 1,
+ "updatedAt": "2026-11-04",
+ "notes": [
+  "资料目录人工策展（2026-11-04 首版），每条 URL 经 curl 实测并标 HTTP 状态；A=官方一手，B=二手/社区一手项目，C=社区/未核实。",
+  "官方资料条目内容只在发版/人工编辑时更新；GitHub 指标与社区动态由宿主每日刷新（见 spec §19.2）。",
+  "原文语言：en/zh；摘要为中文编译，非原文全文。",
+  "摘要为本项目原创编译（非原文全文）；链接页内容的版权归原发布者，引用请以原链接为准。"
+ ],
+ "groups": [
+  {
+   "key": "intl-official",
+   "label": "国外官方",
+   "note": "OpenAI / Anthropic / Palantir / Microsoft / Google / AWS 等官方一手"
+  },
+  {
+   "key": "cn-official",
+   "label": "国内官方",
+   "note": "腾讯云 / 阿里云 / 字节火山 / 华为云 / 百度 / 政府与机构官方"
+  },
+  {
+   "key": "opensource",
+   "label": "开源工具",
+   "note": "GitHub 仓库；指标每日刷新"
+  },
+  {
+   "key": "method",
+   "label": "方法与模板",
+   "note": "方法论、清单、模板（含工作站内置）"
+  },
+  {
+   "key": "community",
+   "label": "社区动态",
+   "note": "生财有术 FDE 情报（来自缓存，非策展）"
+  }
+ ],
+ "items": [
+  {
+   "id": "openai-fde-job-sf",
+   "group": "intl-official",
+   "kind": "job",
+   "lang": "en",
+   "title": "Forward Deployed Engineer (FDE) - SF",
+   "publisher": "OpenAI",
+   "url": "https://jobs.ashbyhq.com/openai/967f94aa-1706-4dba-ac89-bfbc2c38b688",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "scoping",
+    "solution",
+    "delivery"
+   ],
+   "topics": [
+    "fde-role",
+    "delivery-model",
+    "job-description"
+   ],
+   "summary": "官方 FDE JD：负责战略客户的端到端前沿模型部署，覆盖 discovery、技术范围界定、系统设计、构建与生产上线；考核看生产采用、可测工作流影响与 eval 反馈。",
+   "why": "最具体的 FDE 职责官方定义，可直接转成岗位画像与阶段表",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "2026-11 在招；Ashby 公开 JSON 可结构化取用，职位数量会变",
+   "featuredRank": 1
+  },
+  {
+   "id": "anthropic-fde-job-london",
+   "group": "intl-official",
+   "kind": "job",
+   "lang": "en",
+   "title": "Forward Deployed Engineer",
+   "publisher": "Anthropic",
+   "url": "https://job-boards.greenhouse.io/anthropic/jobs/5423029008",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "solution",
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "fde-role",
+    "delivery-model",
+    "job-description"
+   ],
+   "summary": "官方 FDE JD：嵌入战略客户交付生产应用，产出 MCP server、子 agent 与 skills，并把可复用部署模式回流产品与工程团队。",
+   "why": "给出 FDE 交付物清单与「沉淀部署模式」职责",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "London 岗；招聘板共 682 岗，FDE/Applied AI 类批量在招",
+   "featuredRank": 2
+  },
+  {
+   "id": "palantir-s1-fde-origin",
+   "group": "intl-official",
+   "kind": "report",
+   "lang": "en",
+   "title": "Palantir Technologies S-1/A (SEC EDGAR)",
+   "publisher": "Palantir Technologies",
+   "url": "https://www.sec.gov/Archives/edgar/data/1321655/000119312520250103/d904406ds1a.htm",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery",
+    "solution"
+   ],
+   "topics": [
+    "forward-deployed",
+    "delivery-model",
+    "origin-story"
+   ],
+   "summary": "招股书原文：FDE 上前线（阿富汗基地、中西部工厂）部署平台，在现场观察用户难题并反哺产品持续改进。",
+   "why": "forward deployed 模式最早的一手公开定义",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "2020-08 提交；SEC 访问需 UA 声明联系方式",
+   "featuredRank": 3
+  },
+  {
+   "id": "databricks-fde-page",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "Databricks Forward Deployed Engineering",
+   "publisher": "Databricks",
+   "url": "https://www.databricks.com/forward-deployed-engineering",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "delivery"
+   ],
+   "topics": [
+    "fde-role",
+    "delivery-model"
+   ],
+   "summary": "Databricks 设「Forward Deployed Engineering」独立业务页，说明 FDE 模式已扩散到数据平台厂商；正文由 JS 渲染，仅标题级核实。",
+   "why": "证明 FDE 不是 Palantir 独有的旁证",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "正文 JS 渲染，仅标题级核实"
+  },
+  {
+   "id": "openai-practical-guide-building-agents",
+   "group": "intl-official",
+   "kind": "guide",
+   "lang": "en",
+   "title": "A practical guide to building agents",
+   "publisher": "OpenAI",
+   "url": "https://cdn.openai.com/business-guides-and-resources/a-practical-guide-to-building-agents.pdf",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "agent-design",
+    "orchestration",
+    "guardrails"
+   ],
+   "summary": "33 页官方指南：agent 定义、何时该建、单/多 agent 模式（manager、decentralized）、分层护栏；面向产品与工程团队。",
+   "why": "方案章节骨架，一份 PDF 覆盖建与不建",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "无显式发布日期；32 页正文",
+   "featuredRank": 4
+  },
+  {
+   "id": "openai-agents-sdk-docs",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "OpenAI Agents SDK",
+   "publisher": "OpenAI",
+   "url": "https://openai.github.io/openai-agents-python/",
+   "authority": "A",
+   "stages": [
+    "delivery"
+   ],
+   "topics": [
+    "agent-sdk",
+    "orchestration",
+    "tracing"
+   ],
+   "summary": "生产级 agent 原语文档：agents、handoffs、guardrails、sessions、tracing、human-in-the-loop、MCP、测试。",
+   "why": "交付期可直接照做的 SDK 原语清单",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "随 SDK 版本更新"
+  },
+  {
+   "id": "anthropic-building-effective-agents",
+   "group": "intl-official",
+   "kind": "guide",
+   "lang": "en",
+   "title": "Building effective AI agents",
+   "publisher": "Anthropic",
+   "url": "https://www.anthropic.com/research/building-effective-agents",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot"
+   ],
+   "topics": [
+    "agent-design",
+    "workflow-vs-agent",
+    "patterns"
+   ],
+   "summary": "区分 workflow（预定义代码路径编排）与 agent（模型自主决定流程与工具），并给出何时用哪种。",
+   "why": "反过度设计的权威论据，方案评审必用",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "页面含 workflow/agent 完整章节",
+   "featuredRank": 5
+  },
+  {
+   "id": "claude-code-best-practices",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "Best practices for Claude Code",
+   "publisher": "Anthropic",
+   "url": "https://code.claude.com/docs/en/best-practices",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "agentic-coding",
+    "delivery-discipline"
+   ],
+   "summary": "agentic coding 官方实践：短 CLAUDE.md、给 agent 可运行检查、用 Stop hook 强制执行、把团队流程放进 skills、规则按代码范围收窄。",
+   "why": "试点与交付的工程纪律清单",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "原 anthropic.com/engineering/claude-code-best-practices 301→ 现址"
+  },
+  {
+   "id": "claude-agent-sdk-blog",
+   "group": "intl-official",
+   "kind": "blog",
+   "lang": "en",
+   "title": "Building agents with the Claude Agent SDK",
+   "publisher": "Anthropic",
+   "url": "https://claude.com/resources/articles/building-agents-with-the-claude-agent-sdk",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "delivery"
+   ],
+   "topics": [
+    "agent-sdk",
+    "agent-harness"
+   ],
+   "summary": "官方说明 Claude Code SDK 更名为 Claude Agent SDK：同一套 agent harness 可复用到客服等非编码 agent 场景。",
+   "why": "讲清 agent harness 通用化的官方口径",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "原 anthropic.com/engineering/... 301→ claude.com"
+  },
+  {
+   "id": "anthropic-writing-tools-for-agents",
+   "group": "intl-official",
+   "kind": "guide",
+   "lang": "en",
+   "title": "Writing effective tools for agents — with agents",
+   "publisher": "Anthropic",
+   "url": "https://www.anthropic.com/research/writing-tools-for-agents",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "tool-design",
+    "evaluation"
+   ],
+   "summary": "工具设计三步法：先做工具原型、用 agent 跑全面评测、再让 agent 参与改进工具；含挑选与实现工具的原则。",
+   "why": "工具层交付质量的官方方法论",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "原 /engineering/ 301→ /research/"
+  },
+  {
+   "id": "anthropic-context-engineering",
+   "group": "intl-official",
+   "kind": "guide",
+   "lang": "en",
+   "title": "Effective context engineering for AI agents",
+   "publisher": "Anthropic",
+   "url": "https://www.anthropic.com/research/effective-context-engineering-for-ai-agents",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "delivery"
+   ],
+   "topics": [
+    "context-engineering",
+    "prompting"
+   ],
+   "summary": "提出 LLM 的「attention budget」：每个新 token 都消耗预算，上下文需要策展而非堆砌。",
+   "why": "解释上下文工程与 prompt 工程的差别",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "原 /engineering/ 301→ /research/"
+  },
+  {
+   "id": "google-adk-docs",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "Agent Development Kit (ADK)",
+   "publisher": "Google",
+   "url": "https://adk.dev/",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "agent-framework",
+    "evaluation",
+    "observability"
+   ],
+   "summary": "开源多语言 agent 框架文档：含 Evaluation（用户/环境模拟、自定义指标）、Observability 与 Cloud Run/GKE 部署。",
+   "why": "谷歌系交付栈的官方入口",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "原 google.github.io/adk-docs 跳转；ADK 2.0 TS GA"
+  },
+  {
+   "id": "microsoft-ai-agent-orchestration-patterns",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "AI Agent Orchestration Patterns",
+   "publisher": "Microsoft",
+   "url": "https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "delivery"
+   ],
+   "topics": [
+    "orchestration",
+    "patterns",
+    "architecture"
+   ],
+   "summary": "五种编排模式：sequential、concurrent、handoff、group chat、magentic，各配适用场景与示例。",
+   "why": "行业通用编排命名，设计评审可复用",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "Learn 页，含模式示例"
+  },
+  {
+   "id": "microsoft-ai-agents-for-beginners",
+   "group": "intl-official",
+   "kind": "course",
+   "lang": "en",
+   "title": "AI Agents for Beginners: 18 Lessons to Get Started Building AI Agents",
+   "publisher": "Microsoft",
+   "url": "https://github.com/microsoft/ai-agents-for-beginners",
+   "authority": "A",
+   "stages": [
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "training",
+    "agent-basics"
+   ],
+   "summary": "18 课从 agent 设计模式讲到生产，适合团队内训与新人补课。",
+   "why": "低成本团队共学材料",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "GitHub 仓库，随课程更新"
+  },
+  {
+   "id": "aws-bedrock-agentcore",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "What is Amazon Bedrock AgentCore?",
+   "publisher": "AWS",
+   "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "agent-runtime",
+    "memory",
+    "observability",
+    "mcp"
+   ],
+   "summary": "生产 agent 组件：Runtime（serverless、会话隔离、长时异步）、Memory、Gateway（含 MCP）、Browser、Code Interpreter、Observability。",
+   "why": "回答「上生产还缺什么」的组件清单",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "AWS 文档站，按服务版本更新"
+  },
+  {
+   "id": "openai-ai-in-the-enterprise",
+   "group": "intl-official",
+   "kind": "report",
+   "lang": "en",
+   "title": "AI in the Enterprise: Lessons from seven frontier companies",
+   "publisher": "OpenAI",
+   "url": "https://cdn.openai.com/business-guides-and-resources/ai-in-the-enterprise.pdf",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "adoption"
+   ],
+   "topics": [
+    "enterprise-adoption",
+    "evals",
+    "case-studies"
+   ],
+   "summary": "7 家前沿企业 7 条经验：从 eval 开始、嵌入产品、尽早投资、定制微调、交给专家、解锁开发者、设定大胆自动化目标。",
+   "why": "含可引用案例数据的落地方法论",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "含 Morgan Stanley、Klarna 案例与量化结果"
+  },
+  {
+   "id": "openai-identifying-scaling-use-cases",
+   "group": "intl-official",
+   "kind": "guide",
+   "lang": "en",
+   "title": "Identifying and scaling AI use cases",
+   "publisher": "OpenAI",
+   "url": "https://cdn.openai.com/business-guides-and-resources/identifying-and-scaling-ai-use-cases.pdf",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery",
+    "scoping"
+   ],
+   "topics": [
+    "use-cases",
+    "prioritization",
+    "workflow-mapping"
+   ],
+   "summary": "六种用例原语与用例收集/排序/部门工作流映射；样本为 300 个实施、4000+ 采纳调研。",
+   "why": "场景评估与客户访谈提纲来源",
+   "featured": false,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "数据：300 实施 / 4000+ 调研 / 200 万用户"
+  },
+  {
+   "id": "aws-caf-for-ai",
+   "group": "intl-official",
+   "kind": "whitepaper",
+   "lang": "en",
+   "title": "AWS Cloud Adoption Framework for Artificial Intelligence, Machine Learning, and Generative AI",
+   "publisher": "AWS",
+   "url": "https://docs.aws.amazon.com/whitepapers/latest/aws-caf-for-ai/aws-caf-for-ai.html",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "solution"
+   ],
+   "topics": [
+    "adoption-framework",
+    "maturity"
+   ],
+   "summary": "用成熟度与基础能力描述企业 AI 转型旅程，给出目标态与演进步骤；页面自标 historical reference only。",
+   "why": "客户现状对标用的成熟度框架",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "发布 2024-02-13；页面自标 historical reference only"
+  },
+  {
+   "id": "microsoft-caf-ai-adoption",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "AI adoption - Cloud Adoption Framework",
+   "publisher": "Microsoft",
+   "url": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ai/strategy",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "solution"
+   ],
+   "topics": [
+    "adoption-framework",
+    "decision-tree"
+   ],
+   "summary": "决策者视角 AI 采用路径与 AI decision tree，区分 M365 Copilot、Copilot Studio、Foundry、Fabric 的适用边界。",
+   "why": "判断客户该买什么、不该买什么",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "原 /ai/ 301→ /ai/strategy"
+  },
+  {
+   "id": "microsoft-foundry-observability",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "Observability in Generative AI - Microsoft Foundry",
+   "publisher": "Microsoft",
+   "url": "https://learn.microsoft.com/en-us/azure/foundry/concepts/observability",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "evaluation",
+    "observability",
+    "quality-gates"
+   ],
+   "summary": "把评估框架、可观测（trace/evaluate）与 CI/CD 质量门串成 AI 应用生命周期方法。",
+   "why": "试点验收与上线监控的方法来源",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "原 evaluation-approach 页 301→ observability"
+  },
+  {
+   "id": "nist-ai-rmf",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "NIST AI Risk Management Framework",
+   "publisher": "NIST",
+   "url": "https://www.nist.gov/itl/ai-risk-management-framework",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "governance",
+    "risk-management",
+    "standards"
+   ],
+   "summary": "NIST AI RMF：2023-01-26 发布、自愿使用，配套 Playbook/Roadmap/Crosswalk；页面注明正按白宫 AI 行动计划修订。",
+   "why": "国企军工场景的国际治理对标口径",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "AI RMF 1.0 发布 2023-01-26；页面注明修订中"
+  },
+  {
+   "id": "mit-nanda-genai-divide",
+   "group": "intl-official",
+   "kind": "report",
+   "lang": "en",
+   "title": "The GenAI Divide: State of AI in Business 2025",
+   "publisher": "MIT NANDA",
+   "url": "https://mlq.ai/media/quarterly_decks/v0.1_State_of_AI_in_Business_2025_Report.pdf",
+   "authority": "B",
+   "stages": [
+    "discovery",
+    "solution"
+   ],
+   "topics": [
+    "enterprise-adoption",
+    "pilot-failure",
+    "research"
+   ],
+   "summary": "报告称 95% 组织零回报、仅 5% 试点产生可观价值；分水岭是学习能力而非模型质量或监管。",
+   "why": "解释为何需要 FDE 陪跑的关键论据",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "2025-07；300+ 项目、52 访谈、153 问卷；B 级报告"
+  },
+  {
+   "id": "stanford-ai-index-2025",
+   "group": "intl-official",
+   "kind": "report",
+   "lang": "en",
+   "title": "AI Index Report 2025",
+   "publisher": "Stanford HAI",
+   "url": "https://hai.stanford.edu/ai-index/2025-ai-index-report",
+   "authority": "B",
+   "stages": [
+    "lead",
+    "discovery"
+   ],
+   "topics": [
+    "adoption-data",
+    "investment",
+    "research"
+   ],
+   "summary": "2025 AI Index：78% 组织 2024 年已使用 AI（上年 55%），生成式 AI 私募投资 339 亿美元、同比 +18.7%。",
+   "why": "行业窗口期判断的第三方基线",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "B 级年度报告；数据以页面为准"
+  },
+  {
+   "id": "salesforce-agentforce-pricing",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "Salesforce Agentforce Pricing",
+   "publisher": "Salesforce",
+   "url": "https://www.salesforce.com/agentforce/pricing/",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "scoping"
+   ],
+   "topics": [
+    "pricing",
+    "outcome-based",
+    "business-model"
+   ],
+   "summary": "官方价目：按次 $2/conversation、按量 $500/10 万 Flex Credits、按人 $5/user/月，另有 flat fee 与按解决计费。",
+   "why": "效果计费谈判的硬参照",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "实测价目，随套餐调整"
+  },
+  {
+   "id": "aws-bedrock-pricing",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "Amazon Bedrock Pricing",
+   "publisher": "AWS",
+   "url": "https://aws.amazon.com/bedrock/pricing/",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot"
+   ],
+   "topics": [
+    "pricing",
+    "token-cost",
+    "business-model"
+   ],
+   "summary": "Bedrock 按模型与用量计价的官方价目表；具体价格随型号/区域变化，禁止抄旧数。",
+   "why": "推理成本估算基准",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "价格随模型/区域变动，须现查"
+  },
+  {
+   "id": "anthropic-platform-pricing",
+   "group": "intl-official",
+   "kind": "doc",
+   "lang": "en",
+   "title": "Pricing - Claude Platform Docs",
+   "publisher": "Anthropic",
+   "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot"
+   ],
+   "topics": [
+    "pricing",
+    "token-cost",
+    "business-model"
+   ],
+   "summary": "Claude 官方定价文档：按模型区分输入/输出 token 与缓存计价。",
+   "why": "模型选型与成本估算基准",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "原 docs.claude.com 301→ platform.claude.com"
+  },
+  {
+   "id": "a16z-new-business-of-ai",
+   "group": "intl-official",
+   "kind": "blog",
+   "lang": "en",
+   "title": "The New Business of AI (and How It's Different From Traditional Software)",
+   "publisher": "Andreessen Horowitz",
+   "url": "https://a16z.com/the-new-business-of-ai-and-how-its-different-from-traditional-software/",
+   "authority": "B",
+   "stages": [
+    "solution",
+    "scoping"
+   ],
+   "topics": [
+    "gross-margin",
+    "business-model",
+    "pricing"
+   ],
+   "summary": "分析认为 AI 公司毛利率更低：云基础设施与持续人工支持、长尾边界情况、模型商品化削弱护城河。",
+   "why": "内部定价与毛利评审的行业解释",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "2020 年文章；B 级行业分析，非官方口径"
+  },
+  {
+   "id": "openai-academy",
+   "group": "intl-official",
+   "kind": "course",
+   "lang": "en",
+   "title": "OpenAI Academy",
+   "publisher": "OpenAI",
+   "url": "https://academy.openai.com/",
+   "authority": "A",
+   "stages": [
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "training",
+    "enablement"
+   ],
+   "summary": "官方课程与活动平台，覆盖工作、教育、中小企业、非营利与政府场景。",
+   "why": "客户 adoption 培训素材入口",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "首页含 Events/Courses/Communities"
+  },
+  {
+   "id": "anthropic-academy-skilljar",
+   "group": "intl-official",
+   "kind": "course",
+   "lang": "en",
+   "title": "Anthropic Courses (Anthropic Academy)",
+   "publisher": "Anthropic",
+   "url": "https://anthropic.skilljar.com/",
+   "authority": "A",
+   "stages": [
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "training",
+    "enablement"
+   ],
+   "summary": "Anthropic 官方课程平台，含 Claude 101 等入门与进阶课。",
+   "why": "交付前客户团队基础训练",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "课程目录随版本更新"
+  },
+  {
+   "id": "google-cloud-skills-boost-genai",
+   "group": "intl-official",
+   "kind": "course",
+   "lang": "en",
+   "title": "Google Cloud Skills Boost - Generative AI learning path",
+   "publisher": "Google Cloud",
+   "url": "https://www.skills.google/paths/118",
+   "authority": "A",
+   "stages": [
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "training",
+    "cloud"
+   ],
+   "summary": "谷歌官方生成式 AI 学习路径（页面 200；逐课清单 JS 渲染未核实）。",
+   "why": "补齐云侧概念的低成本路径",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "原 cloudskillsboost.google 跳转；逐课未核实"
+  },
+  {
+   "id": "tencent-adp-fde-cert-launch",
+   "group": "cn-official",
+   "kind": "doc",
+   "lang": "zh",
+   "title": "腾讯云 ADP 首推行业 FDE 工程师认证",
+   "publisher": "腾讯云",
+   "url": "https://cloud.tencent.cn/act/pro/openclaw-in-adp",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery",
+    "meeting",
+    "solution"
+   ],
+   "topics": [
+    "FDE认证",
+    "能力模型",
+    "客户案例",
+    "Agent交付"
+   ],
+   "summary": "腾讯云官方定义 FDE：深入客户现场，把智能体从方案设计推进到上线运营并对交付结果负责；能力分场景理解、交付实施、安全合规三块，附华润信托、伊利、德邦等案例。",
+   "why": "国内大厂第一份公开 FDE 能力定义与客户案例",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "活动页，2026年；成效为厂商自述",
+   "featuredRank": 7
+  },
+  {
+   "id": "tencent-adp-fde-exam-guide",
+   "group": "cn-official",
+   "kind": "doc",
+   "lang": "zh",
+   "title": "腾讯云 ADP 前沿部署工程师（FDE）认证考试指南",
+   "publisher": "腾讯云文档中心",
+   "url": "https://cloud.tencent.com/document/product/658/137832",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "scoping",
+    "solution",
+    "delivery"
+   ],
+   "topics": [
+    "FDE认证",
+    "考试大纲",
+    "培训"
+   ],
+   "summary": "官方考试指南：线下理论考，单选40+多选20，90分钟，70/100通过；知识点覆盖 AI 基础、ADP 产品定位与能力边界、应用搭建、评测优化与交付运维。",
+   "why": "可量化的 FDE 考核标准，适合团队培训与自测",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "最近更新 2026-09-10"
+  },
+  {
+   "id": "tencent-adp-fde-training",
+   "group": "cn-official",
+   "kind": "guide",
+   "lang": "zh",
+   "title": "腾讯云 ADP 前沿部署工程师（FDE）培训认证页",
+   "publisher": "腾讯云培训认证中心",
+   "url": "https://cloud.tencent.com/edu/training/cert/detail?type=CFD",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "scoping",
+    "solution",
+    "delivery"
+   ],
+   "topics": [
+    "FDE认证",
+    "课程大纲",
+    "培训"
+   ],
+   "summary": "面向 ADP 合作伙伴工程师与个人开发者的交付型认证：要求掌握产品定位与能力边界、客户场景方案设计、行业落地路径与交付运维，能独立完成需求判断与方案设计。",
+   "why": "大厂首个 FDE 认证课程大纲，可映射能力地图",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "页面最近更新 2026/09/10"
+  },
+  {
+   "id": "tencent-adp-product",
+   "group": "cn-official",
+   "kind": "doc",
+   "lang": "zh",
+   "title": "腾讯智能体开发平台（ADP）产品页",
+   "publisher": "腾讯云",
+   "url": "https://cloud.tencent.com/product/adp",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "Agent平台",
+    "AgentOps",
+    "厂商能力"
+   ],
+   "summary": "官方定位：以 AgentOps 为核心的企业原生智能体平台，提供 Agentic Loop、LLM+RAG、Workflow、Multi-Agent、Claw 等开发引擎，支持构建、分发、管理、使用一体化。",
+   "why": "确认厂商平台能力边界的第一入口",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "产品页无发布日"
+  },
+  {
+   "id": "tencent-adp-overview",
+   "group": "cn-official",
+   "kind": "doc",
+   "lang": "zh",
+   "title": "腾讯云智能体开发平台（ADP）企业级应用概要",
+   "publisher": "腾讯云开发者社区",
+   "url": "https://cloud.tencent.com.cn/developer/article/2649195",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "Agent平台",
+    "RAG",
+    "行业场景"
+   ],
+   "summary": "官方文章：ADP 支持低代码开发、多智能体协同与安全管控，适用于教育、运维、汽车等行业；通过 RAG、工作流引擎实现试题处理、监控告警、知识问答等场景。",
+   "why": "官方示例最接近会面可讲的落地场景",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "页面日期 2026-04-02"
+  },
+  {
+   "id": "tencent-adp-arch-cases",
+   "group": "cn-official",
+   "kind": "case",
+   "lang": "zh",
+   "title": "腾讯云智能体开发平台（ADP）核心架构与行业应用成效概要",
+   "publisher": "腾讯云开发者社区",
+   "url": "https://cloud.tencent.com.cn/developer/article/2675708",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "meeting",
+    "solution"
+   ],
+   "topics": [
+    "行业案例",
+    "Agent平台",
+    "成效数据"
+   ],
+   "summary": "官方披露：一汽丰田客服机器人问题解决率提升至84%，DHL 日均减少人工客服200人次；ADP 已用于政务、金融、汽车等行业，采用 LLM+RAG/Workflow/Multi-Agent 框架。",
+   "why": "少数给出具体成效数字的大厂一手页",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "页面日期 2026-05-28；成效为厂商自述"
+  },
+  {
+   "id": "tencent-adp-blog-agent-production",
+   "group": "cn-official",
+   "kind": "blog",
+   "lang": "zh",
+   "title": "企业如何真正将 AI Agent 落地到生产环境",
+   "publisher": "腾讯云 ADP 官方博客",
+   "url": "https://adp.tencentcloud.com/zh/blog/how-enterprises-build-ai-agents",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "Demo到生产",
+    "RAG",
+    "多智能体",
+    "治理"
+   ],
+   "summary": "腾讯云 ADP 团队基于汽车制造、酒店、医药零售、物流案例总结：项目失败多因 Demo 与生产现实的鸿沟；关键点是知识冷启动、多智能体协作、企业治理（成本/安全/审计）与平台选型。",
+   "why": "厂商一手写的 Demo→生产方法论，可直接变会面提纲",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "博客未标注日期"
+  },
+  {
+   "id": "aliyun-bailian-product",
+   "group": "cn-official",
+   "kind": "doc",
+   "lang": "zh",
+   "title": "大模型服务平台百炼（产品页）",
+   "publisher": "阿里云",
+   "url": "https://www.aliyun.com/product/bailian",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "Agent平台",
+    "大模型服务",
+    "厂商能力"
+   ],
+   "summary": "阿里云官方入口：一站式大模型应用构建平台，提供模型服务、应用开发与配套工具链；是百炼能力边界与产品术语的官方出处。",
+   "why": "阿里侧平台对照项",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "国际站同名页软404已弃用"
+  },
+  {
+   "id": "aliyun-model-studio-doc",
+   "group": "cn-official",
+   "kind": "doc",
+   "lang": "zh",
+   "title": "模型服务概览 - 大模型服务平台百炼（Model Studio）",
+   "publisher": "阿里云帮助中心",
+   "url": "https://help.aliyun.com/zh/model-studio/what-is-model-studio",
+   "authority": "A",
+   "stages": [
+    "scoping",
+    "solution",
+    "delivery"
+   ],
+   "topics": [
+    "模型服务",
+    "API",
+    "文档"
+   ],
+   "summary": "官方文档：提供文本、视觉、语音、全模态及向量模型 API，支持在线调用、推理调度与模型训练；是百炼模型侧能力的文档入口。",
+   "why": "方案里写模型选型与调用方式的权威出处",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "帮助中心文档"
+  },
+  {
+   "id": "aliyun-ai-agent-handbook",
+   "group": "cn-official",
+   "kind": "guide",
+   "lang": "zh",
+   "title": "AI Agent Handbook（企业级 Agent 全生命周期手册）",
+   "publisher": "阿里云（GitHub aliyun 官方仓库）",
+   "url": "https://github.com/aliyun/ai-agent-handbook",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "Agent生命周期",
+    "方法论",
+    "治理"
+   ],
+   "summary": "阿里云官方开源手册：围绕 Agent 的架构、构建、运行、治理、调优全生命周期，汇总阿里云、企业客户与开源社区在企业级 Agent 落地中的实践与教训，并称每周更新。",
+   "why": "官方开源、持续更新，最适合做长期跟踪源",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "README 明示面向企业落地与周更",
+   "featuredRank": 8
+  },
+  {
+   "id": "volcengine-ark-docs",
+   "group": "cn-official",
+   "kind": "doc",
+   "lang": "zh",
+   "title": "火山方舟大模型服务平台文档（快速入门）",
+   "publisher": "火山引擎",
+   "url": "https://www.volcengine.com/docs/82379/1099455",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "豆包大模型",
+    "方舟",
+    "文档"
+   ],
+   "summary": "字节系大模型服务与 Agent 开发官方文档入口：页面含快速入门、方舟、豆包、Agent 等内容，是确认火山引擎能力边界的官方来源。",
+   "why": "字节侧平台入口，补全大厂对照",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "SPA文档，仅页面可达+关键词核实"
+  },
+  {
+   "id": "coze-docs",
+   "group": "cn-official",
+   "kind": "doc",
+   "lang": "zh",
+   "title": "扣子（Coze）官方文档",
+   "publisher": "扣子 / 字节跳动",
+   "url": "https://docs.coze.cn/",
+   "authority": "A",
+   "stages": [
+    "scoping",
+    "solution",
+    "pilot"
+   ],
+   "topics": [
+    "低代码Agent",
+    "原型",
+    "文档"
+   ],
+   "summary": "低代码 Agent 搭建平台的官方文档站（title「了解扣子」），适合快速做场景原型与 Demo 验证，是扣子能力边界的官方出处。",
+   "why": "试点阶段做低成本原型验证的工具入口",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "www.coze.cn/docs 已为产品页，勿用"
+  },
+  {
+   "id": "huawei-ai-cases",
+   "group": "cn-official",
+   "kind": "case",
+   "lang": "zh",
+   "title": "AI 优秀案例（华为云 AI 开发者社区案例栏目）",
+   "publisher": "华为云",
+   "url": "https://developer.huaweicloud.cn/techfield/ai/case.html",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery"
+   ],
+   "topics": [
+    "行业案例",
+    "华为云"
+   ],
+   "summary": "华为云官方 AI 落地案例聚合入口，覆盖行业实践与开发者案例；页面静态 HTML 不含正文，本次仅完成可达与标题核实。",
+   "why": "华为云行业落地证据的官方入口",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "仅标题级核实；正文 JS 渲染"
+  },
+  {
+   "id": "huawei-pangu-tag",
+   "group": "cn-official",
+   "kind": "doc",
+   "lang": "zh",
+   "title": "盘古大模型 PanguLargeModels 标签页",
+   "publisher": "华为云开发者社区",
+   "url": "https://developer.huaweicloud.cn/tags/203113/post_3",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery"
+   ],
+   "topics": [
+    "盘古大模型",
+    "行业大模型"
+   ],
+   "summary": "华为云盘古大模型官方技术文章聚合页（标题可读），用于跟踪盘古在行业的落地实践；正文为 JS 渲染，本次仅标题级核实。",
+   "why": "跟踪盘古行业落地的官方栏目",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "仅标题级核实；栏目随更新变化"
+  },
+  {
+   "id": "baidu-qianfan",
+   "group": "cn-official",
+   "kind": "doc",
+   "lang": "zh",
+   "title": "千帆大模型平台（产品页）",
+   "publisher": "百度智能云",
+   "url": "https://cloud.baidu.com/product/qianfan.html",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "文心大模型",
+    "模型定制",
+    "厂商能力"
+   ],
+   "summary": "官方页面：基于文心大模型，提供对文本内容的深度理解、语言大模型定制能力与在线推理服务；是百度千帆能力边界的官方出处。",
+   "why": "百度侧平台对照项，完善大厂全景",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "meta 描述已核实"
+  },
+  {
+   "id": "bytedance-fde-algo-jd",
+   "group": "cn-official",
+   "kind": "job",
+   "lang": "zh",
+   "title": "Forward Deployed Engineer-火山引擎FDE（AI全系产品·算法方向）",
+   "publisher": "字节跳动招聘官网",
+   "url": "https://jobs.bytedance.com/experienced/position/7670430731151198517/detail",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery",
+    "delivery"
+   ],
+   "topics": [
+    "FDE招聘",
+    "能力要求",
+    "交付链路"
+   ],
+   "summary": "一手 JD：深入客户场景、基于 LLM 快速构建原型并推动落地，覆盖 Demo 到 production；负责模型选型、SFT/微调、推理优化、Agent 与 RAG 端到端集成；5 年以上算法经验。",
+   "why": "大厂 FDE 岗位最具体的交付能力清单",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "正文经招聘 API 核实；北京"
+  },
+  {
+   "id": "bytedance-fde-fin-hr-jd",
+   "group": "cn-official",
+   "kind": "job",
+   "lang": "zh",
+   "title": "Forward Deployed Engineer-火山引擎FDE（AI全系产品·财务/HR系统方向）",
+   "publisher": "字节跳动招聘官网",
+   "url": "https://jobs.bytedance.com/experienced/position/7659364431323400501/detail",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery",
+    "delivery"
+   ],
+   "topics": [
+    "FDE招聘",
+    "Vibe coding",
+    "评估与可观测性"
+   ],
+   "summary": "同厂商第二条 FDE JD：快速开发原型并迭代至生产级 Agent，基于 AI 与云设计架构、连接客户 API 与数据系统，构建评估管道与可观测性框架；3 年以上经验。",
+   "why": "展示 FDE 能力要求随行业方向分化",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "正文经招聘 API 核实；北京"
+  },
+  {
+   "id": "ztc-fde-jd",
+   "group": "cn-official",
+   "kind": "job",
+   "lang": "zh",
+   "title": "前沿部署工程师 FDE（2027 届校园招聘）",
+   "publisher": "中兴新云",
+   "url": "https://www.ztccloud.com.cn/careers/campus-forward-deployed-engineer.html",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery",
+    "meeting"
+   ],
+   "topics": [
+    "FDE招聘",
+    "咨询式交付",
+    "校招"
+   ],
+   "summary": "企业软件厂商把 FDE 设在「咨询」岗位类别：深入客户业务场景、识别 AI 应用机会、输出可落地方案；联动产品研发与解决方案团队推动交付与持续优化；7 城可选、需出差。",
+   "why": "中国式 FDE=咨询+交付的一手证据",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "正文已读；网申截止 2026-12-31"
+  },
+  {
+   "id": "beijing-fde-occupation",
+   "group": "cn-official",
+   "kind": "report",
+   "lang": "zh",
+   "title": "关于对「FDE 人工智能前沿部署」专项职业能力信息进行公示的公告",
+   "publisher": "北京市人力资源和社会保障局",
+   "url": "https://rsj.beijing.gov.cn/xxgk/tzgg/202610/t20261028_4921994.html",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery",
+    "meeting"
+   ],
+   "topics": [
+    "FDE职业化",
+    "政策",
+    "技能评价"
+   ],
+   "summary": "政府公告（2026-10-28）：经机构申报与专家评审，拟发布「FDE 人工智能前沿部署」专项职业能力信息并公开征求意见，理由是填补前沿 AI 应用技能人才评价空白。",
+   "why": "FDE 职业化最高级别证据，客户沟通最有说服力",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "公示反馈截止 2026-10-30；附件未抓取",
+   "featuredRank": 6
+  },
+  {
+   "id": "mininglamp-3000-agents",
+   "group": "cn-official",
+   "kind": "case",
+   "lang": "zh",
+   "title": "当 3000 个 Agent 成为同事，我们看到了怎样的超级团队",
+   "publisher": "明略科技",
+   "url": "https://www.mininglamp.com/news/8045/",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "meeting",
+    "solution"
+   ],
+   "topics": [
+    "Agent规模化",
+    "组织变革",
+    "Agentic Services"
+   ],
+   "summary": "明略科技自述：开源 Agent 协作平台「章鱼」上 3000+ Agent 与 1400+ 员工协同，分析师报告自动化率 99%，策划到投流闭环从两周压到 48 小时；对外以 Agentic Services 交付数字劳动力。",
+   "why": "国内最完整的 Agent 规模化+对外交付一手叙事",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "发布日期未明示（页面时间信号2026-10）"
+  },
+  {
+   "id": "deepexi-case-2025",
+   "group": "cn-official",
+   "kind": "case",
+   "lang": "zh",
+   "title": "滴普科技入选 2025 年度中关村科学城人工智能全景赋能典型案例",
+   "publisher": "滴普科技",
+   "url": "https://deepexi.com/news-detail/111",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery"
+   ],
+   "topics": [
+    "企业大模型",
+    "公司动态",
+    "案例认定"
+   ],
+   "summary": "滴普官方动态：其企业级大模型 AI 应用方向入选 2025 年度中关村科学城人工智能全景赋能典型案例；产品线含企业大模型、企业智能体平台 DeepWorks 等。",
+   "why": "滴普公司背调的一手起点",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "更新日期 2025-08-22；正文仅动态级信息"
+  },
+  {
+   "id": "datacanvas-cases-2023",
+   "group": "cn-official",
+   "kind": "case",
+   "lang": "zh",
+   "title": "九章云极 DataCanvas 两大标杆案例入选《2023 大模型落地应用案例集》",
+   "publisher": "九章云极",
+   "url": "https://www.datacanvas.com/news/328.html",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery"
+   ],
+   "topics": [
+    "智算",
+    "案例集",
+    "公司动态"
+   ],
+   "summary": "九章云极官方：两大标杆案例入选《2023 大模型落地应用案例集》，公司定位为人工智能基础设施及智算云提供商，可了解其算力+模型平台的交付形态。",
+   "why": "智算厂商落地样本，补中国版 Palantir 全景",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "案例年份 2023，时效偏旧"
+  },
+  {
+   "id": "4paradigm-home",
+   "group": "cn-official",
+   "kind": "case",
+   "lang": "zh",
+   "title": "第四范式官网（AI+行业大模型）",
+   "publisher": "第四范式",
+   "url": "https://www.4paradigm.com/",
+   "authority": "A",
+   "stages": [
+    "lead",
+    "discovery"
+   ],
+   "topics": [
+    "行业大模型",
+    "决策AI",
+    "公司定位"
+   ],
+   "summary": "官网首页定位「AI+行业大模型，推动千行百业智能化转型」；是「中国版 Palantir」讨论核心标的之一的产品线与定位核实入口（仅标题级）。",
+   "why": "对标 Palantir 的中国标的官方入口",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "仅标题级核实；解决方案页无 title"
+  },
+  {
+   "id": "infoq-fde-capability",
+   "group": "cn-official",
+   "kind": "blog",
+   "lang": "zh",
+   "title": "Demo 能跑，项目却落不了地：企业真正缺的是 FDE 能力",
+   "publisher": "InfoQ（极客时间企业版）",
+   "url": "https://www.infoq.cn/article/ZvwSZ2U61Q8uBMerbYD9",
+   "authority": "B",
+   "stages": [
+    "discovery",
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "FDE定义",
+    "交付能力",
+    "媒体观察"
+   ],
+   "summary": "媒体拆解 FDE 四件事：找到真正值得解决的问题、用 Demo 低成本验证业务价值、推动 AI 进入生产系统、把项目经验沉淀为产品能力；并区分 FDE 与售前/咨询/实施的责任差异。",
+   "why": "中文侧最好的 FDE 定义入门（媒体二手）",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "2026-08-07，4133字"
+  },
+  {
+   "id": "infoq-ai-fde-cases",
+   "group": "cn-official",
+   "kind": "blog",
+   "lang": "zh",
+   "title": "AI+FDE：合格的 FDE，要亲手跟老师傅做业务，再把经验解法做成 Skill｜深空之序 COO 芦宇峰分享",
+   "publisher": "InfoQ（模力工场）",
+   "url": "https://www.infoq.cn/article/FckEhkVfCLoXg0jvaKBa",
+   "authority": "B",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "现场案例",
+    "隐性知识",
+    "Skill沉淀"
+   ],
+   "summary": "媒体整理一线分享：刺绣项目从模仿操作转向原图→针迹生成；义乌报关 OCR 经现场迭代，单据处理从至少3小时降到约5分钟，单份成本从约70元降到约10元；强调亲手做业务。",
+   "why": "中国现场 FDE 案例，含可核对数字口径（自述）",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "2026-11-02，5139字；数字为分享方自述"
+  },
+  {
+   "id": "36kr-delivery-gap",
+   "group": "cn-official",
+   "kind": "blog",
+   "lang": "zh",
+   "title": "交付能力的不足是制约 AI 在企业落地应用的最大障碍",
+   "publisher": "36氪",
+   "url": "https://www.36kr.com/p/3322780136810759",
+   "authority": "B",
+   "stages": [
+    "discovery",
+    "solution"
+   ],
+   "topics": [
+    "交付能力",
+    "企业承接能力",
+    "落地障碍"
+   ],
+   "summary": "媒体评论：交付能力分企业内外部两种，内部承接（信息部门技术能力、实施推广、业务应用）常被忽视；障碍集中在需求匹配、数据质量、工程化部署与团队协作四类。",
+   "why": "把「交付能力」拆成可操作的障碍清单",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "发布日期未在页面明示"
+  },
+  {
+   "id": "36kr-fde-last-mile",
+   "group": "cn-official",
+   "kind": "blog",
+   "lang": "zh",
+   "title": "企业 AI 落地最后一公里：三路人马在此交锋",
+   "publisher": "36氪·全天候科技（华尔街见闻）",
+   "url": "https://eu.36kr.com/zh/p/3952951381966212",
+   "authority": "B",
+   "stages": [
+    "lead",
+    "discovery",
+    "meeting"
+   ],
+   "topics": [
+    "FDE浪潮",
+    "时间线",
+    "厂商动向"
+   ],
+   "summary": "媒体报道（2026-08-24）：腾讯云8月18日将「AI应用工程师认证」改名为「ADP前沿部署工程师（FDE）认证」；明略CEO吴明辉谈FDE与传统部署的区别；OpenAI设部署公司、Anthropic联合DXC培训FDE。",
+   "why": "国内 FDE 浪潮时间线最完整的媒体报道",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "媒体二手；引用须标注来源与日期"
+  },
+  {
+   "id": "leiphone-palantir-china",
+   "group": "cn-official",
+   "kind": "blog",
+   "lang": "zh",
+   "title": "万字拆解 Palantir：股价暴涨 30 倍幕后，中国厂商卡在哪？",
+   "publisher": "雷峰网",
+   "url": "https://www.leiphone.com/category/industrynews/DDJUUtS5ZMcZFnlU.html",
+   "authority": "B",
+   "stages": [
+    "discovery",
+    "meeting",
+    "solution"
+   ],
+   "topics": [
+    "Palantir",
+    "本体论",
+    "中国厂商",
+    "对标"
+   ],
+   "summary": "媒体深度：Palantir 以本体论打通异构数据，2025年政府业务占54%、商业46%；采访明略、滴普等高管，讨论第四范式、明略、滴普等中国厂商对标时的困境（交付重、复制难、数据底座）。",
+   "why": "理解「中国版 Palantir」叙事与差距的最佳中文材料",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "2026-03-21；含采访观点，需区分事实"
+  },
+  {
+   "id": "iresearch-enterprise-ai-2025",
+   "group": "cn-official",
+   "kind": "report",
+   "lang": "zh",
+   "title": "2025 年中国企业级 AI 应用行业研究报告",
+   "publisher": "艾瑞咨询",
+   "url": "https://report.iresearch.cn/report/202512/4779.shtml",
+   "authority": "A",
+   "stages": [
+    "discovery",
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "行业报告",
+    "企业AI应用",
+    "市场研究"
+   ],
+   "summary": "艾瑞官方发布页（2025-12-31）：围绕企业级 AI 应用落地，从业务场景、支撑层、组织与基础设施等维度研究关键问题与趋势；本次仅读发布页摘要，未取得研报 PDF 正文。",
+   "why": "机构官方发布页，做市场侧引用的合规入口",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "机构研究报告官方发布页（报告本身即一手）；PDF正文未读"
+  },
+  {
+   "id": "jiemian-iresearch-repost",
+   "group": "cn-official",
+   "kind": "report",
+   "lang": "zh",
+   "title": "2025 年中国企业级 AI 应用行业研究报告（转载）",
+   "publisher": "界面新闻·JMedia",
+   "url": "https://www.jiemian.com/article/13842599.html",
+   "authority": "B",
+   "stages": [
+    "discovery",
+    "scoping"
+   ],
+   "topics": [
+    "行业报告",
+    "媒体转载"
+   ],
+   "summary": "艾瑞报告在界面新闻的转载/摘要页，可作为打不开研报 PDF 时的替代阅读入口；属媒体转载，引用需回溯艾瑞官方发布页。",
+   "why": "研报正文的替代阅读入口（转载，B级）",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "转载稿，不当官方一手"
+  },
+  {
+   "id": "gh-suboss87-fdeops",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "FDEOps（FDE 技能包）",
+   "publisher": "suboss87/FDEOps",
+   "url": "https://github.com/suboss87/FDEOps",
+   "authority": "B",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "fde-模板",
+    "github"
+   ],
+   "summary": "把前沿部署工程的交付动作封装成 Claude Code、Codex 等编码 Agent 可直接调用的技能集。",
+   "why": "给已用编码 Agent 的团队补上调研、方案、交付的现场动作。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "suboss87/FDEOps",
+   "track": true,
+   "staticMeta": {
+    "stars": 948,
+    "forks": 106,
+    "license": "MIT",
+    "language": "JavaScript",
+    "pushedAt": "2026-10-21T00:45:17Z",
+    "latestRelease": "v5.2.3"
+   },
+   "featuredRank": 9
+  },
+  {
+   "id": "gh-agnesai-labs-agnes-harness",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Agnes Harness（FDE 可插拔工作台）",
+   "publisher": "AgnesAI-Labs/agnes-harness",
+   "url": "https://github.com/AgnesAI-Labs/agnes-harness",
+   "authority": "B",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "fde-模板",
+    "github"
+   ],
+   "summary": "面向 FDE 的可插拔 Agent harness，用 TypeScript 组装工具、记忆与交付流程。",
+   "why": "多客户并行时复用同一套工作台骨架，少重复搭轮子。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "AgnesAI-Labs/agnes-harness",
+   "track": true,
+   "staticMeta": {
+    "stars": 1714,
+    "forks": 91,
+    "license": "Apache-2.0",
+    "language": "TypeScript",
+    "pushedAt": "2026-11-04T12:57:55Z",
+    "latestRelease": ""
+   },
+   "featuredRank": 10
+  },
+  {
+   "id": "gh-xdash-fde-the-guidance-book-of-forward-deployed-engineer",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "FDE 从零入门指南",
+   "publisher": "xdash/FDE-the-Guidance-Book-of-Forward-Deployed-Engineer",
+   "url": "https://github.com/xdash/FDE-the-Guidance-Book-of-Forward-Deployed-Engineer",
+   "authority": "B",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "fde-模板",
+    "github"
+   ],
+   "summary": "中文 FDE 入门书，按《增长黑客》框架梳理前沿部署工程师的能力模型与工作方式。",
+   "why": "新成员快速建立 FDE 角色认知与交付语言。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION/null，商用需人工核对 LICENSE",
+   "repo": "xdash/FDE-the-Guidance-Book-of-Forward-Deployed-Engineer",
+   "track": false,
+   "staticMeta": {
+    "stars": 5439,
+    "forks": 637,
+    "license": "无（API null）",
+    "language": "—",
+    "pushedAt": "2026-11-02T05:01:15Z",
+    "latestRelease": ""
+   }
+  },
+  {
+   "id": "gh-calmrocks-ai-engineer-notebooks",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "ai-engineer-notebooks（无框架实战 notebook）",
+   "publisher": "calmrocks/ai-engineer-notebooks",
+   "url": "https://github.com/calmrocks/ai-engineer-notebooks",
+   "authority": "B",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "fde-模板",
+    "github"
+   ],
+   "summary": "无框架依赖的 Colab notebook 合集，覆盖 Agent、RAG、评测、微调等常见动作。",
+   "why": "零新依赖现场跑通 demo，最快让客户看到效果。",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "calmrocks/ai-engineer-notebooks",
+   "track": false,
+   "staticMeta": {
+    "stars": 736,
+    "forks": 69,
+    "license": "MIT",
+    "language": "Jupyter Notebook",
+    "pushedAt": "2026-11-04T02:57:41Z",
+    "latestRelease": "v0.1.0"
+   }
+  },
+  {
+   "id": "gh-richardxu001-the-fde-handbook",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "the-fde-handbook（企业 AI 落地实战手册）",
+   "publisher": "RichardXu001/the-fde-handbook",
+   "url": "https://github.com/RichardXu001/the-fde-handbook",
+   "authority": "B",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "fde-模板",
+    "github"
+   ],
+   "summary": "中文开源手册，讲企业 AI 落地的前线部署方法、客户沟通与项目推进。",
+   "why": "中文语境下对齐交付节奏、角色分工与预期管理。",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION/null，商用需人工核对 LICENSE",
+   "repo": "RichardXu001/the-fde-handbook",
+   "track": false,
+   "staticMeta": {
+    "stars": 93,
+    "forks": 15,
+    "license": "NOASSERTION",
+    "language": "—",
+    "pushedAt": "2026-09-10T04:50:09Z",
+    "latestRelease": ""
+   }
+  },
+  {
+   "id": "gh-openai-openai-agents-python",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "OpenAI Agents SDK（agents-python）",
+   "publisher": "openai/openai-agents-python",
+   "url": "https://github.com/openai/openai-agents-python",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "agent-框架",
+    "github"
+   ],
+   "summary": "OpenAI 官方轻量 Agent 框架，内置工具调用、handoff、tracing 与护栏。",
+   "why": "单兵最快落一个可演示、可追踪的 Agent。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "openai/openai-agents-python",
+   "track": true,
+   "staticMeta": {
+    "stars": 30491,
+    "forks": 4983,
+    "license": "MIT",
+    "language": "Python",
+    "pushedAt": "2026-11-04T11:36:11Z",
+    "latestRelease": "v0.24.0"
+   }
+  },
+  {
+   "id": "gh-langchain-ai-langgraph",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "LangGraph",
+   "publisher": "langchain-ai/langgraph",
+   "url": "https://github.com/langchain-ai/langgraph",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "agent-框架",
+    "github"
+   ],
+   "summary": "用状态图编排有状态 Agent 与多角色工作流，支持持久化与人工介入。",
+   "why": "客户流程跨多步骤、要断点续跑和人工审批时用它。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "langchain-ai/langgraph",
+   "track": true,
+   "staticMeta": {
+    "stars": 44448,
+    "forks": 7644,
+    "license": "MIT",
+    "language": "Python",
+    "pushedAt": "2026-11-04T13:08:58Z",
+    "latestRelease": "sdk==0.4.12"
+   }
+  },
+  {
+   "id": "gh-crewaiinc-crewai",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "CrewAI",
+   "publisher": "crewAIInc/crewAI",
+   "url": "https://github.com/crewAIInc/crewAI",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "agent-框架",
+    "github"
+   ],
+   "summary": "以「角色+任务」快速拼装多 Agent 协作，封装度高、上手快。",
+   "why": "一周内搭出多角色协作 demo，适合售前验证。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "crewAIInc/crewAI",
+   "track": true,
+   "staticMeta": {
+    "stars": 60485,
+    "forks": 9033,
+    "license": "MIT",
+    "language": "Python",
+    "pushedAt": "2026-11-04T13:10:04Z",
+    "latestRelease": "1.15.35"
+   }
+  },
+  {
+   "id": "gh-google-adk-python",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Google ADK（adk-python）",
+   "publisher": "google/adk-python",
+   "url": "https://github.com/google/adk-python",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "agent-框架",
+    "github"
+   ],
+   "summary": "Google 的 Agent 开发套件，强调工具、会话与部署路径的一体化。",
+   "why": "客户偏 GCP 或要官方多 Agent 编排范式时的备选。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "google/adk-python",
+   "track": false,
+   "staticMeta": {
+    "stars": 22102,
+    "forks": 4295,
+    "license": "Apache-2.0",
+    "language": "Python",
+    "pushedAt": "2026-11-04T10:23:10Z",
+    "latestRelease": "v2.13.0"
+   }
+  },
+  {
+   "id": "gh-stanfordnlp-dspy",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "DSPy",
+   "publisher": "stanfordnlp/dspy",
+   "url": "https://github.com/stanfordnlp/dspy",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "agent-框架",
+    "github"
+   ],
+   "summary": "用「编程式提示 + 自动优化」替代手写 prompt，把提示工程变成可测的编译流程。",
+   "why": "提示效果不稳时用数据驱动调优，减少手调。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "stanfordnlp/dspy",
+   "track": false,
+   "staticMeta": {
+    "stars": 38916,
+    "forks": 3483,
+    "license": "MIT",
+    "language": "Python",
+    "pushedAt": "2026-11-04T13:11:09Z",
+    "latestRelease": "3.4.1"
+   }
+  },
+  {
+   "id": "gh-microsoft-agent-framework",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Microsoft Agent Framework",
+   "publisher": "microsoft/agent-framework",
+   "url": "https://github.com/microsoft/agent-framework",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "agent-框架",
+    "github"
+   ],
+   "summary": "微软新一代 Agent 框架，Python/.NET 双栈，覆盖编排、持久化与部署。",
+   "why": "客户在 Azure/微软生态时，作为 LangGraph 的对照方案。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "microsoft/agent-framework",
+   "track": false,
+   "staticMeta": {
+    "stars": 14530,
+    "forks": 2574,
+    "license": "MIT",
+    "language": "Python",
+    "pushedAt": "2026-11-04T12:04:42Z",
+    "latestRelease": "python-1.24.0"
+   }
+  },
+  {
+   "id": "gh-langgenius-dify",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Dify",
+   "publisher": "langgenius/dify",
+   "url": "https://github.com/langgenius/dify",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "知识库-RAG",
+    "github"
+   ],
+   "summary": "可视化 LLM 应用平台，内置知识库、工作流、Agent 与 API 发布。",
+   "why": "客户要「能自己改」的知识库/问答应用时，一周可上线。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION/null，商用需人工核对 LICENSE",
+   "repo": "langgenius/dify",
+   "track": true,
+   "staticMeta": {
+    "stars": 160391,
+    "forks": 25367,
+    "license": "NOASSERTION",
+    "language": "Python",
+    "pushedAt": "2026-11-04T13:01:08Z",
+    "latestRelease": "1.19.0"
+   }
+  },
+  {
+   "id": "gh-infiniflow-ragflow",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "RAGFlow",
+   "publisher": "infiniflow/ragflow",
+   "url": "https://github.com/infiniflow/ragflow",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "知识库-RAG",
+    "github"
+   ],
+   "summary": "深度文档解析驱动的 RAG 引擎，表格与版面识别强，可自托管。",
+   "why": "制造业 PDF/扫描件多，用它把文档变成可检索知识库。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "infiniflow/ragflow",
+   "track": true,
+   "staticMeta": {
+    "stars": 93487,
+    "forks": 11217,
+    "license": "Apache-2.0",
+    "language": "Go",
+    "pushedAt": "2026-11-04T13:08:52Z",
+    "latestRelease": "v1.0.0-rc3"
+   }
+  },
+  {
+   "id": "gh-unclecode-crawl4ai",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Crawl4AI",
+   "publisher": "unclecode/crawl4ai",
+   "url": "https://github.com/unclecode/crawl4ai",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "知识库-RAG",
+    "github"
+   ],
+   "summary": "面向 LLM 的网页抓取器，直接输出干净 markdown，支持并发与 JS 渲染。",
+   "why": "给知识库补公开资料，省掉自己写解析管道。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "unclecode/crawl4ai",
+   "track": true,
+   "staticMeta": {
+    "stars": 86882,
+    "forks": 9050,
+    "license": "Apache-2.0",
+    "language": "Python",
+    "pushedAt": "2026-11-04T12:20:01Z",
+    "latestRelease": "v0.9.5"
+   }
+  },
+  {
+   "id": "gh-run-llama-llama-index",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "LlamaIndex",
+   "publisher": "run-llama/llama_index",
+   "url": "https://github.com/run-llama/llama_index",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "知识库-RAG",
+    "github"
+   ],
+   "summary": "数据接入与检索编排框架，连接器与索引抽象齐全，可插进自有系统。",
+   "why": "要按客户数据源定制检索链路、不想被平台绑死时用。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "run-llama/llama_index",
+   "track": true,
+   "staticMeta": {
+    "stars": 52802,
+    "forks": 8515,
+    "license": "MIT",
+    "language": "Python",
+    "pushedAt": "2026-11-03T22:27:50Z",
+    "latestRelease": "v0.14.25"
+   }
+  },
+  {
+   "id": "gh-microsoft-markitdown",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "MarkItDown",
+   "publisher": "microsoft/markitdown",
+   "url": "https://github.com/microsoft/markitdown",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "知识库-RAG",
+    "github"
+   ],
+   "summary": "把 Office、PDF、图片等文件转成 markdown，供 LLM 直接消费。",
+   "why": "客户材料多是 Word/PDF，先统一转 md 再进 RAG。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "microsoft/markitdown",
+   "track": true,
+   "staticMeta": {
+    "stars": 193834,
+    "forks": 14550,
+    "license": "MIT",
+    "language": "Python",
+    "pushedAt": "2026-10-28T15:33:14Z",
+    "latestRelease": "v0.1.9"
+   }
+  },
+  {
+   "id": "gh-hkuds-lightrag",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "LightRAG",
+   "publisher": "HKUDS/LightRAG",
+   "url": "https://github.com/HKUDS/LightRAG",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "知识库-RAG",
+    "github"
+   ],
+   "summary": "轻量图增强 RAG，实体关系索引 + 增量更新，适合中小知识库。",
+   "why": "单机就能跑，客户环境资源受限时做图 RAG 试点。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "HKUDS/LightRAG",
+   "track": true,
+   "staticMeta": {
+    "stars": 40525,
+    "forks": 5760,
+    "license": "MIT",
+    "language": "Python",
+    "pushedAt": "2026-11-03T18:06:26Z",
+    "latestRelease": "v1.5.7"
+   }
+  },
+  {
+   "id": "gh-gradio-app-gradio",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Gradio",
+   "publisher": "gradio-app/gradio",
+   "url": "https://github.com/gradio-app/gradio",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot"
+   ],
+   "topics": [
+    "原型-UI",
+    "github"
+   ],
+   "summary": "用几行 Python 把模型或流程包成网页 demo，支持分享与组件化。",
+   "why": "客户要看效果时最快出一个可点击原型。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "gradio-app/gradio",
+   "track": true,
+   "staticMeta": {
+    "stars": 43983,
+    "forks": 3659,
+    "license": "Apache-2.0",
+    "language": "Python",
+    "pushedAt": "2026-11-04T11:18:55Z",
+    "latestRelease": "gradio@6.31.0"
+   }
+  },
+  {
+   "id": "gh-streamlit-streamlit",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Streamlit",
+   "publisher": "streamlit/streamlit",
+   "url": "https://github.com/streamlit/streamlit",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot"
+   ],
+   "topics": [
+    "原型-UI",
+    "github"
+   ],
+   "summary": "以脚本方式搭数据应用与看板，交互组件丰富，迭代快。",
+   "why": "做给业务看的指标看板或审批小工具。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "streamlit/streamlit",
+   "track": true,
+   "staticMeta": {
+    "stars": 46236,
+    "forks": 4445,
+    "license": "Apache-2.0",
+    "language": "Python",
+    "pushedAt": "2026-11-04T13:13:49Z",
+    "latestRelease": "1.66.1"
+   }
+  },
+  {
+   "id": "gh-open-webui-open-webui",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Open WebUI",
+   "publisher": "open-webui/open-webui",
+   "url": "https://github.com/open-webui/open-webui",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot"
+   ],
+   "topics": [
+    "原型-UI",
+    "github"
+   ],
+   "summary": "自托管的 LLM 对话前端，支持多模型、知识库、用户与权限管理。",
+   "why": "给客户内部交付一个能登录使用的问答门户。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION/null，商用需人工核对 LICENSE",
+   "repo": "open-webui/open-webui",
+   "track": true,
+   "staticMeta": {
+    "stars": 157742,
+    "forks": 22942,
+    "license": "NOASSERTION",
+    "language": "Svelte",
+    "pushedAt": "2026-11-04T10:10:53Z",
+    "latestRelease": "v0.13.0"
+   }
+  },
+  {
+   "id": "gh-assistant-ui-assistant-ui",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "assistant-ui",
+   "publisher": "assistant-ui/assistant-ui",
+   "url": "https://github.com/assistant-ui/assistant-ui",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot"
+   ],
+   "topics": [
+    "原型-UI",
+    "github"
+   ],
+   "summary": "React 聊天 UI 组件库，可接多种模型后端，适合嵌进现有系统。",
+   "why": "客户已有 Web 系统，用它把对话能力嵌进业务界面。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "assistant-ui/assistant-ui",
+   "track": false,
+   "staticMeta": {
+    "stars": 12938,
+    "forks": 1315,
+    "license": "MIT",
+    "language": "TypeScript",
+    "pushedAt": "2026-11-04T11:55:33Z",
+    "latestRelease": "@assistant-ui/core@0.3.32"
+   }
+  },
+  {
+   "id": "gh-vercel-ai",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Vercel AI SDK",
+   "publisher": "vercel/ai",
+   "url": "https://github.com/vercel/ai",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot"
+   ],
+   "topics": [
+    "原型-UI",
+    "github"
+   ],
+   "summary": "TypeScript AI SDK，统一多家模型与流式 UI，Node 栈首选接入层。",
+   "why": "与自有 Node 服务无缝，前端流式体验一步到位。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION/null，商用需人工核对 LICENSE",
+   "repo": "vercel/ai",
+   "track": false,
+   "staticMeta": {
+    "stars": 27733,
+    "forks": 5527,
+    "license": "NOASSERTION",
+    "language": "TypeScript",
+    "pushedAt": "2026-11-04T08:27:28Z",
+    "latestRelease": "@ai-sdk/deepinfra@1.0.64"
+   }
+  },
+  {
+   "id": "gh-promptfoo-promptfoo",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "promptfoo",
+   "publisher": "promptfoo/promptfoo",
+   "url": "https://github.com/promptfoo/promptfoo",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "评测-可观测",
+    "github"
+   ],
+   "summary": "提示与 Agent 的评测、红队工具，YAML 写用例，可进 CI 做回归。",
+   "why": "每次改 prompt 都跑回归，客户现场不靠手感验收。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "promptfoo/promptfoo",
+   "track": true,
+   "staticMeta": {
+    "stars": 26821,
+    "forks": 2647,
+    "license": "MIT",
+    "language": "TypeScript",
+    "pushedAt": "2026-11-04T04:46:38Z",
+    "latestRelease": "0.125.1"
+   }
+  },
+  {
+   "id": "gh-langfuse-langfuse",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Langfuse",
+   "publisher": "langfuse/langfuse",
+   "url": "https://github.com/langfuse/langfuse",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "评测-可观测",
+    "github"
+   ],
+   "summary": "开源 LLM 可观测平台，追踪、评测、提示管理与成本统计一体，可自托管。",
+   "why": "交付后要能查「为什么答错」并给客户看调用账本。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION/null，商用需人工核对 LICENSE",
+   "repo": "langfuse/langfuse",
+   "track": true,
+   "staticMeta": {
+    "stars": 36991,
+    "forks": 4153,
+    "license": "NOASSERTION",
+    "language": "TypeScript",
+    "pushedAt": "2026-11-04T13:14:38Z",
+    "latestRelease": "v4.75.0"
+   }
+  },
+  {
+   "id": "gh-confident-ai-deepeval",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "DeepEval",
+   "publisher": "confident-ai/deepeval",
+   "url": "https://github.com/confident-ai/deepeval",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "评测-可观测",
+    "github"
+   ],
+   "summary": "Python 评测框架，内置 RAG/Agent 指标与 LLM-as-judge，pytest 风格。",
+   "why": "给知识库/Agent 写可复跑的验收测试用例。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "confident-ai/deepeval",
+   "track": false,
+   "staticMeta": {
+    "stars": 19291,
+    "forks": 2168,
+    "license": "Apache-2.0",
+    "language": "Python",
+    "pushedAt": "2026-11-04T11:31:07Z",
+    "latestRelease": "python-v4.2.4"
+   }
+  },
+  {
+   "id": "gh-arize-ai-phoenix",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Arize Phoenix",
+   "publisher": "Arize-ai/phoenix",
+   "url": "https://github.com/Arize-ai/phoenix",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "评测-可观测",
+    "github"
+   ],
+   "summary": "基于 OpenTelemetry 的 LLM 追踪与评测工作台，支持自托管。",
+   "why": "不想上 SaaS 又要有 trace/评测界面时的替代方案。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION/null，商用需人工核对 LICENSE",
+   "repo": "Arize-ai/phoenix",
+   "track": false,
+   "staticMeta": {
+    "stars": 12134,
+    "forks": 1263,
+    "license": "NOASSERTION",
+    "language": "Python",
+    "pushedAt": "2026-11-04T13:12:09Z",
+    "latestRelease": "@arizeai/phoenix-mcp@4.3.20"
+   }
+  },
+  {
+   "id": "gh-traceloop-openllmetry",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "OpenLLMetry",
+   "publisher": "traceloop/openllmetry",
+   "url": "https://github.com/traceloop/openllmetry",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "评测-可观测",
+    "github"
+   ],
+   "summary": "OpenTelemetry 语义约定实现，给主流 SDK 自动加 trace，数据可发任意后端。",
+   "why": "对接客户既有监控体系（OTel/APM）时做插桩。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "traceloop/openllmetry",
+   "track": false,
+   "staticMeta": {
+    "stars": 7522,
+    "forks": 1185,
+    "license": "Apache-2.0",
+    "language": "Python",
+    "pushedAt": "2026-11-04T11:44:34Z",
+    "latestRelease": "0.62.4"
+   }
+  },
+  {
+   "id": "gh-vibrantlabsai-ragas",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "RAGAS",
+   "publisher": "vibrantlabsai/ragas",
+   "url": "https://github.com/vibrantlabsai/ragas",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "评测-可观测",
+    "github"
+   ],
+   "summary": "RAG 评测指标库，用合成问题与 LLM 裁判量化检索与生成质量。",
+   "why": "知识库验收时给召回/忠实度出可解释分数。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "vibrantlabsai/ragas",
+   "track": false,
+   "staticMeta": {
+    "stars": 16232,
+    "forks": 1800,
+    "license": "Apache-2.0",
+    "language": "Python",
+    "pushedAt": "2026-02-24T07:47:19Z",
+    "latestRelease": "v0.4.3"
+   }
+  },
+  {
+   "id": "gh-berriai-litellm",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "LiteLLM",
+   "publisher": "BerriAI/litellm",
+   "url": "https://github.com/BerriAI/litellm",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "部署-推理",
+    "github"
+   ],
+   "summary": "统一 100+ 模型接口的网关/代理，内置预算、限流、密钥与费用统计。",
+   "why": "一个入口接客户多家模型，顺手把成本算出来。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION/null，商用需人工核对 LICENSE",
+   "repo": "BerriAI/litellm",
+   "track": true,
+   "staticMeta": {
+    "stars": 62681,
+    "forks": 13000,
+    "license": "NOASSERTION",
+    "language": "Python",
+    "pushedAt": "2026-11-04T13:13:08Z",
+    "latestRelease": "v1.108.0"
+   }
+  },
+  {
+   "id": "gh-vllm-project-vllm",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "vLLM",
+   "publisher": "vllm-project/vllm",
+   "url": "https://github.com/vllm-project/vllm",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "部署-推理",
+    "github"
+   ],
+   "summary": "高吞吐推理服务引擎，兼容 OpenAI API，支持主流开源模型。",
+   "why": "客户要本地化部署模型、数据不出内网时用。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "vllm-project/vllm",
+   "track": true,
+   "staticMeta": {
+    "stars": 96294,
+    "forks": 24397,
+    "license": "Apache-2.0",
+    "language": "Python",
+    "pushedAt": "2026-11-04T13:14:39Z",
+    "latestRelease": "v0.33.0rc3"
+   }
+  },
+  {
+   "id": "gh-ollama-ollama",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Ollama",
+   "publisher": "ollama/ollama",
+   "url": "https://github.com/ollama/ollama",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "部署-推理",
+    "github"
+   ],
+   "summary": "一条命令本地起模型的运行时，跨平台、模型库丰富。",
+   "why": "现场笔记本就能演示私有模型，省掉环境折腾。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "ollama/ollama",
+   "track": true,
+   "staticMeta": {
+    "stars": 185885,
+    "forks": 18882,
+    "license": "MIT",
+    "language": "Go",
+    "pushedAt": "2026-11-04T01:39:55Z",
+    "latestRelease": "v0.40.14"
+   }
+  },
+  {
+   "id": "gh-sgl-project-sglang",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "SGLang",
+   "publisher": "sgl-project/sglang",
+   "url": "https://github.com/sgl-project/sglang",
+   "authority": "A",
+   "stages": [
+    "pilot",
+    "delivery",
+    "adoption"
+   ],
+   "topics": [
+    "部署-推理",
+    "github"
+   ],
+   "summary": "高性能推理框架，主打结构化生成与大批量吞吐。",
+   "why": "vLLM 吞吐不够或需复杂约束解码时的备选。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "sgl-project/sglang",
+   "track": false,
+   "staticMeta": {
+    "stars": 38449,
+    "forks": 10137,
+    "license": "Apache-2.0",
+    "language": "Python",
+    "pushedAt": "2026-11-04T13:11:49Z",
+    "latestRelease": "v0.5.23"
+   }
+  },
+  {
+   "id": "gh-modelcontextprotocol-servers",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "MCP Servers（官方参考实现）",
+   "publisher": "modelcontextprotocol/servers",
+   "url": "https://github.com/modelcontextprotocol/servers",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "MCP-工具协议",
+    "github"
+   ],
+   "summary": "官方 MCP 参考服务器集合，覆盖文件、数据库、搜索等常见接入。",
+   "why": "客户要接内部系统时先看现成 server，少写胶水。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION/null，商用需人工核对 LICENSE",
+   "repo": "modelcontextprotocol/servers",
+   "track": true,
+   "staticMeta": {
+    "stars": 91784,
+    "forks": 11907,
+    "license": "NOASSERTION",
+    "language": "TypeScript",
+    "pushedAt": "2026-10-29T05:27:40Z",
+    "latestRelease": "v2.2.0"
+   }
+  },
+  {
+   "id": "gh-modelcontextprotocol-python-sdk",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "MCP Python SDK",
+   "publisher": "modelcontextprotocol/python-sdk",
+   "url": "https://github.com/modelcontextprotocol/python-sdk",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "MCP-工具协议",
+    "github"
+   ],
+   "summary": "MCP 官方 Python SDK，实现 server/client 与工具协议。",
+   "why": "把客户内部 API 包成 MCP server 给 Agent 用。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "modelcontextprotocol/python-sdk",
+   "track": false,
+   "staticMeta": {
+    "stars": 24754,
+    "forks": 4098,
+    "license": "MIT",
+    "language": "Python",
+    "pushedAt": "2026-11-03T13:33:25Z",
+    "latestRelease": "v2.3.0"
+   }
+  },
+  {
+   "id": "gh-prefecthq-fastmcp",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "FastMCP",
+   "publisher": "PrefectHQ/fastmcp",
+   "url": "https://github.com/PrefectHQ/fastmcp",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "MCP-工具协议",
+    "github"
+   ],
+   "summary": "Pythonic 的 MCP 服务端框架，几行代码暴露工具，社区活跃。",
+   "why": "比官方 SDK 更快写出可维护的内部工具服务。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "PrefectHQ/fastmcp",
+   "track": false,
+   "staticMeta": {
+    "stars": 28303,
+    "forks": 2562,
+    "license": "Apache-2.0",
+    "language": "Python",
+    "pushedAt": "2026-11-04T13:15:53Z",
+    "latestRelease": "v4.1.6"
+   }
+  },
+  {
+   "id": "gh-modelcontextprotocol-inspector",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "MCP Inspector",
+   "publisher": "modelcontextprotocol/inspector",
+   "url": "https://github.com/modelcontextprotocol/inspector",
+   "authority": "A",
+   "stages": [
+    "solution",
+    "pilot",
+    "delivery"
+   ],
+   "topics": [
+    "MCP-工具协议",
+    "github"
+   ],
+   "summary": "MCP 调试工具，可视化检查 server 的工具、消息与 schema。",
+   "why": "联调 MCP server 时定位参数与协议问题。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION/null，商用需人工核对 LICENSE",
+   "repo": "modelcontextprotocol/inspector",
+   "track": false,
+   "staticMeta": {
+    "stars": 11225,
+    "forks": 1555,
+    "license": "NOASSERTION",
+    "language": "TypeScript",
+    "pushedAt": "2026-10-29T06:32:33Z",
+    "latestRelease": "2.13.0"
+   }
+  },
+  {
+   "id": "gh-helicone-helicone",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Helicone",
+   "publisher": "Helicone/helicone",
+   "url": "https://github.com/Helicone/helicone",
+   "authority": "A",
+   "stages": [
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "成本-报价",
+    "github"
+   ],
+   "summary": "LLM 可观测与成本分析平台，一行代理接入，看调用量、延迟与花费。",
+   "why": "给客户报每月 AI 成本时用真实账单数据。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "Helicone/helicone",
+   "track": false,
+   "staticMeta": {
+    "stars": 6260,
+    "forks": 702,
+    "license": "Apache-2.0",
+    "language": "TypeScript",
+    "pushedAt": "2026-10-28T15:59:52Z",
+    "latestRelease": "v2025.08.21-1"
+   }
+  },
+  {
+   "id": "gh-agentops-ai-tokencost",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "tokencost",
+   "publisher": "AgentOps-AI/tokencost",
+   "url": "https://github.com/AgentOps-AI/tokencost",
+   "authority": "A",
+   "stages": [
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "成本-报价",
+    "github"
+   ],
+   "summary": "Python 库，按模型单价估算 token 成本，可接进调用链。",
+   "why": "报价阶段先算单次调用成本，避免拍脑袋。",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "AgentOps-AI/tokencost",
+   "track": false,
+   "staticMeta": {
+    "stars": 2003,
+    "forks": 108,
+    "license": "MIT",
+    "language": "Python",
+    "pushedAt": "2025-09-05T08:10:10Z",
+    "latestRelease": "0.1.26"
+   }
+  },
+  {
+   "id": "gh-datawhalechina-self-llm",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "self-llm（开源大模型食用指南）",
+   "publisher": "datawhalechina/self-llm",
+   "url": "https://github.com/datawhalechina/self-llm",
+   "authority": "B",
+   "stages": [
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "成本-报价",
+    "github"
+   ],
+   "summary": "中文开源教程，讲开源大模型的本地部署、微调与推理实践。",
+   "why": "客户要私有化模型时，给团队一份可照做的中文路径。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "datawhalechina/self-llm",
+   "track": false,
+   "staticMeta": {
+    "stars": 32701,
+    "forks": 3149,
+    "license": "Apache-2.0",
+    "language": "Jupyter Notebook",
+    "pushedAt": "2026-10-29T10:59:29Z",
+    "latestRelease": ""
+   }
+  },
+  {
+   "id": "gh-unicomai-wanwu",
+   "group": "opensource",
+   "kind": "repo",
+   "lang": "en",
+   "title": "元景万悟（Wanwu）",
+   "publisher": "UnicomAI/wanwu",
+   "url": "https://github.com/UnicomAI/wanwu",
+   "authority": "A",
+   "stages": [
+    "scoping",
+    "solution"
+   ],
+   "topics": [
+    "成本-报价",
+    "github"
+   ],
+   "summary": "联通元景开源企业级 Agent 平台，多租户、工作流、知识库与 MCP 接入。",
+   "why": "国企/制造业客户要平台级自托管形态时的国产参照。",
+   "featured": false,
+   "recommend": "backup",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "UnicomAI/wanwu",
+   "track": false,
+   "staticMeta": {
+    "stars": 2384,
+    "forks": 151,
+    "license": "Apache-2.0",
+    "language": "Go",
+    "pushedAt": "2026-10-23T17:30:34Z",
+    "latestRelease": "v0.6.5"
+   }
+  },
+  {
+   "id": "method-openai-openai-cookbook",
+   "group": "method",
+   "kind": "repo",
+   "lang": "en",
+   "title": "OpenAI Cookbook（官方示例集）",
+   "publisher": "openai/openai-cookbook",
+   "url": "https://github.com/openai/openai-cookbook",
+   "authority": "A",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "cookbook",
+    "learning",
+    "官方示例"
+   ],
+   "summary": "OpenAI 官方示例与最佳实践合集：agent、RAG、评测、工具调用等可运行 notebook，按主题持续更新。",
+   "why": "官方示例是最快的方案脚手架来源；用于方案章节骨架与原型加速。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "openai/openai-cookbook",
+   "staticMeta": {
+    "stars": 76947,
+    "forks": 13038,
+    "license": "MIT",
+    "language": "Jupyter Notebook",
+    "pushedAt": "2026-11-04T01:12:45Z",
+    "latestRelease": ""
+   },
+   "track": true,
+   "featuredRank": 11
+  },
+  {
+   "id": "method-anthropics-claude-cookbooks",
+   "group": "method",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Claude Cookbooks（官方示例集）",
+   "publisher": "anthropics/claude-cookbooks",
+   "url": "https://github.com/anthropics/claude-cookbooks",
+   "authority": "A",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "cookbook",
+    "learning",
+    "官方示例"
+   ],
+   "summary": "Anthropic 官方 Claude 使用示例：agent、检索、工具、评测与生产化模式。",
+   "why": "与《Building effective agents》配套，适合做方案里的技术路线与反过度设计论据。",
+   "featured": true,
+   "recommend": "star",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "anthropics/claude-cookbooks",
+   "staticMeta": {
+    "stars": 54197,
+    "forks": 6557,
+    "license": "MIT",
+    "language": "Jupyter Notebook",
+    "pushedAt": "2026-11-02T21:46:46Z",
+    "latestRelease": ""
+   },
+   "track": true
+  },
+  {
+   "id": "method-microsoft-generative-ai-for-beginners",
+   "group": "method",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Generative AI for Beginners（微软官方课程）",
+   "publisher": "microsoft/generative-ai-for-beginners",
+   "url": "https://github.com/microsoft/generative-ai-for-beginners",
+   "authority": "A",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "cookbook",
+    "learning",
+    "官方示例"
+   ],
+   "summary": "微软官方 21 课生成式 AI 入门：提示工程、RAG、微调、安全与落地。",
+   "why": "客户侧 AI 认知培训与售前工作坊的通用教材。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "microsoft/generative-ai-for-beginners",
+   "staticMeta": {
+    "stars": 122961,
+    "forks": 65886,
+    "license": "MIT",
+    "language": "Jupyter Notebook",
+    "pushedAt": "2026-11-02T18:55:18Z",
+    "latestRelease": ""
+   },
+   "track": true
+  },
+  {
+   "id": "method-googlecloudplatform-generative-ai",
+   "group": "method",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Google Cloud Generative AI Samples",
+   "publisher": "GoogleCloudPlatform/generative-ai",
+   "url": "https://github.com/GoogleCloudPlatform/generative-ai",
+   "authority": "A",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "cookbook",
+    "learning",
+    "官方示例"
+   ],
+   "summary": "Google Cloud 官方生成式 AI 示例：Gemini、Vertex AI、RAG、agent 与评测样例。",
+   "why": "云上落地的官方参考实现，适合评估托管方案与成本。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "GoogleCloudPlatform/generative-ai",
+   "staticMeta": {
+    "stars": 17841,
+    "forks": 4503,
+    "license": "Apache-2.0",
+    "language": "Jupyter Notebook",
+    "pushedAt": "2026-11-03T21:19:00Z",
+    "latestRelease": ""
+   },
+   "track": false
+  },
+  {
+   "id": "method-langchain-ai-langchain-academy",
+   "group": "method",
+   "kind": "repo",
+   "lang": "en",
+   "title": "LangChain Academy（官方课程）",
+   "publisher": "langchain-ai/langchain-academy",
+   "url": "https://github.com/langchain-ai/langchain-academy",
+   "authority": "A",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "cookbook",
+    "learning",
+    "官方示例"
+   ],
+   "summary": "LangChain 官方课程：LangGraph、agent 编排、记忆与部署的模块化教程。",
+   "why": "团队补 LangGraph 编排能力的系统教材；方案原型期参考。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "langchain-ai/langchain-academy",
+   "staticMeta": {
+    "stars": 2990,
+    "forks": 1903,
+    "license": "MIT",
+    "language": "Jupyter Notebook",
+    "pushedAt": "2026-06-15T16:01:24Z",
+    "latestRelease": ""
+   },
+   "track": false
+  },
+  {
+   "id": "method-google-gemini-cookbook",
+   "group": "method",
+   "kind": "repo",
+   "lang": "en",
+   "title": "Gemini API Cookbook（Google 官方示例）",
+   "publisher": "google-gemini/cookbook",
+   "url": "https://github.com/google-gemini/cookbook",
+   "authority": "A",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "cookbook",
+    "learning",
+    "官方课程"
+   ],
+   "summary": "Google 官方 Gemini API 示例集：多模态、函数调用、RAG、agent 与生产化模式。",
+   "why": "官方示例，适合评估托管模型能力与方案原型。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "google-gemini/cookbook",
+   "staticMeta": {
+    "stars": 17900,
+    "forks": 2827,
+    "license": "Apache-2.0",
+    "language": "Jupyter Notebook",
+    "pushedAt": "2026-11-04T08:22:20Z",
+    "latestRelease": ""
+   },
+   "track": false
+  },
+  {
+   "id": "method-microsoft-ai-for-beginners",
+   "group": "method",
+   "kind": "repo",
+   "lang": "en",
+   "title": "AI for Beginners（微软官方课程）",
+   "publisher": "microsoft/AI-For-Beginners",
+   "url": "https://github.com/microsoft/AI-For-Beginners",
+   "authority": "A",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "cookbook",
+    "learning",
+    "官方课程"
+   ],
+   "summary": "微软官方 12 课 AI 入门：神经网络、CNN、NLP、伦理与 Azure AI 实践。",
+   "why": "客户侧 AI 认知培训与团队内训的通用教材。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "",
+   "repo": "microsoft/AI-For-Beginners",
+   "staticMeta": {
+    "stars": 70554,
+    "forks": 13736,
+    "license": "MIT",
+    "language": "Jupyter Notebook",
+    "pushedAt": "2026-11-04T13:42:44Z",
+    "latestRelease": ""
+   },
+   "track": true
+  },
+  {
+   "id": "method-datawhalechina-happy-llm",
+   "group": "method",
+   "kind": "repo",
+   "lang": "zh",
+   "title": "Happy-LLM（Datawhale 中文大模型教程）",
+   "publisher": "datawhalechina/happy-llm",
+   "url": "https://github.com/datawhalechina/happy-llm",
+   "authority": "B",
+   "stages": [
+    "all"
+   ],
+   "topics": [
+    "cookbook",
+    "learning",
+    "官方课程"
+   ],
+   "summary": "从零构建大模型的中文教程：Transformer、预训练、微调、RAG 与部署实践。",
+   "why": "中文团队补大模型原理与手写实践的系统材料。",
+   "featured": false,
+   "recommend": "recommend",
+   "addedAt": "2026-11-04",
+   "verifiedAt": "2026-11-04",
+   "httpStatus": 200,
+   "note": "许可为 NOASSERTION，商用需人工核对 LICENSE",
+   "repo": "datawhalechina/happy-llm",
+   "staticMeta": {
+    "stars": 34757,
+    "forks": 3285,
+    "license": "NOASSERTION",
+    "language": "Jupyter Notebook",
+    "pushedAt": "2026-08-08T17:18:48Z",
+    "latestRelease": ""
+   },
+   "track": false
+  }
+ ]
+}

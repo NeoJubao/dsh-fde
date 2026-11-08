@@ -1,0 +1,40 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: build + verify（Node 24）
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: 构建客户端产物（client.js 与源码一致）
+        run: node build.mjs
+
+      - name: 全量验证（宿主冒烟 / 安全 / 内核 / 工具 / 面板 / 开源就绪 / 打包 / 自检）
+        run: node verify/all.mjs
+
+      - name: 健康检查
+        run: node scripts/health-check.mjs
+
+      - name: 打包内容断言（npm pack --dry-run，files 白名单有效）
+        run: node verify/pack.mjs
+
+      - name: README 版本一致性
+        run: node scripts/check-readme-version.mjs
