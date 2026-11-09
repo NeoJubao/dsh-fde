@@ -1,12 +1,12 @@
 # FDE 工作站（`dsh-fde`）· DSH 插件
 
-[![verify](https://github.com/NeoJubao/dsh-fde/actions/workflows/verify.yml/badge.svg)](https://github.com/NeoJubao/dsh-fde/actions/workflows/verify.yml) [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![docs: CC BY 4.0](https://img.shields.io/badge/docs-CC_BY_4.0-lightgrey.svg)](LICENSE-docs)
+[![verify](https://github.com/NeoJubao/dsh-fde/actions/workflows/verify.yml/badge.svg)](https://github.com/NeoJubao/dsh-fde/actions/workflows/verify.yml) [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/NeoJubao/dsh-fde/blob/main/LICENSE) [![docs: CC BY 4.0](https://img.shields.io/badge/docs-CC_BY_4.0-lightgrey.svg)](https://github.com/NeoJubao/dsh-fde/blob/main/LICENSE-docs)
 
 > 把「客户经营」从线索到采用做成**一屏可看、可推进、可验证、可复盘**的作战台：客户看板 + 今日注意力 + 8 阶段门禁 + 任务泳道 + FDE 方法库 + 资料库 + 招采关联。
 > 跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里，中文界面，纯 JS，零运行时依赖。
 > **版本：v1.4.0** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
 
-![今日视图](assets/screenshot-today.png)
+![今日视图](https://raw.githubusercontent.com/NeoJubao/dsh-fde/main/assets/screenshot-today.png)
 
 **它解决什么**：FDE / 解决方案 / 售前同学真正的问题是「客户一大把，今天该推谁、卡在哪、还差什么材料、agent 做完了没有」。这个插件把这些状态从人的脑子里外化成**可检查的数据**：
 
@@ -33,6 +33,8 @@ npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.4.0.tgz
 ```
 
 > npm 上的 `dsh-fde@1.3.0` 是旧九页签界面；本文档描述 main 分支 1.4.0（5 页签 IA）。1.4.0 发布到 npm 前，请用 GitHub 直装。
+>
+> **第一次用？** 先看 [10 分钟上手教程](https://github.com/NeoJubao/dsh-fde/blob/main/docs/GETTING-STARTED.md)：装好 → 建第一个客户 → 走通一轮「线索到采用」。
 
 安装后**重启 DSH**（或在「设置 → 插件」里对 `dsh-fde` 禁用→启用一次），侧栏出现「FDE 工作站」入口。客户端改动只需刷新页面。
 
@@ -95,13 +97,13 @@ python3 tools/install_profiles.py --run    # 实际执行 dsh plugin add
 
 > 迁移兼容：旧 state 值（`board` / `library` / `bids` / `artifacts` / `methods` / `settings`）会被映射到新页签（未知值回落「今日」），不会白屏。
 
-![客户看板](assets/screenshot-board.png)
+![客户看板](https://raw.githubusercontent.com/NeoJubao/dsh-fde/main/assets/screenshot-board.png)
 
-![资料库](assets/screenshot-library.png)
+![资料库](https://raw.githubusercontent.com/NeoJubao/dsh-fde/main/assets/screenshot-library.png)
 
 ## UI 契约（ui-contract）
 
-面板的**结构 / 视觉 / 取值**写在 [`docs/ui-contract/`](docs/ui-contract/)，改界面前先读它（不是自由发挥，也不是「重画一套皮」）：
+面板的**结构 / 视觉 / 取值**写在 [`docs/ui-contract/`](https://github.com/NeoJubao/dsh-fde/blob/main/docs/ui-contract/)，改界面前先读它（不是自由发挥，也不是「重画一套皮」）：
 
 - **结构**：[`layout.md`](docs/ui-contract/layout.md) —— 区域树、落位决策树、22 个区域白名单（每行写「禁止放什么」）、页型、焦点位、导航准入、附录 C 迁移清单；
 - **视觉**：[`design.md`](docs/ui-contract/design.md) —— 五条原则、字体/间距/表面/几何/颜色语义与视觉禁止清单（只写 token 名，不写值）；
@@ -159,18 +161,20 @@ node scripts/check-readme-version.mjs
 
 ## 许可
 
-- **代码**（`index.js`、`src/`、`tools/`、`scripts/`、`verify/`、`build.mjs`）：**MIT**，见 [`LICENSE`](LICENSE)。
-- **方法与文档**（`methods/`、`skills/`、`templates/`、`reference/`、`docs/`、README 正文）：**CC BY 4.0**，见 [`LICENSE-docs`](LICENSE-docs)。
+- **代码**（`index.js`、`src/`、`tools/`、`scripts/`、`verify/`、`build.mjs`）：**MIT**，见 [`LICENSE`](https://github.com/NeoJubao/dsh-fde/blob/main/LICENSE)。
+- **方法与文档**（`methods/`、`skills/`、`templates/`、`reference/`、`docs/`、README 正文）：**CC BY 4.0**，见 [`LICENSE-docs`](https://github.com/NeoJubao/dsh-fde/blob/main/LICENSE-docs)。
 - 第三方内容（ASD-STE100 摘要、生财经验参数、资料库外链）的来源与许可见 `LICENSE-docs` 末节。
 
 ## 文档
 
-- 规格：[`docs/01-spec.md`](docs/01-spec.md)（唯一事实来源）
-- 决策：[`docs/adr/`](docs/adr/)（0001 工作站 / 0002 招采 / 0003 资料库与流程 v2 / 0004 开源就绪）
-- UI 契约：[`docs/ui-contract/`](docs/ui-contract/)（结构 / 视觉 / 取值 / 区域 id / 8 项体检；迁移中）
-- 发布：[`docs/RELEASE.md`](docs/RELEASE.md)（发布前清单、npm/git 命令、回滚、人工确认）
-- 方法与技能：[`methods/`](methods/)、[`skills/`](skills/)
-- 贡献：[`CONTRIBUTING.md`](CONTRIBUTING.md)、审查规则 [`REVIEW.md`](REVIEW.md)、给 AI 协作者 [`AGENTS.md`](AGENTS.md)
+- **上手教程**：[`docs/GETTING-STARTED.md`](https://github.com/NeoJubao/dsh-fde/blob/main/docs/GETTING-STARTED.md)（10 分钟：安装 → 建客户 → 看板/门禁 → 资料/招采/文件 → 设置 → 故障排查）
+- **开发者教程**：[`docs/DEVELOPING.md`](https://github.com/NeoJubao/dsh-fde/blob/main/docs/DEVELOPING.md)（加工具/路由/视图、测试矩阵、发布）
+- 规格：[`docs/01-spec.md`](https://github.com/NeoJubao/dsh-fde/blob/main/docs/01-spec.md)（唯一事实来源）
+- 决策：[`docs/adr/`](https://github.com/NeoJubao/dsh-fde/blob/main/docs/adr/)（0001 工作站 / 0002 招采 / 0003 资料库与流程 v2 / 0004 开源就绪 / 0005 信息架构收敛）
+- UI 契约：[`docs/ui-contract/`](https://github.com/NeoJubao/dsh-fde/blob/main/docs/ui-contract/)（结构 / 视觉 / 取值 / 区域 id / 8 项体检；当前 drift 0）
+- 发布：[`docs/RELEASE.md`](https://github.com/NeoJubao/dsh-fde/blob/main/docs/RELEASE.md)（发布前清单、npm/git 命令、回滚、人工确认）
+- 方法与技能：[`methods/`](https://github.com/NeoJubao/dsh-fde/blob/main/methods/)、[`skills/`](https://github.com/NeoJubao/dsh-fde/blob/main/skills/)
+- 贡献：[`CONTRIBUTING.md`](https://github.com/NeoJubao/dsh-fde/blob/main/CONTRIBUTING.md)、审查规则 [`REVIEW.md`](https://github.com/NeoJubao/dsh-fde/blob/main/REVIEW.md)、给 AI 协作者 [`AGENTS.md`](https://github.com/NeoJubao/dsh-fde/blob/main/AGENTS.md)
 
 ## 不构成什么
 
