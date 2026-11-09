@@ -2,7 +2,7 @@
 
 > 状态：已确认（Neo，2026-11-03）｜ 依据：`docs/00-intent.md`｜ 计划：`docs/02-plan.md`｜ ADR：`docs/adr/0001-fde-workstation.md`
 > 本规格是**唯一事实来源**：阶段、门禁、字段、路由、工具、面板结构以本文件为准；实现与测试都从这里派生。
-> 版本：**v1.4.0**（包名 `dsh-fde`；2026-11-08 起改名与开源就绪，见 `docs/adr/0004-open-source-readiness.md`；v1/v1.2/v1.3 的演进标注保留为历史基线）
+> 版本：**v1.4.1**（包名 `dsh-fde`；2026-11-08 起改名与开源就绪，见 `docs/adr/0004-open-source-readiness.md`；v1/v1.2/v1.3 的演进标注保留为历史基线）
 
 ## 0. 一句话
 

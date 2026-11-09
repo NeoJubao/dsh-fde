@@ -4,7 +4,7 @@
 
 > 把「客户经营」从线索到采用做成**一屏可看、可推进、可验证、可复盘**的作战台：客户看板 + 今日注意力 + 8 阶段门禁 + 任务泳道 + FDE 方法库 + 资料库 + 招采关联。
 > 跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里，中文界面，纯 JS，零运行时依赖。
-> **版本：v1.4.0** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
+> **版本：v1.4.1** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
 
 ![今日视图](https://raw.githubusercontent.com/NeoJubao/dsh-fde/main/assets/screenshot-today.png)
 
@@ -21,18 +21,16 @@
 前置：DSH `0.2.0-rc.2`（含 Web GUI），Node ≥ 20。
 
 ```bash
-# 方式一：GitHub 直装（main = 1.4.0，当前推荐）
+# 方式一：npm 包（推荐）
+dsh plugin --profile web add dsh-fde
+
+# 方式二：GitHub 直装（main 分支 = 最新代码）
 git clone https://github.com/NeoJubao/dsh-fde.git
 dsh plugin --profile web add ./dsh-fde
 
-# 方式二：npm 包（npm 最新为 1.3.0；1.4.0 发布后建议改用这条）
-dsh plugin --profile web add dsh-fde
-
 # 方式三：tarball
-npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.4.0.tgz
+npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.4.1.tgz
 ```
-
-> npm 上的 `dsh-fde@1.3.0` 是旧九页签界面；本文档描述 main 分支 1.4.0（5 页签 IA）。1.4.0 发布到 npm 前，请用 GitHub 直装。
 >
 > **第一次用？** 先看 [10 分钟上手教程](https://github.com/NeoJubao/dsh-fde/blob/main/docs/GETTING-STARTED.md)：装好 → 建第一个客户 → 走通一轮「线索到采用」。
 
