@@ -21,16 +21,18 @@
 前置：DSH `0.2.0-rc.2`（含 Web GUI），Node ≥ 20。
 
 ```bash
-# 方式一：GitHub 直装（当前可用）
+# 方式一：GitHub 直装（main = 1.4.0，当前推荐）
 git clone https://github.com/NeoJubao/dsh-fde.git
 dsh plugin --profile web add ./dsh-fde
 
-# 方式二：npm 包（已发布于 npm，推荐）
+# 方式二：npm 包（npm 最新为 1.3.0；1.4.0 发布后建议改用这条）
 dsh plugin --profile web add dsh-fde
 
 # 方式三：tarball
 npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.4.0.tgz
 ```
+
+> npm 上的 `dsh-fde@1.3.0` 是旧九页签界面；本文档描述 main 分支 1.4.0（5 页签 IA）。1.4.0 发布到 npm 前，请用 GitHub 直装。
 
 安装后**重启 DSH**（或在「设置 → 插件」里对 `dsh-fde` 禁用→启用一次），侧栏出现「FDE 工作站」入口。客户端改动只需刷新页面。
 
