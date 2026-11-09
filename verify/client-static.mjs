@@ -5,8 +5,11 @@
  * 覆盖三类：
  *  1) 包/模块/注册契约（必须保留，破坏即安装不上或面板不出现）
  *  2) 旧能力兼容（Finder 三通道、旧五页签、经典模式）
- *  3) FDE 新能力（九视图、看板拖拽/键盘、抽屉、兼容页、轮询、主题 token、招采雷达、
- *     流程 v2（8 阶段 playbook）、资料库（v1.3））
+ *  3) FDE 新能力（Phase 2 IA：5 页签 + 页内子页签、看板拖拽/键盘、抽屉、兼容页、轮询、
+ *     主题 token、招采雷达、流程 v2（8 阶段 playbook）、资料库（v1.3））
+ *  注：Phase 2 起导航为「今日 / 客户 / 资料 / 流程 / 文件」+ 页头设置齿轮；
+ *     原「看板/客户」合并为「客户」页内视图，原「资料库/招采」并入「资料」，
+ *     原「方法」并入「流程」，「工件」改名「文件」。断言随新 IA 同步（未放宽）。
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -52,21 +55,40 @@ const checks = [
     ["t('tabNew')", "t('tabProjects')", "t('tabFiles')", "t('tabMaterials')", "t('tabMethods')"].every((s) => c.includes(s))],
   ['经典模式组件存在', c.includes('function ClassicApp(')],
 
-  /* ---- 3. FDE 九视图（v1.1 招采 / v1.3 流程 + 资料库） ---- */
-  ['九视图组件存在',
+  /* ---- 3. FDE 页型组件（Phase 2：5 页签 + 页内子页签） ---- */
+  ['视图组件存在（今日/看板/客户/流程/资料库/招采/工件/方法/设置）',
     ['function TodayView(', 'function BoardView(', 'function CustomersView(', 'function ProcessView(',
       'function LibraryView(', 'function BidsView(', 'function ArtifactsView(', 'function MethodsView(',
       'function SettingsView('].every((s) => c.includes(s))],
-  ['九视图导航文案齐全（流程 / 资料库 / 招采 / 工件 / 方法 / 设置）',
-    ["t('tabToday')", "t('tabBoard')", "t('tabCustomers')", "t('tabProcess')", "t('tabLibrary')",
-      "t('tabBids')", "t('tabArtifacts')", "t('tabMethods')", "t('tabSettings')"].every((s) => c.includes(s))],
-  ['导航 9 项顺序正确（流程第 4、资料库第 5、招采第 6）',
+  ['5 页签导航文案齐全（今日 / 客户 / 资料 / 流程 / 文件 + 设置入口）',
+    ["t('tabToday')", "t('tabCustomers')", "t('tabKnowledge')", "t('tabProcess')",
+      "t('tabNavFiles')", "t('tabSettings')"].every((s) => c.includes(s))],
+  ['导航 5 项顺序正确（今日 / 客户 / 资料 / 流程 / 文件）',
     (() => {
       const m = /const navItems = \[([\s\S]*?)\];/.exec(c);
       if (!m) return false;
       const order = [...m[1].matchAll(/key: '([a-z]+)'/g)].map((x) => x[1]);
-      return order.join(',') === 'today,board,customers,process,library,bids,artifacts,methods,settings';
+      return order.join(',') === 'today,customers,knowledge,process,files';
     })()],
+  ['设置不再占页签：靠页头齿轮入口打开（layout.md §7）',
+    (() => {
+      const m = /const navItems = \[([\s\S]*?)\];/.exec(c);
+      if (!m) return false;
+      return !/key: 'settings'/.test(m[1]) && c.includes("className: 'fde-iconbtn'")
+        && /onClick: activeView === 'settings' \? closeSettings : openSettings/.test(c)
+        && c.includes("'aria-label': t('tabSettings')");
+    })()],
+  ['页内子页签壳：客户三态 / 资料两态 / 流程三态（layout.md §7）',
+    c.includes('function PageTabs(')
+    && ["t('customersViewBoardCustomer')", "t('customersViewBoardTask')", "t('customersViewList')"].every((x) => c.includes(x))
+    && ["t('knowledgeTabs')", "t('tabLibrary')", "t('tabBids')"].every((x) => c.includes(x))
+    && ["t('processTabFlow')", "t('processTabMethods')", "t('processTabSkills')"].every((x) => c.includes(x))],
+  ['旧 state 值回落今日（不白屏）：normalizeView + LEGACY_VIEW_ALIASES',
+    c.includes('function normalizeView(') && c.includes('LEGACY_VIEW_ALIASES')
+    && c.includes("return LEGACY_VIEW_ALIASES[k] || 'today'")],
+  ['深链/跳转改到新 IA：流程 chip→方法库/技能、资料库跳转、扫描→清单',
+    c.includes("kind === 'template' ? 'skills' : 'methods'")
+    && c.includes("setKnowledgeTab('library')") && c.includes("setCustomersTab('list')")],
   ['v1.3 已移除生财页签与 ScysView（宿主 scys 能力保留）',
     !c.includes("key: 'scys'") && !c.includes('function ScysView(')
     && !c.includes("fdeGet('/scys/feed')") && !c.includes("t('tabScys')")],
@@ -75,8 +97,9 @@ const checks = [
   ['FDE API 前缀统一', c.includes("const FDE = API + '/fde'")],
   ['今日：注意力 + 建议 + 焦点 + 活动',
     ["t('todayAttention')", "t('todayProposals')", "t('todayFocus')", "t('todayActivity')"].every((s) => c.includes(s))],
-  ['看板：客户模式 + 任务模式',
-    ["t('boardModeCustomer')", "t('boardModeTask')"].every((s) => c.includes(s))],
+  ['客户页内三态：看板（客户/任务）+ 客户清单',
+    ["t('customersViewBoardCustomer')", "t('customersViewBoardTask')", "t('customersViewList')"]
+      .every((s) => c.includes(s)) && c.includes('（空）')],
   ['客户：导入现有项目两段式（scan/apply）',
     c.includes("fdePost('/adopt', { action: 'scan' })") && c.includes("fdePost('/adopt', { action: 'apply', dirs })")],
 
@@ -100,9 +123,9 @@ const checks = [
   ['切页签立即刷新（轮询 effect 依赖 view）', /useEffect\(\(\) => \{[\s\S]*?\[view, loadBoard, loadBrief\]/.test(c)],
   ['hasSession:false 剪贴板降级', c.includes('copyText') && c.includes('navigator.clipboard')],
 
-  /* ---- 6. 招采雷达（v1.1，spec §17.7） ---- */
-  ['招采页签在导航中（客户之后）',
-    /\{ key: 'bids', label: t\('tabBids'\)/.test(c)],
+  /* ---- 6. 招采雷达（v1.1，spec §17.7）；Phase 2 起并入「资料」页子页签 ---- */
+  ['招采并入「资料」页子页签（不再单列导航）',
+    /\{ key: 'bids', label: t\('tabBids'\) \}/.test(c) && c.includes('function KnowledgePage(')],
   ['招采 API 前缀统一（stats/search/match/link/unlink/promote/refresh）',
     ["'/bids/stats'", "'/bids/search?", "'/bids/match?", "'/bids/link'", "'/bids/unlink'", "'/bids/promote'", "'/bids/refresh'"]
       .every((x) => c.includes(x))],
@@ -123,11 +146,11 @@ const checks = [
   ['设置页招标雷达开关与索引状态',
     c.includes("t('bidSettingsLabel')") && c.includes("t('bidServiceStatus')") && c.includes('bidStats')],
 
-  /* ---- 6b. FDE 资料库（v1.3，spec §19.6） ---- */
-  ['资料库页签在导航中（流程之后、招采之前）',
-    /\{ key: 'library', label: t\('tabLibrary'\), count: null \}/.test(c)],
-  ['资料库视图有独立路由分支',
-    c.includes("view === 'library'") && /return h\(LibraryView,/.test(c)],
+  /* ---- 6b. FDE 资料库（v1.3，spec §19.6）；Phase 2 起并入「资料」页子页签 ---- */
+  ['资料库并入「资料」页子页签（与招采同页）',
+    /\{ key: 'library', label: t\('tabLibrary'\) \}/.test(c) && c.includes('function KnowledgePage(')],
+  ['资料库视图由「资料」页型壳承载（activeView 分支）',
+    c.includes("activeView === 'knowledge'") && /function KnowledgePage\(/.test(c) && /h\(LibraryView,/.test(c)],
   ['资料库接口走 fdeGet/fdePost（feed 读 / refresh 强制刷新）',
     c.includes("fdeGet('/library/feed')") && c.includes("fdePost('/library/refresh', { force: true })")],
   ['资料库顶部：日期 / 更新于 / 总条数 / 来源组计数 / 刷新',
@@ -153,11 +176,14 @@ const checks = [
   ['资料库 CSS 走 --fde-* 语义 token（明暗自适应）',
     /\.fde-lib-/.test(c) && /var\(--fde-/.test(c)],
 
-  /* ---- 6c. FDE 流程 v2（v1.3，spec §20.5） ---- */
-  ['流程页签在导航中（客户之后、资料库之前）',
-    /\{ key: 'process', label: t\('tabProcess'\), count: null \}/.test(c)],
-  ['流程视图有独立路由分支',
-    c.includes("view === 'process'") && /return h\(ProcessView,/.test(c)],
+  /* ---- 6c. FDE 流程 v2（v1.3，spec §20.5）；Phase 2 起「方法」并入本页 ---- */
+  ['流程在导航中且带页内子页签（8 阶段 / 方法库 / 技能与模板）',
+    /\{ key: 'process', label: t\('tabProcess'\)/.test(c) && c.includes('function ProcessPage(')
+    && ["t('processTabFlow')", "t('processTabMethods')", "t('processTabSkills')"].every((x) => c.includes(x))],
+  ['流程视图由「流程」页型壳承载（activeView 分支）',
+    c.includes("activeView === 'process'") && /function ProcessPage\(/.test(c) && /h\(ProcessView,/.test(c)],
+  ['方法页并入流程页：MethodsView 按 section 拆「方法库 / 技能与模板」',
+    c.includes("p.section === 'skills' ? 'skills' : 'methods'") && c.includes('function MethodsView(')],
   ['8 阶段从 meta.stages 派生（不硬编码阶段数组）',
     c.includes('asList(meta && meta.stages)') && c.includes('stages.map(stepNode)')
     && !/\[\s*'lead'\s*,\s*'discovery'/.test(c) && !c.includes('7 个阶段') && !c.includes('7 列')],
@@ -181,6 +207,20 @@ const checks = [
     c.includes('initialName') && c.includes('initialSeq') && c.includes('methodJump')],
   ['流程 CSS 走 --fde-* 语义 token（明暗自适应）',
     /\.fde-flow-/.test(c) && /var\(--fde-/.test(c)],
+
+  /* ---- 6d. A7 去重（Phase 2 IA：全局刷新/自主性只在壳层一处） ---- */
+  ['A7：页内刷新只允许块级（t(\'refresh\') 全文件 = 壳层 1 + 经典模式 1）',
+    (() => {
+      const n = (c.match(/t\('refresh'\)/g) || []).length;
+      return n === 2;
+    })()],
+  ['A7：自主性徽章只在壳层渲染（视图内无 AutonomyBadge 调用）',
+    (() => {
+      const shellStart = c.indexOf('const autonomy = autonomyKey');
+      if (shellStart < 0) return false;
+      const before = c.slice(0, shellStart);
+      return !/AutonomyBadge\(\{ meta, mode: autonomyKey\(meta, board\) \}\)/.test(before);
+    })()],
 
   /* ---- 7. 约束 ---- */
   ['不 import @deepseek-ai/*', !c.includes('@deepseek-ai')],

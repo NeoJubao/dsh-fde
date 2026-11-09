@@ -7,7 +7,7 @@
 `dsh-fde`：跑在 DeepSeek Harness 里的单机插件，把「调研工作台」演进为 **FDE 工作站**——客户（engagement）沿 **8 个阶段**推进，任务（item）在看板泳道流转，注意力（attention）汇总需要人动作的事，会话（session）由看板按阶段模板发起并由 agent 回报，门禁（gate）用产物与人工确认共同把关。
 
 - 宿主半：`index.js` + `src/host/`（工具、路由、提示词、技能注册、看板状态、资料库刷新、两个计算工具）。
-- 客户端半：`src/ui/ui-panel.js`（**九页签**面板）→ `node build.mjs` 生成 `client.js`。
+- 客户端半：`src/ui/ui-panel.js`（**5 页签 + 页头设置入口**面板：今日/客户/资料/流程/文件；子页签见 `docs/01-spec.md` §8）→ `node build.mjs` 生成 `client.js`。
 - 方法论与技能：`methods/`（8 篇）、`reference/`、`templates/`、`skills/`（**11 个 `fde-*` 编排技能**，含 v1.3 新增 `fde-scoping`；另 4 个方法库技能 + 1 个通用技能 `longdoc-brief`，长文一页纸（brief））。
 - 状态：`research/.fde/board.json`（看板，属于**工作区**）；`research/.fde/fde-library.json`（资料库每日缓存）；`research/.fde/scys-fde.json`（生财社区缓存）；`research/.fde/scys-auth.json`（生财链接授权，0600，可由面板清除）。
 
@@ -15,7 +15,7 @@
 
 - 运行环境：DeepSeek Harness 0.2.0-rc.2（`engines.dsh: >=0.2.0-rc.2 <0.3.0`）；插件为纯 JS（ESM），**无编译、零新 npm 依赖**。
 - 安装：官方机制 `dsh plugin --profile <name> add <spec>`（本地路径会以 link 方式挂载，也可用 npm/git/tarball）；`tools/install_profiles.py` 只做 preflight 与打印命令，**不直接改 profile 文件**。
-- 许可：代码 MIT、方法/文档 CC BY 4.0（`LICENSE` / `LICENSE-docs`）；包名 `dsh-fde`，当前版本 `1.3.0`。
+- 许可：代码 MIT、方法/文档 CC BY 4.0（`LICENSE` / `LICENSE-docs`）；包名 `dsh-fde`，当前版本 `1.4.0`。
 - 禁止 `import '@deepseek-ai/*'`；服务一律 `ctx.get(...)` 懒取 + 容错，服务缺失时静默降级、不影响插件启动。
 - 面板只用 `--dsw-alias-*` 主题 token；不写 localStorage 作为事实源。
 

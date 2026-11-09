@@ -264,7 +264,7 @@ const byType = (tree, type) => collect(tree, (n) => n.type === type);
 const buttons = (tree) => collect(tree, (n) => n.type === 'button');
 const btnByText = (tree, txt) => buttons(tree).filter((b) => textOf(b).includes(txt));
 const btnExact = (tree, txt) => buttons(tree).filter((b) => textOf(b).trim() === txt);
-/* 九视图导航按钮在 .fde-nav 内，文本可能带计数（如「客户2」） */
+/* Phase 2 IA：5 页签导航按钮在 .fde-nav 内，文本可能带计数（如「今日20」） */
 const navBtn = (tree, label) => {
   const nav = byClass(tree, 'fde-nav')[0];
   if (!nav) return null;
@@ -894,6 +894,23 @@ function makeProps(over) {
 }
 const PanelApp = applied.captured.main;
 
+/* Phase 2 IA 导航助手：页内子页签在 .fde-pagebar；设置入口是页头齿轮 */
+const pageTab = (tree, label) => {
+  const bar = byClass(tree, 'fde-pagebar')[0];
+  if (!bar) return null;
+  return buttons({ children: [bar] }).filter((b) => textOf(b).trim().indexOf(label) === 0)[0] || null;
+};
+const gearBtn = (tree) => collect(tree, (n) => n.props && String(n.props['aria-label'] || '') === '设置')[0]
+  || byClass(tree, 'fde-iconbtn')[0] || null;
+const clickNode = (tree, node) => (node ? act(PanelApp, makeProps(), () => node.props.onClick()) : Promise.resolve(tree));
+const goNav = (tree, label) => clickNode(tree, navBtn(tree, label));
+const goPage = (tree, label) => clickNode(tree, pageTab(tree, label));
+const goFlow = async (tree) => {
+  tree = await goNav(tree, '流程');
+  tree = await goPage(tree, '8 阶段流程');
+  return tree;
+};
+
 /* ================= 场景一：FDE 今日 ================= */
 let tree = await renderStable(PanelApp, makeProps());
 if (process.env.DBG) {
@@ -902,16 +919,16 @@ if (process.env.DBG) {
 }
 check('面板标题为 FDE 工作站', textOf(tree).includes('FDE 工作站'));
 check('今日页渲染问候与战况', textOf(tree).includes('活跃客户'));
-check('九视图页签齐全（含流程与资料库，无生财）',
-  ['今日', '看板', '客户', '流程', '资料库', '招采', '工件', '方法', '设置'].every((x) => textOf(tree).includes(x))
+check('5 页签齐全（今日/客户/资料/流程/文件，无生财）',
+  ['今日', '客户', '资料', '流程', '文件'].every((x) => textOf(tree).includes(x))
   && !textOf(tree).includes('生财'));
-check('导航顺序：客户 → 流程 → 资料库 → 招采', (() => {
+check('导航顺序：今日 → 客户 → 资料 → 流程 → 文件', (() => {
   const nav = byClass(tree, 'fde-nav')[0];
   if (!nav) return false;
-  const labels = buttons({ children: [nav] }).map((b) => textOf(b).trim());
-  const idx = (k) => labels.findIndex((x) => x.indexOf(k) === 0);
-  return idx('客户') < idx('流程') && idx('流程') < idx('资料库') && idx('资料库') < idx('招采');
+  const labels = buttons({ children: [nav] }).map((b) => textOf(b).trim().replace(/\d+/g, ''));
+  return labels.join('|') === '今日|客户|资料|流程|文件';
 })());
+check('设置走页头齿轮入口（不占页签）', !!gearBtn(tree) && !textOf(byClass(tree, 'fde-nav')[0] || {}).includes('设置'));
 check('注意力列表渲染（受阻/待审/逾期/建议）',
   textOf(tree).includes('受阻') && textOf(tree).includes('受阻：KPI 数据拿不到')
   && textOf(tree).includes('逾期 2 天') && textOf(tree).includes('待审阅：写会面 Brief'));
@@ -949,10 +966,11 @@ if (acceptBtn) {
 }
 
 /* ================= 场景二：看板（客户模式）+ 拖拽 + 键盘 ================= */
-const boardTab = navBtn(tree, '看板');
-check('可切换到看板视图', !!boardTab);
-check('点击「看板」页签可导航', !!boardTab);
-tree = await act(PanelApp, makeProps(), () => boardTab.props.onClick());
+const customersNav = navBtn(tree, '客户');
+check('可切换到「客户」页（看板视图）', !!customersNav);
+tree = await act(PanelApp, makeProps(), () => customersNav.props.onClick());
+const boardTab = pageTab(tree, '看板 · 客户');
+check('客户页默认「看板 · 客户」子页签', !!boardTab);
 const colNodes = byClass(tree, 'fde-col');
 check('客户模式 8 列（含空列，来自 meta.stages）', colNodes.length === 8, '列数 ' + colNodes.length);
 check('8 列阶段名含 v1.3 新增「场景」', textOf(tree).includes('场景'));
@@ -1030,8 +1048,8 @@ if (cardA3 && pilotCol) {
 stub('POST', '/research-workbench/api/fde/engagement', () => ({ ok: true, engagement: BOARD.engagements[0] }));
 
 /* 任务模式：5 列 + 拖拽到 done 需证据 */
-const taskSeg = btnExact(tree, '任务')[0];
-check('看板可切换到任务模式', !!taskSeg);
+const taskSeg = pageTab(tree, '看板 · 任务');
+check('客户页可切换到「看板 · 任务」子页签', !!taskSeg);
 if (taskSeg) {
   tree = await act(PanelApp, makeProps(), () => taskSeg.props.onClick());
   const taskCols = byClass(tree, 'fde-col');
@@ -1074,6 +1092,9 @@ if (taskSeg) {
 const customerTab = navBtn(tree, '客户');
 check('点击「客户」页签可导航', !!customerTab);
 tree = await act(PanelApp, makeProps(), () => customerTab.props.onClick());
+const listTab = pageTab(tree, '客户清单');
+check('客户页可切换到「客户清单」子页签', !!listTab);
+if (listTab) tree = await act(PanelApp, makeProps(), () => listTab.props.onClick());
 check('客户表格渲染行与下一步', textOf(tree).includes('某环境集团') && textOf(tree).includes('补 KPI 假设第三段'));
 const customerRow = collect(tree, (n) => n.type === 'tr' && String(textOf(n)).indexOf('某环境集团') !== -1)[0];
 check('客户行可点击打开抽屉', !!customerRow);
@@ -1139,9 +1160,9 @@ if (archiveBtn) {
 
 /* ================= 场景三·续：任务抽屉（编辑/回报/删除） ================= */
 {
-  const boardNav = navBtn(tree, '看板');
+  const boardNav = navBtn(tree, '客户');
   tree = await act(PanelApp, makeProps(), () => boardNav.props.onClick());
-  const taskSeg2 = btnExact(tree, '任务')[0];
+  const taskSeg2 = pageTab(tree, '看板 · 任务');
   tree = await act(PanelApp, makeProps(), () => taskSeg2.props.onClick());
   const taskCard2 = collect(tree, (n) => n.props && n.props.draggable === 'true' && String(n.props['aria-label'] || '').indexOf('补公司年报摘要') !== -1)[0];
   check('任务卡片可打开抽屉', !!taskCard2);
@@ -1212,8 +1233,8 @@ if (adoptBtn) {
 }
 
 /* ================= 场景五：工件 / 方法 / 设置 ================= */
-const artTab = navBtn(tree, '工件');
-check('点击「工件」页签可导航', !!artTab);
+const artTab = navBtn(tree, '文件');
+check('点击「文件」页签可导航', !!artTab);
 tree = await act(PanelApp, makeProps(), () => artTab.props.onClick());
 check('工件页按客户聚合（可展开）', textOf(tree).includes('某环境集团'));
 const accHead = collect(tree, (n) => n.props && String(n.props.className || '').indexOf('fde-acc-head') !== -1)[0];
@@ -1230,20 +1251,29 @@ if (exportBtn) {
     JSON.stringify(expCall && expCall.body));
 }
 
-const methodsTab = navBtn(tree, '方法');
-check('点击「方法」页签可导航', !!methodsTab);
-tree = await act(PanelApp, makeProps(), () => methodsTab.props.onClick());
-check('方法页列出旧方法文件与 FDE 技能',
-  textOf(tree).includes('00-调研执行流程') && textOf(tree).includes('fde-engagement'));
+const processNav = navBtn(tree, '流程');
+check('点击「流程」页签可导航', !!processNav);
+if (processNav) tree = await act(PanelApp, makeProps(), () => processNav.props.onClick());
+const methodsTab = pageTab(tree, '方法库');
+check('流程页可切换到「方法库」子页签', !!methodsTab);
+if (methodsTab) tree = await act(PanelApp, makeProps(), () => methodsTab.props.onClick());
+check('方法库列出旧方法文件（方法 / 参考）',
+  textOf(tree).includes('00-调研执行流程'));
 const methodEntry = btnByText(tree, '00-调研执行流程')[0];
 if (methodEntry) {
   tree = await act(PanelApp, makeProps(), () => methodEntry.props.onClick());
   check('点开即读方法正文', textOf(tree).includes('调研执行流程'));
 }
+const skillsTab = pageTab(tree, '技能与模板');
+check('流程页可切换到「技能与模板」子页签', !!skillsTab);
+if (skillsTab) tree = await act(PanelApp, makeProps(), () => skillsTab.props.onClick());
+check('技能与模板列出 FDE 技能（meta.skills）', textOf(tree).includes('fde-engagement'));
+const backToList = btnExact(tree, '返回列表')[0] || btnByText(tree, '返回列表')[0];
+if (backToList) tree = await act(PanelApp, makeProps(), () => backToList.props.onClick());
 
-const settingsTab = navBtn(tree, '设置');
-check('点击「设置」页签可导航', !!settingsTab);
-tree = await act(PanelApp, makeProps(), () => settingsTab.props.onClick());
+const settingsTab = gearBtn(tree);
+check('点击页头齿轮可打开设置', !!settingsTab);
+if (settingsTab) tree = await act(PanelApp, makeProps(), () => settingsTab.props.onClick());
 check('设置页渲染自主性/停滞/WIP/重启提示',
   textOf(tree).includes('自主性') && textOf(tree).includes('停滞天数') && textOf(tree).includes('WIP') && textOf(tree).includes('重启'));
 check('设置页显示招采索引状态（board 顶层 bidStats 合并）',
@@ -1270,9 +1300,9 @@ if (saveSettingsBtn) {
   bidsAvailableFlag = true;
 
   /* 看板卡片徽章：available && total>0 才显示 */
-  const boardNav2 = navBtn(tree, '看板');
+  const boardNav2 = navBtn(tree, '客户');
   tree = await act(PanelApp, makeProps(), () => boardNav2.props.onClick());
-  const customerModeBtn = btnExact(tree, '客户')[0];
+  const customerModeBtn = pageTab(tree, '看板 · 客户');
   if (customerModeBtn) tree = await act(PanelApp, makeProps(), () => customerModeBtn.props.onClick());
   check('看板客户卡片显示「招采 N」徽章（数字为采样 total）', textOf(tree).includes('招采 3'));
   check('available:false 的客户不显示徽章（即使 total>0）', !textOf(tree).includes('招采 5'));
@@ -1282,9 +1312,12 @@ if (saveSettingsBtn) {
     bidBadge && bidBadge.props.title);
 
   /* 招采页签：概况 + 结果列表 */
-  const bidsNav = navBtn(tree, '招采');
-  check('导航含「招采」页签', !!bidsNav);
+  const bidsNav = navBtn(tree, '资料');
+  check('「资料」页签在导航中（资料库/招采同页）', !!bidsNav);
   tree = await act(PanelApp, makeProps(), () => bidsNav.props.onClick());
+  const bidsTab = pageTab(tree, '招采');
+  check('资料页可切换到「招采」子页签', !!bidsTab);
+  if (bidsTab) tree = await act(PanelApp, makeProps(), () => bidsTab.props.onClick());
   check('招采概况渲染（条数/区间/来源）',
     textOf(tree).includes('24156') && textOf(tree).includes('2018-05-03') && textOf(tree).includes('aecc-ebidding'));
   check('招采检索自动加载结果列表（标题/关系徽章）',
@@ -1388,10 +1421,12 @@ if (saveSettingsBtn) {
 
   /* 服务不可用降级：available:false 显示未就绪，不白屏不报错 */
   bidsAvailableFlag = false;
-  const settingsNav2 = navBtn(tree, '设置');
+  const settingsNav2 = gearBtn(tree);
   tree = await act(PanelApp, makeProps(), () => settingsNav2.props.onClick());
-  const bidsNav2 = navBtn(tree, '招采');
+  const bidsNav2 = navBtn(tree, '资料');
   tree = await act(PanelApp, makeProps(), () => bidsNav2.props.onClick());
+  const bidsTab2 = pageTab(tree, '招采');
+  if (bidsTab2) tree = await act(PanelApp, makeProps(), () => bidsTab2.props.onClick());
   check('available:false → 显示「招采雷达未就绪」且不白屏',
     textOf(tree).includes('招采雷达未就绪（bid-intel 未装载或未升级）') && textOf(tree).includes('重试')
     && textOf(tree).includes('按客户匹配'));
@@ -1403,8 +1438,10 @@ if (saveSettingsBtn) {
 /* ================= 场景五·续2：流程 v2（v1.3，spec §20.5） ================= */
 {
   const processNav = navBtn(tree, '流程');
-  check('第 4 页签「流程」在导航中（客户之后、资料库之前）', !!processNav);
-  if (processNav) tree = await act(PanelApp, makeProps(), () => processNav.props.onClick());
+  check('流程在导航中（第 4 项）', !!processNav);
+  tree = await goFlow(tree);
+  check('流程页带页内子页签（8 阶段流程 / 方法库 / 技能与模板）',
+    !!pageTab(tree, '8 阶段流程') && !!pageTab(tree, '方法库') && !!pageTab(tree, '技能与模板'));
 
   const stepByLabel = (label) => byClass(tree, 'fde-flow-step').filter((b) => textOf(b).includes(label))[0];
   check('流程步进条渲染 8 个阶段（来自 meta.stages）',
@@ -1434,8 +1471,7 @@ if (saveSettingsBtn) {
     && textOf(tree).includes('场景选择与数据体检') && textOf(tree).includes('四条硬门槛'));
 
   /* template chip → 方法页打开模板 */
-  const processNav2 = navBtn(tree, '流程');
-  if (processNav2) tree = await act(PanelApp, makeProps(), () => processNav2.props.onClick());
+  tree = await goFlow(tree);
   const scopingStep2 = stepByLabel('场景');
   if (scopingStep2) tree = await act(PanelApp, makeProps(), () => scopingStep2.props.onClick());
   const tplChip = buttons(tree).filter((b) => textOf(b).trim() === '场景评估表')[0];
@@ -1446,8 +1482,7 @@ if (saveSettingsBtn) {
     && textOf(tree).includes('模板：场景'));
 
   /* skill chip → 展开「在会话中这样用」+ 复制 */
-  const processNav3 = navBtn(tree, '流程');
-  if (processNav3) tree = await act(PanelApp, makeProps(), () => processNav3.props.onClick());
+  tree = await goFlow(tree);
   const scopingStep3 = stepByLabel('场景');
   if (scopingStep3) tree = await act(PanelApp, makeProps(), () => scopingStep3.props.onClick());
   const skillChip = buttons(tree).filter((b) => textOf(b).trim() === 'fde-scoping 技能')[0];
@@ -1476,8 +1511,7 @@ if (saveSettingsBtn) {
     textOf(tree).includes('FDE 资料库') && callsOf('GET', '/fde/library/feed').length >= 1);
 
   /* 阶段 × 工具矩阵 */
-  const processNav4 = navBtn(tree, '流程');
-  if (processNav4) tree = await act(PanelApp, makeProps(), () => processNav4.props.onClick());
+  tree = await goFlow(tree);
   const matrix = byClass(tree, 'fde-matrix')[0];
   check('阶段 × 工具矩阵渲染（表头 + 8 行，只读）',
     textOf(tree).includes('阶段 × 工具矩阵') && !!matrix
@@ -1493,8 +1527,8 @@ if (saveSettingsBtn) {
   instances.clear();
   tree = await renderStable(PanelApp, makeProps());
   const processNav = navBtn(tree, '流程');
-  check('无 playbook 时流程页签仍可达（不白屏）', !!processNav);
-  if (processNav) tree = await act(PanelApp, makeProps(), () => processNav.props.onClick());
+  check('无 playbook 时流程页仍可达（不白屏）', !!processNav);
+  tree = await goFlow(tree);
   check('meta 缺 playbook → 提示「宿主未升级」',
     textOf(tree).includes('宿主未升级') && textOf(tree).includes('FDE 流程'));
 
@@ -1508,9 +1542,12 @@ if (saveSettingsBtn) {
 {
   libMode = 'ok';
   windowOpens.length = 0;
-  const libNav = navBtn(tree, '资料库');
-  check('第 5 页签「资料库」在导航中（流程之后、招采之前）', !!libNav);
+  const libNav = navBtn(tree, '资料');
+  check('「资料」页签在导航中（资料库 / 招采同页）', !!libNav);
   if (libNav) tree = await act(PanelApp, makeProps(), () => libNav.props.onClick());
+  const libTab = pageTab(tree, '资料库');
+  check('资料页带子页签（资料库 / 招采）', !!libTab && !!pageTab(tree, '招采'));
+  if (libTab) tree = await act(PanelApp, makeProps(), () => libTab.props.onClick());
 
   check('资料库首屏 GET /fde/library/feed', callsOf('GET', '/fde/library/feed').length >= 1);
   check('顶部信息：数据日期 / 更新于 / 总条数 / 来源组计数',

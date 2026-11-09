@@ -3,7 +3,7 @@
  * 用法: node verify/fde-client.mjs
  *
  * 与 client-static.mjs 的分工：client-static 守「模块/注册/旧能力」，
- * 本脚本守「九视图信息架构（含流程 v2 与资料库）、主题 token 纪律、API 前缀、兼容页、
+ * 本脚本守「Phase 2 IA：5 页签 + 页内子页签（含流程 v2 与资料库）、主题 token 纪律、API 前缀、兼容页、
  * 可访问性、拖拽/键盘、破坏性确认、轮询、不白屏」。
  * v1.3：生财页签与 ScysView 已移除（宿主 scys 能力保留），由资料库接替。
  * 全部是对 client.js 的静态断言；运行时行为见 verify/client-runtime.mjs。
@@ -46,21 +46,32 @@ check('Finder 三通道保留（remote.session → /open-in-app → /reveal）',
 
 /* ---------- 2. 九视图信息架构（spec §8 / §17.7 / §19.6 / §20.5） ---------- */
 const views = ['Today', 'Board', 'Customers', 'Process', 'Library', 'Bids', 'Artifacts', 'Methods', 'Settings'];
-check('九个视图组件存在', views.every((v) => c.includes('function ' + v + 'View(')));
-check('视图路由分支齐全（今日为默认回退）',
-  ['board', 'customers', 'process', 'library', 'bids', 'artifacts', 'methods', 'settings']
-    .every((v) => c.includes("view === '" + v + "'"))
-  && /return h\(TodayView,/.test(c));
-check('导航含九项（流程第 4 / 资料库第 5）且带 role=tablist',
-  c.includes("role: 'tablist'") && ['tabToday', 'tabBoard', 'tabCustomers', 'tabProcess', 'tabLibrary',
-    'tabBids', 'tabArtifacts', 'tabMethods', 'tabSettings'].every((k) => c.includes("t('" + k + "')")));
-check('导航顺序：今日/看板/客户/流程/资料库/招采/工件/方法/设置',
+check('视图组件存在（页型壳复用九组件）', views.every((v) => c.includes('function ' + v + 'View(')));
+check('5 页型壳组件存在（客户/资料/流程/设置 + 页内子页签）',
+  ['CustomersPage', 'KnowledgePage', 'ProcessPage', 'SettingsPage'].every((v) => c.includes('function ' + v + '('))
+  && c.includes('function PageTabs('));
+check('视图路由分支齐全（5 页签 + 设置，今日为默认回退）',
+  ['customers', 'knowledge', 'process', 'files', 'settings']
+    .every((v) => c.includes("activeView === '" + v + "'"))
+  && /return h\(TodayView,/.test(c) && c.includes('function normalizeView('));
+check('导航含五项（客户/资料/流程/文件）且带 role=tablist',
+  c.includes("role: 'tablist'") && ['tabToday', 'tabCustomers', 'tabKnowledge', 'tabProcess', 'tabNavFiles']
+    .every((k) => c.includes("t('" + k + "')")));
+check('导航顺序：今日/客户/资料/流程/文件（设置走页头齿轮）',
   (() => {
     const m = /const navItems = \[([\s\S]*?)\];/.exec(c);
     if (!m) return false;
     return [...m[1].matchAll(/key: '([a-z]+)'/g)].map((x) => x[1]).join(',')
-      === 'today,board,customers,process,library,bids,artifacts,methods,settings';
+      === 'today,customers,knowledge,process,files';
   })());
+check('页内子页签：客户三态 / 资料两态 / 流程三态',
+  ['customersViewBoardCustomer', 'customersViewBoardTask', 'customersViewList',
+    'knowledgeTabs', 'processTabFlow', 'processTabMethods', 'processTabSkills'].every((k) => c.includes("t('" + k + "')")));
+check('旧 state 值回落今日（normalizeView + LEGACY_VIEW_ALIASES，不白屏）',
+  c.includes('normalizeView') && c.includes('LEGACY_VIEW_ALIASES') && c.includes("|| 'today'"));
+check('设置不占页签：页头齿轮入口（aria-label + openSettings）',
+  !/\{ key: 'settings'/.test(/const navItems = \[([\s\S]*?)\];/.exec(c)[1])
+  && c.includes('const openSettings = useCallback(') && c.includes("'aria-label': t('tabSettings')"));
 check('v1.3 已移除生财页签与 ScysView（宿主 scys 能力保留）',
   !c.includes("key: 'scys'") && !c.includes('function ScysView(')
   && !c.includes("fdeGet('/scys/feed')") && !c.includes('fde-scys-'));
@@ -69,7 +80,9 @@ check('今日页四块：注意力/建议/焦点/活动',
 check('注意力 8 类 kind 齐全（spec §5）',
   ['blocked', 'decision', 'review', 'answer', 'overdue', 'gate', 'stall', 'proposal']
     .every((k) => c.includes("'" + k + "'")));
-check('看板两种模式 + 空列占位', c.includes("t('boardModeCustomer')") && c.includes("t('boardModeTask')") && c.includes('（空）'));
+check('客户页三态（看板·客户 / 看板·任务 / 客户清单）+ 空列占位',
+  ['customersViewBoardCustomer', 'customersViewBoardTask', 'customersViewList'].every((k) => c.includes("t('" + k + "')"))
+  && c.includes('（空）'));
 check('客户页表格 + 筛选 + 两段式导入',
   c.includes("className: 'fde-table'") && c.includes("fdePost('/adopt', { action: 'scan' })") && c.includes("fdePost('/adopt', { action: 'apply', dirs })"));
 check('工件页复用旧素材/导出/质检能力',
@@ -168,8 +181,8 @@ check('归档/删除都二次确认（无原生 confirm）',
   c.includes("t('drawerArchiveBody')") && c.includes("t('drawerDeleteBody')") && !/window\.confirm\(/.test(c));
 
 /* ---------- 8b. 招采雷达（spec §17.7 / §17.9.6） ---------- */
-check('第 7 页签「招采」存在且位于客户之后',
-  /\{ key: 'bids', label: t\('tabBids'\), count: null \}/.test(c));
+check('招采并入「资料」页子页签（不再单列导航）',
+  /\{ key: 'bids', label: t\('tabBids'\) \}/.test(c) && c.includes('function KnowledgePage('));
 check('招采 API 全部走 fdeGet/fdePost',
   ["fdeGet('/bids/stats')", "FDE + '/bids/search?", "fdeGet('/bids/match?", "fdePost('/bids/link'", "fdePost('/bids/unlink'", "fdePost('/bids/promote'", "fdePost('/bids/refresh'"]
     .every((x) => c.includes(x)));
@@ -206,8 +219,8 @@ check('招采用 theme token（无裸色值）',
   /var\(--dsw-alias-/.test(css) && !/fde-bid[^}]*#[0-9a-fA-F]{3,8}/.test(css));
 
 /* ---------- 8c. FDE 资料库（spec §19.6 / §19.8） ---------- */
-check('第 5 页签「资料库」存在且位于流程之后、招采之前',
-  /\{ key: 'library', label: t\('tabLibrary'\), count: null \}/.test(c));
+check('资料库并入「资料」页子页签（与招采同页，不再单列导航）',
+  /\{ key: 'library', label: t\('tabLibrary'\) \}/.test(c) && c.includes('function KnowledgePage('));
 check('资料库只读接口走 fdeGet/fdePost（feed / refresh force）',
   c.includes("fdeGet('/library/feed')") && c.includes("fdePost('/library/refresh', { force: true })"));
 check('资料库顶部：数据日期 / 更新于 / 总条数 / 来源组计数 / 刷新',
@@ -240,8 +253,8 @@ check('资料库 CSS 走 --fde-* 语义 token 且无裸色值',
   /\.fde-lib-/.test(css) && /var\(--fde-/.test(css) && !/fde-lib[^}]*#[0-9a-fA-F]{3,8}/.test(css));
 
 /* ---------- 8d. FDE 流程 v2（spec §20.5 / §20.7） ---------- */
-check('第 4 页签「流程」存在且位于客户之后、资料库之前',
-  /\{ key: 'process', label: t\('tabProcess'\), count: null \}/.test(c));
+check('流程在导航中（第 4 项）且带页内子页签',
+  /\{ key: 'process', label: t\('tabProcess'\)/.test(c) && c.includes('function ProcessPage('));
 check('8 阶段从 meta.stages 派生（不硬编码阶段数与顺序）',
   c.includes('asList(meta && meta.stages)') && c.includes('stages.map(stepNode)')
   && !/\[\s*'lead'\s*,\s*'discovery'/.test(c) && !c.includes('7 个阶段') && !c.includes('7 列'));

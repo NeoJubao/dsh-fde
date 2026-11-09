@@ -2,13 +2,26 @@
 
 本文件记录 `dsh-fde`（FDE 工作站）的用户可见变化。版本号遵循 SemVer；插件市场与 `dsh plugin add` 以 `package.json` 的版本为准。
 
-## 1.3.1 — 2026-11-09
+## 1.3.1 — 2026-11-09（仓库内部发布准备，未单独发布到 npm）
 
 发布卫生修复（不改变功能）：
 
 - 移除误提交的 `scripts/__pycache__/`（Python 字节码）；`.gitignore` 与 `verify/pack.mjs` 增加拦截。
 - 版本断言改为从 `package.json` 单一来源读取（`pack.mjs` / `open-source.mjs`），避免发版时漏改。
 - README 明确 npm 安装方式已可用。
+
+## 1.4.0 — 2026-11-09
+
+信息架构收敛（ADR 0005），并汇总此前已进仓库、但未随 1.3.0 上 npm 的加固与视觉对齐：
+
+- **导航 9 → 5 页签 + 页头设置入口**：今日 / 客户 / 资料 / 流程 / 文件；客户页内「看板·客户 / 看板·任务 / 客户清单」，资料页内「资料库 / 招采」，流程页内「8 阶段流程 / 方法库 / 技能与模板」；设置改为页头齿轮，旧状态值回落「今日」，无死路由。
+- **A7 重复全局控件清零**：页内重复的「刷新 / 自主性徽章」删除，只保留壳层一处；块级刷新保留。
+- **宿主内核加固**（Phase 3）：`rw_*` 子进程优先 `ctx.subprocess`（不可用时脱敏 `execFile` + 显式 cwd）；`rw_export_pdf` / `rw_qa_pdf` 路径锁定工作区；JSON 响应 `Cache-Control: no-store` + `nosniff`；`presentCall.kind` 归一到官方枚举；board 原子写 `wx` + `0600`；agent 不得自行 resolve `decision` / `blocked` 注意力。
+- **客户端加固**：请求 8s 超时（慢路由按路径放宽）、隐藏页暂停轮询 + 恢复补拉、GET 在途去重；React key 告警清零；正文基准接 `--dsh-content-font-size`。
+- **视觉对齐 DSH 官方 token**：中性描边 0.5px（spinner 豁免）、圆角/胶囊/材质/`:hover`/字号接 `--dsw-radius-*` / `--dsw-elevation-*` / `@media (hover:hover)`；ui-contract 体检 drift 0。
+- **ui-contract v1 并入仓库**（`docs/ui-contract/`）：结构 / 视觉 / 取值 / 区域 id / 可执行体检 + 自测 fixture；`verify/ui-contract.mjs` advisory 接入 `verify/all`。
+- **发布手册与预检**：`docs/RELEASE.md`、`scripts/release-preflight.mjs`。
+- **发布卫生**：移除 `__pycache__`；版本断言改为从 `package.json` 单一来源读取；npm 安装方式已在 README 标注可用。
 
 ## 1.3.0 — 2026-11-08（首个开源版本）
 

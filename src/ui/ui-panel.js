@@ -200,6 +200,13 @@ window.__ModuleLoader__.load({
 
 /* ---- 九视图导航（分段选择） ---- */
 .fde-nav-wrap{padding:0 18px 10px;flex:0 0 auto}
+/* Phase 2（layout.md §7）：页内子页签条 / 页头设置入口图标按钮 */
+.fde-pagebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:0 0 auto}
+.fde-iconbtn{width:32px;height:32px;border:0.5px solid var(--fde-border);border-radius:var(--dsw-radius-md,12px);
+  background:var(--fde-surface-2);color:var(--fde-text-2);font-size:16px;line-height:1;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.fde-iconbtn.on{border-color:color-mix(in srgb,var(--fde-accent) 46%,transparent);
+  background:color-mix(in srgb,var(--fde-accent) 10%,transparent);color:var(--fde-accent)}
 .fde-nav{display:inline-flex;gap:2px;padding:3px;border-radius:var(--dsw-radius-md,12px);background:var(--fde-surface-2);border:0.5px solid var(--fde-border);max-width:100%;overflow-x:auto}
 .fde-nav button{height:30px;padding:0 14px;border:1px solid transparent;border-radius:var(--dsw-radius-sm,8px);background:transparent;
   color:var(--fde-text-2);font-size:13px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;transition:background .15s,color .15s}
@@ -726,6 +733,7 @@ window.__ModuleLoader__.load({
 /* ---- hover 交互（官方 web-styling：:hover 必须位于 @media (hover:hover) 内） ---- */
 @media (hover: hover){
   .fde-root ::-webkit-scrollbar-thumb:hover{background:var(--fde-scroll-hover)}
+  .fde-iconbtn:hover{border-color:var(--fde-border-2)}
   .fde-nav button:hover{background:var(--fde-hover);color:var(--fde-text)}
   .fde-btn:hover{border-color:var(--fde-border-2);background:var(--fde-surface-3)}
   .fde-btn.primary:hover{background:var(--dsw-alias-button-primary-hover,var(--fde-brand));border-color:transparent}
@@ -764,8 +772,12 @@ window.__ModuleLoader__.load({
       fdeBrand: 'FDE 工作站',
       fdeTagline: '客户经营 · 注意力 · 会话派发',
       tagline: '立项 · 调研 · 会面材料 · 方案',
-      tabToday: '今日', tabBoard: '看板', tabCustomers: '客户',
-      tabArtifacts: '工件', tabMethods: '方法', tabSettings: '设置',
+      tabToday: '今日', tabCustomers: '客户', tabKnowledge: '资料', tabNavFiles: '文件',
+      tabBoard: '看板', tabArtifacts: '工件', tabMethods: '方法', tabSettings: '设置',
+      /* Phase 2 IA（layout.md §7）：5 页签 + 页内子页签 */
+      customersViewBoardCustomer: '看板 · 客户', customersViewBoardTask: '看板 · 任务', customersViewList: '客户清单',
+      customersViews: '客户视图', knowledgeTabs: '资料子页签', settingsBack: '返回主视图',
+      processTabFlow: '8 阶段流程', processTabMethods: '方法库', processTabSkills: '技能与模板', processTabs: '流程子页签',
       tabNew: '新建调研', tabProjects: '项目', tabFiles: '产物 / 导出',
       tabMaterials: '素材',
       classicMode: '经典模式',
@@ -930,7 +942,7 @@ window.__ModuleLoader__.load({
       customersDays: '天', customersCount: '个客户',
       customersAlready: '已在看板', customersConfidence: '置信度', customersEvidence: '依据',
       /* 工件 */
-      artifactsTitle: '工件', artifactsMaterials: '素材目录与散落文件',
+      artifactsTitle: '文件', artifactsMaterials: '素材目录与散落文件',
       artifactsPick: '选择客户', artifactsNoCustomer: '还没有客户，先导入或新建客户。',
       artifactsNoFiles: '该客户还没有工件。', artifactsExport: '导出 PDF', artifactsQa: '质检',
       artifactsUploadTitle: '上传文件到客户卷', artifactsUploadHint: '拖拽文件到此，或点击选择；文件保存到该客户的 raw/uploads/。',
@@ -2172,6 +2184,21 @@ window.__ModuleLoader__.load({
     }
 
     /* ============================================================
+     * Phase 2 IA（layout.md §7）：5 页签 + 页内子页签。
+     * 旧 view 值（board/library/bids/artifacts/methods）由 normalizeView 映射，
+     * 未知值回落「今日」，保证旧深链/旧 state 不白屏。
+     * ============================================================ */
+    const NAV_VIEWS = ['today', 'customers', 'knowledge', 'process', 'files'];
+    const LEGACY_VIEW_ALIASES = {
+      board: 'customers', library: 'knowledge', bids: 'knowledge', artifacts: 'files', methods: 'process',
+    };
+    function normalizeView(key) {
+      const k = str(key);
+      if (k === 'settings' || NAV_VIEWS.indexOf(k) !== -1) return k;
+      return LEGACY_VIEW_ALIASES[k] || 'today';
+    }
+
+    /* ============================================================
      * 五、今日视图
      * 注意力列表（blocked/decision/review/answer/overdue/gate/stall/proposal）
      * + 建议（采纳/忽略）+ 今日焦点 + 最近活动 + 战况统计。
@@ -2390,7 +2417,6 @@ window.__ModuleLoader__.load({
           h('div', { className: 'fde-card' },
             Section({
               title: t('todayAttention') + (attention.length ? '（' + attention.length + '）' : ''),
-              actions: h(Btn, { small: true, onClick: p.onRefresh }, t('refresh')),
               children: [
                 p.briefError
                   ? h(ErrorLine, { key: 'e', title: t('briefLoadFail'), text: p.briefError, onRetry: p.onRefreshBrief })
@@ -2681,17 +2707,6 @@ window.__ModuleLoader__.load({
       const emptyBoard = mode === 'customer' && engagements.length === 0;
       return h('div', { className: 'fde-view fde-view-fill' },
         h('div', { className: 'fde-toolbar' },
-          h('div', { className: 'fde-seg', role: 'tablist', 'aria-label': '看板模式' },
-            h('button', {
-              type: 'button', role: 'tab', 'aria-selected': mode === 'customer' ? 'true' : 'false',
-              className: mode === 'customer' ? 'on' : '',
-              onClick: () => p.onMode && p.onMode('customer'),
-            }, t('boardModeCustomer')),
-            h('button', {
-              type: 'button', role: 'tab', 'aria-selected': mode === 'task' ? 'true' : 'false',
-              className: mode === 'task' ? 'on' : '',
-              onClick: () => p.onMode && p.onMode('task'),
-            }, t('boardModeTask'))),
           h('div', { className: 'fde-search' },
             h('span', { className: 'fde-search-icon', 'aria-hidden': 'true' }, '⌕'),
             h('input', {
@@ -2718,9 +2733,7 @@ window.__ModuleLoader__.load({
               ).map((o) => h('option', { key: o.value, value: o.value }, o.label)))
             : null,
           h('div', { className: 'fde-spacer' }),
-          mode === 'task' ? h(Btn, { small: true, kind: 'primary', onClick: p.onCreateItem }, '新建任务') : null,
-          AutonomyBadge({ meta, mode: autonomyKey(meta, board) }),
-          h(Btn, { small: true, onClick: p.onRefresh, disabled: !!p.busy }, t('refresh'))),
+          mode === 'task' ? h(Btn, { small: true, kind: 'primary', onClick: p.onCreateItem }, '新建任务') : null),
         h('div', { className: 'fde-row', style: { justifyContent: 'space-between' } },
           h('span', { className: 'fde-hint' }, t('boardDragHint')),
           h(KeyHint, {})),
@@ -2925,8 +2938,7 @@ window.__ModuleLoader__.load({
           }),
           h('div', { className: 'fde-spacer' }),
           h(Btn, { small: true, kind: 'primary', onClick: p.onCreate }, '新建客户'),
-          h(Btn, { small: true, onClick: () => { if (candidates === null) runScan(); else setShowAdopt((v) => !v); }, busy: scanning }, t('customersAdopt')),
-          h(Btn, { small: true, onClick: p.onRefresh, disabled: !!p.busy }, t('refresh'))),
+          h(Btn, { small: true, onClick: () => { if (candidates === null) runScan(); else setShowAdopt((v) => !v); }, busy: scanning }, t('customersAdopt'))),
         showAdopt ? adoptPanel() : null,
         rows.length === 0
           ? h(Empty, {
@@ -3335,8 +3347,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'fde-toolbar' },
           h('div', { className: 'fde-section-title' }, t('artifactsTitle')),
           h('div', { className: 'fde-spacer' }),
-          h(Btn, { small: true, onClick: doSync, busy: syncing }, syncing ? '重扫中…' : t('artifactsRefresh')),
-          h(Btn, { small: true, onClick: p.onRefresh, disabled: !!p.busy }, t('refresh'))),
+          h(Btn, { small: true, onClick: doSync, busy: syncing }, syncing ? '重扫中…' : t('artifactsRefresh'))),
         syncMsg ? h(MsgLine, { kind: 'ok', text: syncMsg, onClose: () => setSyncMsg('') }) : null,
         engs.length === 0
           ? h(Empty, {
@@ -4240,7 +4251,7 @@ window.__ModuleLoader__.load({
 
       const clickTool = (tool) => {
         if (tool.kind === 'method' || tool.kind === 'template') {
-          if (typeof p.onOpenMethod === 'function') p.onOpenMethod(tool.name || tool.label);
+          if (typeof p.onOpenMethod === 'function') p.onOpenMethod(tool.name || tool.label, tool.kind);
           return;
         }
         if (tool.kind === 'library') {
@@ -4445,19 +4456,14 @@ window.__ModuleLoader__.load({
         if (initialName) read(initialName);
       }, [initialName, initialSeq]);
 
-      const groups = [
-        { kind: 'method', label: '方法' },
-        { kind: 'reference', label: '参考' },
-        { kind: 'template', label: '模板' },
-      ];
+      const section = p.section === 'skills' ? 'skills' : 'methods';
+      const groups = section === 'skills'
+        ? [{ kind: 'template', label: '模板' }]
+        : [{ kind: 'method', label: '方法' }, { kind: 'reference', label: '参考' }];
       const list = items || [];
       const skills = asList(meta && meta.skills);
 
       return h('div', { className: 'fde-view' },
-        h('div', { className: 'fde-toolbar' },
-          h('div', { className: 'fde-section-title' }, t('methodsTitle')),
-          h('div', { className: 'fde-spacer' }),
-          h(Btn, { small: true, onClick: load, disabled: loading }, t('refresh'))),
         err ? h(ErrorLine, { title: t('loadFail'), text: err, onRetry: () => (body ? read(body.name) : load()) }) : null,
         loading && !list.length ? h(Loading, {}) : null,
         body
@@ -4483,16 +4489,18 @@ window.__ModuleLoader__.load({
                   }));
               }))
             : h(Empty, { mark: '▤', title: t('methodsEmpty') })),
-        h('div', { className: 'fde-card' },
-          Section({
-            title: t('methodsSkills') + (skills.length ? '（' + skills.length + '）' : ''),
-            children: skills.length
-              ? h('div', { className: 'fde-stack' }, skills.map((s) => h('div', { key: s.name, className: 'fde-skill' },
-                h('div', { className: 'fde-skill-name' }, s.name),
-                h('div', { className: 'fde-skill-desc' }, s.description || h('span', { className: 'fde-dim' }, '（无描述）')))))
-              : h('div', { className: 'fde-hint' }, t('skillsEmpty')),
-            extra: h('span', { className: 'fde-hint' }, t('methodsSkillsHint')),
-          })));
+        section === 'skills'
+          ? h('div', { className: 'fde-card' },
+            Section({
+              title: t('methodsSkills') + (skills.length ? '（' + skills.length + '）' : ''),
+              children: skills.length
+                ? h('div', { className: 'fde-stack' }, skills.map((sk) => h('div', { key: sk.name, className: 'fde-skill' },
+                  h('div', { className: 'fde-skill-name' }, sk.name),
+                  h('div', { className: 'fde-skill-desc' }, sk.description || h('span', { className: 'fde-dim' }, '（无描述）')))))
+                : h('div', { className: 'fde-hint' }, t('skillsEmpty')),
+              extra: h('span', { className: 'fde-hint' }, t('methodsSkillsHint')),
+            }))
+          : null);
     }
 
     function SettingsView(props) {
@@ -5412,6 +5420,120 @@ window.__ModuleLoader__.load({
     }
 
     /* ============================================================
+     * 十三之二、Phase 2 页型壳（layout.md §7）
+     * 5 页签只组合既有视图；页内视图切换（客户 3 态 / 资料 2 态 / 流程 3 态）
+     * 与页头设置入口在这里承载，各视图组件保持原有数据与行为。
+     * ============================================================ */
+    function PageTabs(props) {
+      const p = props || {};
+      return h('div', { className: 'fde-pagebar' },
+        h('div', { className: 'fde-seg', role: 'tablist', 'aria-label': p.ariaLabel || '' },
+          asList(p.items).map((it) => h('button', {
+            key: it.key,
+            type: 'button',
+            role: 'tab',
+            'aria-selected': p.value === it.key ? 'true' : 'false',
+            className: p.value === it.key ? 'on' : '',
+            onClick: () => { if (p.onChange) p.onChange(it.key); },
+          }, it.label))),
+        p.extra || null);
+    }
+
+    function CustomersPage(props) {
+      const p = props || {};
+      const tab = p.tab === 'board-item' ? 'board-item' : (p.tab === 'list' ? 'list' : 'board-customer');
+      return h('div', { className: 'fde-view fde-view-fill' },
+        PageTabs({
+          ariaLabel: t('customersViews'),
+          value: tab,
+          items: [
+            { key: 'board-customer', label: t('customersViewBoardCustomer') },
+            { key: 'board-item', label: t('customersViewBoardTask') },
+            { key: 'list', label: t('customersViewList') },
+          ],
+          onChange: (k) => { if (p.onTab) p.onTab(k); },
+        }),
+        tab === 'list'
+          ? h(CustomersView, {
+            meta: p.meta, board: p.board, busy: p.busy, scanToken: p.scanToken,
+            onOpenEngagement: p.onOpenEngagement,
+            onRefresh: p.onRefresh,
+            onCreate: p.onCreateEngagement,
+          })
+          : h(BoardView, {
+            meta: p.meta, board: p.board, busy: p.busy,
+            mode: tab === 'board-item' ? 'task' : 'customer',
+            search: p.search, onSearch: p.onSearch,
+            priority: p.priority, onPriority: p.onPriority,
+            customerFilter: p.customerFilter, onCustomerFilter: p.onCustomerFilter,
+            onOpenEngagement: p.onOpenEngagement, onOpenItem: p.onOpenItem,
+            onMoveEngagement: p.onMoveEngagement,
+            onMoveItem: p.onMoveItem,
+            onScanNow: p.onScanNow,
+            onOpenCustomers: () => { if (p.onTab) p.onTab('list'); },
+            onCreateItem: p.onCreateItem,
+          }));
+    }
+
+    function KnowledgePage(props) {
+      const p = props || {};
+      const tab = p.tab === 'bids' ? 'bids' : 'library';
+      return h('div', { className: 'fde-view fde-view-fill' },
+        PageTabs({
+          ariaLabel: t('knowledgeTabs'),
+          value: tab,
+          items: [
+            { key: 'library', label: t('tabLibrary') },
+            { key: 'bids', label: t('tabBids') },
+          ],
+          onChange: (k) => { if (p.onTab) p.onTab(k); },
+        }),
+        tab === 'bids'
+          ? h(BidsView, {
+            meta: p.meta, board: p.board, bidStats: p.bidStats, busy: p.busy,
+            onRefresh: p.onRefresh, onOpenEngagement: p.onOpenEngagement,
+          })
+          : h(LibraryView, { meta: p.meta }));
+    }
+
+    function ProcessPage(props) {
+      const p = props || {};
+      const tab = p.tab === 'methods' || p.tab === 'skills' ? p.tab : 'flow';
+      return h('div', { className: 'fde-view fde-view-fill' },
+        PageTabs({
+          ariaLabel: t('processTabs'),
+          value: tab,
+          items: [
+            { key: 'flow', label: t('processTabFlow') },
+            { key: 'methods', label: t('processTabMethods') },
+            { key: 'skills', label: t('processTabSkills') },
+          ],
+          onChange: (k) => { if (p.onTab) p.onTab(k); },
+        }),
+        tab === 'flow'
+          ? h(ProcessView, {
+            meta: p.meta, board: p.board, copyText: p.copyText,
+            onOpenMethod: p.onOpenMethod, onOpenLibrary: p.onOpenLibrary,
+          })
+          : h(MethodsView, {
+            meta: p.meta, section: tab,
+            initialName: p.initialName, initialSeq: p.initialSeq,
+          }));
+    }
+
+    function SettingsPage(props) {
+      const p = props || {};
+      return h('div', { className: 'fde-view' },
+        h('div', { className: 'fde-toolbar' },
+          h(Btn, { small: true, onClick: p.onBack }, '← ' + t('settingsBack')),
+          h('div', { className: 'fde-section-title' }, t('tabSettings'))),
+        h(SettingsView, {
+          meta: p.meta, board: p.board, busy: p.busy, bidStats: p.bidStats,
+          onRefresh: p.onRefresh, onClassic: p.onClassic, onReprobe: p.onReprobe,
+        }));
+    }
+
+    /* ============================================================
      * 十四、FDE 根组件
      * 状态事实来源是服务端 board：所有写操作后重新拉取 board，
      * 客户端 state 只做渲染与局部编辑草稿。轮询 12s，切页签立即刷新。
@@ -5423,6 +5545,11 @@ window.__ModuleLoader__.load({
       const [board, setBoard] = useState(null);
       const [stats, setStats] = useState(null);
       const [view, setView] = useState('today');
+      /* Phase 2：页内子页签状态（layout.md §7） */
+      const [customersTab, setCustomersTab] = useState('board-customer'); /* board-customer | board-item | list */
+      const [knowledgeTab, setKnowledgeTab] = useState('library'); /* library | bids */
+      const [processTab, setProcessTab] = useState('flow'); /* flow | methods | skills */
+      const [settingsReturn, setSettingsReturn] = useState('today');
       const [loading, setLoading] = useState(true);
       const [boardError, setBoardError] = useState('');
       const [brief, setBrief] = useState(null);
@@ -5434,7 +5561,6 @@ window.__ModuleLoader__.load({
       const [dialog, setDialog] = useState(null);
       const [createForm, setCreateForm] = useState(null); /* 'engagement' | 'item'（§2.1 新建弹层） */
       const [methodJump, setMethodJump] = useState({ name: '', seq: 0 });
-      const [boardMode, setBoardMode] = useState('customer');
       const [search, setSearch] = useState('');
       const [priority, setPriority] = useState('all');
       const [customerFilter, setCustomerFilter] = useState('');
@@ -6044,27 +6170,54 @@ window.__ModuleLoader__.load({
         if (r && r.ok) { await refreshAll(true); notify('ok', action === 'accept' ? '已采纳建议' : '已忽略建议'); }
       }, [runAction, refreshAll, notify]);
 
-      /* ---------- 视图导航 ---------- */
+      /* ---------- 视图导航（Phase 2：5 页签 + 页内子页签；旧 key 映射，不白屏） ---------- */
       const goView = useCallback((key) => {
-        setView(key);
+        const k = str(key);
+        if (k === 'settings') {
+          setSettingsReturn((prev) => (viewRef.current && viewRef.current !== 'settings' ? viewRef.current : prev));
+          setView('settings');
+          setMsg(null);
+          return;
+        }
+        if (k === 'board') setCustomersTab('board-customer');
+        else if (k === 'library') setKnowledgeTab('library');
+        else if (k === 'bids') setKnowledgeTab('bids');
+        else if (k === 'methods') setProcessTab('methods');
+        setView(normalizeView(k));
         setMsg(null);
       }, []);
 
-      /* 流程页 → 方法页直达：seq 递增保证同一文件可再次触发打开 */
-      const openMethod = useCallback((name) => {
+      const openSettings = useCallback(() => { goView('settings'); }, [goView]);
+      const closeSettings = useCallback(() => {
+        const back = normalizeView(settingsReturn && settingsReturn !== 'settings' ? settingsReturn : 'today');
+        setView(back);
+        setMsg(null);
+      }, [settingsReturn]);
+
+      /* 流程页 → 方法库/技能与模板正文：seq 递增保证同一文件可再次触发打开 */
+      const openMethod = useCallback((name, kind) => {
         const nm = str(name);
         if (!nm) return;
         setMethodJump((prev) => ({ name: nm, seq: ((prev && prev.seq) || 0) + 1 }));
-        setView('methods');
+        setProcessTab(kind === 'template' ? 'skills' : 'methods');
+        setView('process');
         setMsg(null);
       }, []);
 
       const openLibrary = useCallback(() => {
-        setView('library');
+        setKnowledgeTab('library');
+        setView('knowledge');
+        setMsg(null);
+      }, []);
+
+      const openCustomersList = useCallback(() => {
+        setCustomersTab('list');
+        setView('customers');
         setMsg(null);
       }, []);
 
       const startScan = useCallback(() => {
+        setCustomersTab('list');
         setView('customers');
         setScanToken((n) => n + 1);
       }, []);
@@ -6080,17 +6233,17 @@ window.__ModuleLoader__.load({
       const activeCount = todayStats.active || 0;
       const engCount = asList(board && board.engagements).length;
 
-      /* v1.3 导航 9 项（spec §19.6 / §20.5、ADR 0003 D5） */
+      /* Phase 2 IA（layout.md §7）：5 页签 + 页头设置入口；旧 view 值由 normalizeView 回落 */
+      const activeView = normalizeView(view);
+      const activeCustomersTab = ['board-customer', 'board-item', 'list'].indexOf(customersTab) !== -1 ? customersTab : 'board-customer';
+      const activeKnowledgeTab = knowledgeTab === 'bids' ? 'bids' : 'library';
+      const activeProcessTab = ['flow', 'methods', 'skills'].indexOf(processTab) !== -1 ? processTab : 'flow';
       const navItems = [
         { key: 'today', label: t('tabToday'), count: attentionCount || null },
-        { key: 'board', label: t('tabBoard'), count: null },
-        { key: 'customers', label: t('tabCustomers'), count: engCount || null },
+        { key: 'customers', label: t('tabCustomers'), count: null },
+        { key: 'knowledge', label: t('tabKnowledge'), count: null },
         { key: 'process', label: t('tabProcess'), count: null },
-        { key: 'library', label: t('tabLibrary'), count: null },
-        { key: 'bids', label: t('tabBids'), count: null },
-        { key: 'artifacts', label: t('tabArtifacts'), count: null },
-        { key: 'methods', label: t('tabMethods'), count: null },
-        { key: 'settings', label: t('tabSettings'), count: null },
+        { key: 'files', label: t('tabNavFiles'), count: null },
       ];
 
       const viewNode = () => {
@@ -6101,10 +6254,10 @@ window.__ModuleLoader__.load({
             onRetry: () => loadBoard(),
           });
         }
-        if (view === 'board') {
-          return h(BoardView, {
-            meta, board, busy,
-            mode: boardMode, onMode: setBoardMode,
+        if (activeView === 'customers') {
+          return h(CustomersPage, {
+            tab: activeCustomersTab, onTab: setCustomersTab,
+            meta, board, busy, scanToken,
             search, onSearch: setSearch,
             priority, onPriority: setPriority,
             customerFilter, onCustomerFilter: setCustomerFilter,
@@ -6113,63 +6266,49 @@ window.__ModuleLoader__.load({
             onMoveEngagement: (id, stage) => doMoveEngagement(id, stage),
             onMoveItem: moveItem,
             onScanNow: startScan, onOpenCustomers: () => goView('customers'),
+            onCreateEngagement: () => openCreate('engagement'),
             onCreateItem: () => openCreate('item'),
           });
         }
-        if (view === 'customers') {
-          return h(CustomersView, {
-            meta, board, busy, scanToken,
-            onOpenEngagement: openEngagement,
-            onRefresh: () => refreshAll(false),
-            onCreate: () => openCreate('engagement'),
-          });
-        }
-        if (view === 'process') {
-          return h(ProcessView, {
-            meta, board,
-            copyText,
-            onOpenMethod: openMethod,
-            onOpenLibrary: openLibrary,
-          });
-        }
-        if (view === 'library') {
-          return h(LibraryView, { meta });
-        }
-        if (view === 'bids') {
-          return h(BidsView, {
-            meta, board, bidStats: normalizeBoardBidStats(board), busy,
+        if (activeView === 'knowledge') {
+          return h(KnowledgePage, {
+            tab: activeKnowledgeTab, onTab: setKnowledgeTab,
+            meta, board, busy,
+            bidStats: normalizeBoardBidStats(board),
             onRefresh: () => refreshAll(false),
             onOpenEngagement: openEngagement,
           });
         }
-        if (view === 'artifacts') {
+        if (activeView === 'process') {
+          return h(ProcessPage, {
+            tab: activeProcessTab, onTab: setProcessTab,
+            meta, board, copyText,
+            onOpenMethod: openMethod, onOpenLibrary: openLibrary,
+            initialName: methodJump.name, initialSeq: methodJump.seq,
+          });
+        }
+        if (activeView === 'files') {
           return h(ArtifactsView, {
             meta, board, busy,
             root: str(board.root),
-            onRefresh: () => refreshAll(false),
             onNotify: notify,
-            onOpenCustomers: () => goView('customers'),
+            onOpenCustomers: openCustomersList,
             onOpenPath: actions.openPath,
             openPath: actions.openPath,
             openSession: actions.openSession,
             copyText,
             onScanNow: startScan,
+            onRefresh: () => refreshAll(false),
           });
         }
-        if (view === 'methods') {
-          return h(MethodsView, {
-            meta,
-            initialName: methodJump.name,
-            initialSeq: methodJump.seq,
-          });
-        }
-        if (view === 'settings') {
-          return h(SettingsView, {
+        if (activeView === 'settings') {
+          return h(SettingsPage, {
             meta, board, busy,
             bidStats: normalizeBoardBidStats(board),
             onRefresh: () => refreshAll(false),
             onClassic: p.onClassic,
             onReprobe: p.onReprobe,
+            onBack: closeSettings,
           });
         }
         return h(TodayView, {
@@ -6184,7 +6323,7 @@ window.__ModuleLoader__.load({
           onAttentionAction: attentionAction,
           onProposalAction: proposalAction,
           onScanNow: startScan,
-          onCustomers: () => goView('customers'),
+          onCustomers: openCustomersList,
           onCreate: () => openCreate('engagement'),
         });
       };
@@ -6200,6 +6339,14 @@ window.__ModuleLoader__.load({
           h('div', { className: 'fde-top-right' },
             AutonomyBadge({ meta, mode: autonomy }),
             h(Btn, { small: true, onClick: () => refreshAll(false), disabled: !!busy, busy: loading && !board }, t('refresh')),
+            h('button', {
+              type: 'button',
+              className: 'fde-iconbtn' + (activeView === 'settings' ? ' on' : ''),
+              title: t('tabSettings'),
+              'aria-label': t('tabSettings'),
+              'aria-pressed': activeView === 'settings' ? 'true' : 'false',
+              onClick: activeView === 'settings' ? closeSettings : openSettings,
+            }, '⚙'),
             p.onClassic ? h(Btn, { small: true, onClick: p.onClassic }, t('classicMode')) : null)),
         h('div', { className: 'fde-nav-wrap' },
           h('div', { className: 'fde-nav', role: 'tablist', 'aria-label': 'FDE 视图' },
@@ -6207,8 +6354,8 @@ window.__ModuleLoader__.load({
               key: n.key,
               type: 'button',
               role: 'tab',
-              'aria-selected': view === n.key ? 'true' : 'false',
-              className: view === n.key ? 'on' : '',
+              'aria-selected': activeView === n.key ? 'true' : 'false',
+              className: activeView === n.key ? 'on' : '',
               onClick: () => goView(n.key),
             }, n.label, n.count ? h('span', { className: 'fde-cnt' }, String(n.count)) : null)))),
         msg ? h('div', { style: { padding: '0 18px' } },

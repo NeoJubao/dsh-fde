@@ -3,7 +3,7 @@
  *
  * 用途：按 docs/01-spec.md 的契约**独立**写断言，再对照实现找「既有测试没覆盖到的真问题」。
  * v1.3（2026-11-04）：口径更新为 8 阶段 / 8 门禁 / 9 类型 / 25 条 FDE 路由 / 16 工具
- * （rw*5 + FDE 11）/ 16 技能 / 九页签；新增 §19 资料库、§20 流程 v2、§21 两个计算工具的独立断言。
+ * （rw*5 + FDE 11）/ 16 技能 / 5 页签（v1.4 起，ADR 0005）；新增 §19 资料库、§20 流程 v2、§21 两个计算工具的独立断言。
  * 开源改造（ADR 0004）：新增第 37 条路由 /fde/scys/auth；package.json 允许可选 peerDependencies。
  * 与既有 verify/*.mjs 的分工：
  *   - fde-host.mjs   宿主内核单测 A1–A9（实现者视角）
@@ -1329,13 +1329,15 @@ sec('11. 一致性 · 客户端路由集合 ⇄ index.js 注册 / meta 单一来
   check('兼容页：探测 /fde/meta，失败显示重启说明且保留经典模式入口',
     src.includes("getJSON(FDE + '/meta')") && src.includes('function CompatPage(') &&
     src.includes('宿主需要重启 DSH 后启用 FDE 看板') && src.includes("t('classicMode')"));
-  /* 九页签：从 FdeApp 的 tab 定义数组提取（顺序即导航）；生财页签不存在 */
-  const tabKeys = [...src.matchAll(/\{ key: '([a-z]+)', label: t\('tab/g)].map((m) => m[1]);
-  check('FDE 面板九页签且顺序为 今日/看板/客户/流程/资料库/招采/工件/方法/设置（spec §19.6/§20.5）',
-    tabKeys.join(',') === 'today,board,customers,process,library,bids,artifacts,methods,settings', tabKeys);
-  check('九视图组件齐全 + 经典模式组件存在',
+  /* 5 页签（v1.4 起，ADR 0005）：从 FdeApp 的 tab 定义数组提取（顺序即导航）；设置走页头入口；生财页签不存在 */
+  const navBlock = (src.match(/const navItems = \[([\s\S]*?)\];/) || ['', ''])[1];
+  const tabKeys = [...navBlock.matchAll(/\{ key: '([a-z]+)'/g)].map((m) => m[1]);
+  check('FDE 面板 5 页签且顺序为 今日/客户/资料/流程/文件（spec §8 / ADR 0005；资料内部 key=knowledge）',
+    tabKeys.join(',') === 'today,customers,knowledge,process,files', tabKeys);
+  check('视图组件齐全（5 页签 + 页内子视图/设置/经典模式）且设置与子页签组件存在',
     ['Today', 'Board', 'Customers', 'Process', 'Library', 'Bids', 'Artifacts', 'Methods', 'Settings']
-      .every((v) => src.includes('function ' + v + 'View(')) && src.includes('function ClassicApp('));
+      .every((v) => src.includes('function ' + v + 'View(')) && src.includes('function ClassicApp(')
+      && /function\s+SettingsView\s*\(/.test(src) && /function\s+normalizeView\s*\(/.test(src));
   /* 口径同步（ADR 0004 D5 / 实施规格 §2.8）：生财「页签」已移除，但设置页新增「生财情报授权」卡片，
    * 资料库仍标注社区来源；因此不再按出现次数 ≤2 断言，改为逐处上下文白名单（仍禁止 ScysView/tabScys）。 */
   check('生财页签已移除（无 ScysView / tabScys；「生财」仅出现在资料库社区来源与设置页生财情报授权）',
@@ -1578,7 +1580,7 @@ const FINDINGS17 = {
   B3: { sev: 'P1', title: 'link/unlink/promote 不符 spec §17.4（持久化/幂等/by 留痕/promote item 带 bidRefs）' },
   B4: { sev: 'P1', title: 'bid_signal 规则不符 spec §17.6（开关/30 天/招标类/去重/dismissed 30 天/paused/上限）' },
   B5: { sev: 'P2', title: 'bids 路由/缓存契约偏差（方法、415、路径安全、limit、mtime 缓存 + refresh）' },
-  B6: { sev: 'P2', title: '客户端招采集成偏差（第 7 页签、API 路径登记、available=false 降级、卡片徽章条件）' },
+  B6: { sev: 'P2', title: '客户端招采集成偏差（资料→招采子页签、API 路径登记、available=false 降级、卡片徽章条件）' },
   B7: { sev: 'P2', title: 'fde_bid 工具契约偏差（schema/紧凑返回/口径提示/UNAVAILABLE）' },
   B8: { sev: 'P2', title: 'health 未纳入招采雷达检查（服务可用 records>0 → ok，否则 warn 不 fail）' },
 };
@@ -1971,7 +1973,10 @@ sec('§17.6 客户端一致性 · 招采页签/API 路径登记/降级文案/卡
 {
   check17('面板源码含招采集成（页签/视图/文案）', /招采/.test(clientSrc17), undefined, 'client');
   /* 客户端源码里出现过的 /bids/* 路径（不依赖具体 helper） */
-  const clientBidNames = [...new Set([...clientSrc17.matchAll(/\/bids\/([a-z]+)/g)].map((m) => m[1]))];
+  const clientSrcNoComments = clientSrc17
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const clientBidNames = [...new Set([...clientSrcNoComments.matchAll(/\/bids\/([a-z]+)/g)].map((m) => m[1]))];
   const clientBidCalls = clientBidNames.map((n) => ({
     method: ['link', 'unlink', 'promote', 'refresh'].includes(n) ? 'POST' : 'GET', path: '/bids/' + n,
   }));
@@ -1991,7 +1996,7 @@ sec('§17.6 客户端一致性 · 招采页签/API 路径登记/降级文案/卡
   spec17('B6', /bids\.available|bids\?\.available|!.*available/.test(clientSrc17) &&
     /bids\.total|bids\.matches|bids\.latest|bidCount/.test(clientSrc17),
   '未找到「bids 有匹配才显示徽章」的条件渲染', 'client');
-  /* 第 7 页签：六视图之上新增招采视图（DICT/导航出现招采 tab） */
+  /* 招采视图（v1.4 起为「资料」子页签；DICT/子页签出现招采） */
   spec17('B6', /tabBid|tabBids|招采/.test(clientSrc17) && /function\s+Bid\w*View\s*\(/.test(clientSrc17),
     '未找到招采视图组件'), 'client';
 }
@@ -2877,15 +2882,15 @@ sec('v1.3 · 文档一致性（README / AGENTS / spec 数字，无过期表述�
   const agents = read('AGENTS.md');
   const spec = read('docs/01-spec.md');
   const allm = readFileSync(join(PLUGIN, 'verify', 'all.mjs'), 'utf8');
-  /* README 在开源改造中重写：版本标识允许 v1.3.0（SemVer 全写），面板表述为「九视图」。 */
-  check('README：v1.3 / 8 阶段 / 九视图 / 资料库 / 11 个 fde-* 技能',
-    /v1\.3/.test(readme) && /8 阶段/.test(readme) && /(?:9 页签|九视图)/.test(readme) &&
+  /* README 在开源改造中重写：版本标识允许 v1.3.x（SemVer 全写）；v1.4 起面板表述为「5 页签 + 页内子页签」（ADR 0005）。 */
+  check('README：版本 / 8 阶段 / 5 页签 / 资料库 / 11 个 fde-* 技能',
+    /v1\.\d/.test(readme) && /8 阶段/.test(readme) && /(?:5 页签|五页签)/.test(readme) &&
     readme.includes('11 个 `fde-*` 编排技能') && /资料库/.test(readme));
   check('README 工具口径：FDE 11 + 执行 5（含 fde_library/fde_scenario/fde_quote/scys_fde 兼容保留）',
     /FDE 11 \+ 执行 5|FDE 编排工具（11）/.test(readme) &&
     ['fde_library', 'fde_scenario', 'fde_quote', 'scys_fde'].every((x) => readme.includes(x)));
-  check('AGENTS：8 阶段 / 九页签 / FDE 工具（11）/ 执行工具（5）/ 11 编排技能',
-    /8 个阶段/.test(agents) && /九页签/.test(agents) && /FDE 工具（11）/.test(agents) &&
+  check('AGENTS：8 阶段 / 5 页签 / FDE 工具（11）/ 执行工具（5）/ 11 编排技能',
+    /8 个阶段/.test(agents) && /(?:5 页签|五页签)/.test(agents) && /FDE 工具（11）/.test(agents) &&
     /执行工具（5）/.test(agents) && agents.includes('11 个 `fde-*` 编排技能'));
   check('spec 首段与术语表已是 8 阶段（v1.3 标注）',
     /沿 8 个阶段推进/.test(spec) && /生命周期中的位置（8 个/.test(spec));
@@ -2918,8 +2923,8 @@ sec('v1.3 · 文档一致性（README / AGENTS / spec 数字，无过期表述�
     sixCtx.every((ctx) => /v1|历史/.test(ctx)), sixCtx);
   check('verify/all.mjs 纳入资料库 / 计算工具 / 独立审计三个测试（spec §19.8-8 / §20.7-6）',
     allm.includes('fde-library-host.mjs') && allm.includes('fde-tools.mjs') && allm.includes('acceptance-audit.mjs'));
-  check('spec §13 A11/A12 已带 v1.3 历史标注（v1.3 = 9 页签 / 11 个 FDE 技能 + 4 方法库）',
-    spec.includes('6 页签存在（v1 历史；v1.3 为 9 页签') &&
+  check('spec §13 A11/A12 已带版本历史标注（A11 v1.4 = 5 页签；A12 v1.3 = 11 个 FDE 技能 + 4 方法库）',
+    spec.includes('**5 页签 + 页头设置入口**') && spec.includes('v1.3 九页签为历史基线') &&
     spec.includes('9 个 SKILL.md 有合法前置元数据（v1 历史；v1.3 为 11 个 FDE 技能'));
   const spec10 = (spec.match(/## 10\. agent skills([\s\S]*?)## 11\./g) || [''])[0];
   const tableRows = (spec10.match(/^\| `fde-[a-z-]+`/gm) || []).length;
