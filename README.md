@@ -4,7 +4,7 @@
 
 > 把「客户经营」从线索到采用做成**一屏可看、可推进、可验证、可复盘**的作战台：客户看板 + 今日注意力 + 8 阶段门禁 + 任务泳道 + FDE 方法库 + 资料库 + 招采关联。
 > 跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里，中文界面，纯 JS，零运行时依赖。
-> **版本：v1.5.0** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
+> **版本：v1.6.0** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
 
 ![今日视图](https://raw.githubusercontent.com/NeoJubao/dsh-fde/main/assets/screenshot-today.png)
 
@@ -30,7 +30,7 @@ git clone https://github.com/NeoJubao/dsh-fde.git
 dsh plugin --profile web add ./dsh-fde
 
 # 方式三：tarball
-npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.5.0.tgz
+npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.6.0.tgz
 ```
 >
 > **第一次用？** 先看 [10 分钟上手教程](https://github.com/NeoJubao/dsh-fde/blob/main/docs/GETTING-STARTED.md)：装好 → 建第一个客户 → 走通一轮「线索到采用」。
@@ -87,7 +87,7 @@ python3 tools/install_profiles.py --run    # 实际执行 dsh plugin add
 
 | 页签 | 页内子页签 | 做什么 |
 |---|---|---|
-| **今日** | — | 战况、待我处理（注意力，按类型分组）、建议、今日焦点、最近活动 |
+| **今日** | — | **一屏四宫格**：顶部一行 KPI，下面 4 个同级块（待我处理 / 建议 / 今日焦点 / 最近活动），宽屏 4 列、中屏 2×2、窄屏单列，页面不滚只块内滚 |
 | **客户** | 看板 · 客户 / 看板 · 任务 / 客户清单 | 客户 8 阶段看板、任务 5 泳道看板（拖拽推进，未过门禁弹缺项）、客户表与筛选、导入现有项目、**新建客户/任务** |
 | **资料** | 资料库 / 招采 | 资料库：权威资料、开源工具、方法模板、社区动态；招采：本地招采索引检索（招标/中标/候选/提及）、按客户匹配 |
 | **流程** | 8 阶段流程 / 方法库 / 技能与模板 | 阶段地图（目标 / 输入 / 关键动作 / 交付物 / 工具 / 常见坑 / 门禁）、方法/参考全文、方法模板与 FDE 技能清单 |
@@ -104,7 +104,7 @@ python3 tools/install_profiles.py --run    # 实际执行 dsh plugin add
 
 面板的**结构 / 视觉 / 取值**写在 [`docs/ui-contract/`](https://github.com/NeoJubao/dsh-fde/blob/main/docs/ui-contract/)，改界面前先读它（不是自由发挥，也不是「重画一套皮」）：
 
-- **结构**：[`layout.md`](docs/ui-contract/layout.md) —— 区域树、落位决策树、22 个区域白名单（每行写「禁止放什么」）、页型、焦点位、导航准入、附录 C 迁移清单；
+- **结构**：[`layout.md`](docs/ui-contract/layout.md) —— 区域树、落位决策树、23 个区域白名单（每行写「禁止放什么」）、页型、焦点位、导航准入、附录 C 迁移清单；
 - **视觉**：[`design.md`](docs/ui-contract/design.md) —— 五条原则、字体/间距/表面/几何/颜色语义与视觉禁止清单（只写 token 名，不写值）；
 - **取值**：[`tokens.md`](docs/ui-contract/tokens.md) —— `--fde-*` 现状全表与目标映射、官方 token 分组、逐项替换清单；
 - **区域 id**：[`region-ids.md`](docs/ui-contract/region-ids.md) + `region-ids.mjs` —— 22 个稳定 id、`region()` helper 与页型校验。

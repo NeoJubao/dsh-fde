@@ -65,7 +65,8 @@ Q7 它是不是「跨页型的全局控件」（刷新、自主性徽章、设�
 | `page-header` | 页面名（1 个）+ 一句定位；页级主操作 ≤1；视图级切换；设置入口 | 全局控件副本（刷新/自主性只在壳层 1 处）；统计数字；对象级操作 | 全部 | 常驻不滚动；窗口 chrome 避让在本区域 |
 | `nav` | 5–6 个页签 + 分组分隔 + **单一语义**计数 | 对象级操作；超过 6 个页签；两种语义的计数徽章（待办数 vs 记录数）；参考/配置页签 | 全部 | 常驻不滚动；≤6 项时不需要横滚 |
 | `status` | 加载 / 空 / 错误 / 降级 / 陈旧数据提示；恢复动作 ≤2 | 用状态条替代页面结构（空态仍须渲染结构 + 主行动）；无原因的纯报错 | 全部 | 位于 header 与 content 之间；不遮 nav |
-| `content` | `toolbar` / `primary` / `aside` 的组合 | 第二个 toolbar；跨页型混装（台账里嵌看板） | 全部 | 唯一滚动容器（页级） |
+| `content` | `toolbar` / `primary` / `aside` / `inbox-grid` 的组合 | 第二个 toolbar；跨页型混装（台账里嵌看板） | 全部 | 唯一滚动容器（页级） |
+| `inbox-grid` | 今日四个同级块：待我处理（action）/ 建议 / 今日焦点 / 最近活动；每块 = 标题条 + 块内滚动 body | 其他页型；跨页型混装；页级主操作；把待办搬到页头 | inbox | 四宫格：宽档 4 列 / 中档 2×2 / 窄档单列；宽档页面级不滚动，仅块内滚动 |
 | `toolbar` | 视图模式切换、搜索、筛选、排序 | 刷新（属壳层）；对象级操作；全局设置 | workbench / ledger | 每页 ≤1；随内容滚动或 sticky 二选一 |
 | `primary` | 当前页型的主对象（列表/看板/表单/文档正文） | 广告位；跨页型推荐；同一对象第二遍重复 | 全部 | 占据剩余高度；长列表自身滚动或整页滚动（页型内统一） |
 | `aside` | 摘要、图例、推荐、活动流；可折叠 | 主对象的全量副本（如把看板客户再列一遍）；页级主操作 | inbox / workbench / reference | 每页 ≤1；窄宽度下折叠到 primary 下方 |
@@ -103,8 +104,9 @@ root
 ├─ status（载/错/空/降级/陈旧；可空）
 └─ content
     ├─ toolbar（仅 workbench/ledger）
-    ├─ primary
-    └─ aside（仅 inbox/workbench/reference，可折叠）
+    ├─ primary（workbench / ledger / reference / settings）
+    ├─ aside（仅 workbench/reference，可折叠）
+    └─ inbox-grid（仅 inbox；四宫格：待我处理 / 建议 / 今日焦点 / 最近活动）
 
 focus（覆盖层，不参与布局）
 ├─ drawer ─ drawer-head / drawer-body / drawer-foot
@@ -125,7 +127,7 @@ focus（覆盖层，不参与布局）
 
 | 页型 | 第一性问题 | 允许的区域 | 主操作（页级，≤1） | 现状对应 | 三态要求 |
 |---|---|---|---|---|---|
-| `inbox` | 现在该我做什么？ | page-header / nav / status / content / primary / aside | 无（动作在每条待办内） | 今日 | 载/空/错 全要（页面级） |
+| `inbox` | 现在该我做什么？ | page-header / nav / status / content / inbox-grid | 无（动作在每条待办内） | 今日 | 载/空/错 全要（页面级） |
 | `workbench` | 这组对象处在什么状态、怎么推进？ | page-header / nav / toolbar / status / content / primary | 「新建客户」（当前缺失） | 看板（客户/任务） | 载/空/错 全要；空态仍渲染结构 |
 | `ledger` | 全量对象在哪、怎么筛、怎么批量？ | page-header / nav / toolbar / status / content / primary | 视页而定（导入/导出/检索） | 客户清单 / 招采 / 工件 | 载/空/错 全要；筛选无结果 ≠ 无数据 |
 | `reference` | 方法/资料/规则是什么？ | page-header / nav / status / content / primary / aside | 无（只读） | 流程 / 资料库 / 方法 | 载/空/错 全要；目录缺失要说明 |
@@ -166,7 +168,7 @@ L0 页面（不含对象详情）
 
 | 需求类型 | 落点 | 不允许落点 |
 |---|---|---|
-| 待审阅/待决定/受阻/逾期等「要我做」 | inbox.primary（按 kind 分组） | 抽屉；aside |
+| 待审阅/待决定/受阻/逾期等「要我做」 | inbox-grid 第 1 块「待我处理」（按 kind 分组） | 抽屉；建议/焦点/活动块 |
 | 客户推进阶段 / 门禁通过 | workbench.primary + focus.block-gate + focus.drawer-foot | inbox（只能有「去确认」入口并跳转） |
 | 客户档案字段编辑 | focus.block-overview / block-next | ledger 行内编辑 |
 | 客户全量筛选/导入 | ledger.primary + toolbar | 看板卡片上的筛选 |

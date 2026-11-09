@@ -13,7 +13,7 @@
 | `layout.md` | **结构**：区域树 / 落位决策树 / 区域白名单（含每行「禁止放」）/ 页型 / 焦点位 / 内容路由 / 导航准入 / 非 happy path / 变更流程 / 反模式 + 附录 A as-built、B 映射、C 迁移清单 | 结构唯一权威；**不写颜色字号值** |
 | `design.md` | **视觉规则**：五条原则 / 字体角色 / 间距节奏 / 表面与层级 / 几何 / 颜色语义 / 组件状态矩阵 / 图标文本 / 明暗 / 禁止清单 / 验收 | 视觉规则唯一权威；**只写 token 名不写值** |
 | `tokens.md` | **取值**：现状 `--fde-*` 全表（含浅/深实测值、引用数、处置）+ 目标映射 + 官方 token 分组 + 替换清单 + 例外 | 取值唯一权威；颜色值只在这里 |
-| `region-ids.md` + `region-ids.mjs` | **稳定 id**：22 个区域 + 白名单元数据 + 页型映射 + `region()` helper + 断言函数 | 代码可引用；与 `layout.md §2` 强制一致 |
+| `region-ids.md` + `region-ids.mjs` | **稳定 id**：23 个区域（含 `inbox-grid` 今日四宫格）+ 白名单元数据 + 页型映射 + `region()` helper + 断言函数 | 代码可引用；与 `layout.md §2` 强制一致 |
 | `audit-ui-contract.mjs` | **体检**：8 项自动检查，可执行、可失败（退出码 0/1/2，末尾 `AUDIT-JSON`） | advisory 入口：`verify/ui-contract.mjs`；迁移期红项不阻断发布 |
 | `selftest/ui-panel.broken.js` | **自测 fixture**：迁移前源码 + 3 处故意违规（白名单外区域 / 裸 `#ff00ff` / 主题选择器）；**已按发布脱敏口径替换合成占位**（客户名/人名/地点 → 某集团/张三/某园区） | 证明「体检脚本能失败」（`--selftest` 预期 exit 1，8 项 FAIL） |
 
@@ -43,7 +43,7 @@ node docs/ui-contract/audit-ui-contract.mjs --source path/to/ui-panel.js --dir d
 ### 2.1 基线（2026-11-08 23:24 实测，迁移前源码）
 
 ```
-PASS A1  区域名 ⊆ 白名单 / layout.md §2 与注册表一致（22 个区域）
+PASS A1  区域名 ⊆ 白名单 / layout.md §2 与注册表一致（23 个区域）
 PASS A2  无写死色值（回退值除外）—— 48 处 var() 回退待收拢
 PASS A3  无主题选择器
 FAIL A4  :hover 位于 @media (hover: hover) 内 —— 24 处全部在外

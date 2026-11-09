@@ -75,8 +75,20 @@ check('设置不占页签：页头齿轮入口（aria-label + openSettings）',
 check('v1.3 已移除生财页签与 ScysView（宿主 scys 能力保留）',
   !c.includes("key: 'scys'") && !c.includes('function ScysView(')
   && !c.includes("fdeGet('/scys/feed')") && !c.includes('fde-scys-'));
-check('今日页四块：注意力/建议/焦点/活动',
-  ['todayAttention', 'todayProposals', 'todayFocus', 'todayActivity'].every((k) => c.includes("t('" + k + "')")));
+check('今日一屏四宫格：头部 KPI + 四块同级卡片（inbox-grid）',
+  ['todayAttention', 'todayProposals', 'todayFocus', 'todayActivity'].every((k) => c.includes("t('" + k + "')"))
+  && c.includes("className: 'fde-today-head'") && c.includes("className: 'fde-today-grid'")
+  && c.includes("className: 'fde-card fde-today-panel'")
+  && c.includes('fde-today-panel-title') && c.includes('fde-today-panel-body'));
+check('今日：4 个内联 KPI + 响应式三档（容器查询）',
+  c.includes("className: 'fde-today-kpis'") && c.includes("className: 'fde-kpi-num'")
+  && c.includes('@container (max-width:1199px)') && c.includes('@container (max-width:899px)')
+  && c.includes('grid-template-columns:repeat(4,minmax(0,1fr))'));
+check('今日：宽档页面级不滚动（四宫格 flex:1/min-height:0 + 块内 body overflow:auto）',
+  c.includes('.fde-today-grid{flex:1 1 auto;min-height:0;display:grid')
+  && c.includes('.fde-today-panel-body{flex:1 1 auto;min-height:0;overflow:auto'));
+check('今日：旧两栏结构已移除（fde-grid-two 不再出现在今日标记）',
+  !c.includes("className: 'fde-grid-two'"));
 check('注意力 8 类 kind 齐全（spec §5）',
   ['blocked', 'decision', 'review', 'answer', 'overdue', 'gate', 'stall', 'proposal']
     .every((k) => c.includes("'" + k + "'")));

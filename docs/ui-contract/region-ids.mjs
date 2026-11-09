@@ -26,6 +26,7 @@ export const REGION_IDS = Object.freeze({
   TOOLBAR: 'toolbar',                  // 页型级视图切换 / 搜索 / 筛选
   PRIMARY: 'primary',                  // 主内容（当前任务的主对象）
   ASIDE: 'aside',                      // 次内容 / 摘要 / 图例（每页最多 1 个，可折叠）
+  INBOX_GRID: 'inbox-grid',            // 今日四宫格（仅 inbox；待我处理/建议/焦点/活动）
   /* ---- 焦点槽 F1：对象详情 ---- */
   DRAWER: 'drawer',                    // 焦点槽容器（遮罩 + 侧板）
   DRAWER_HEAD: 'drawer-head',          // 对象名 + 阶段 + 返回/关闭
@@ -63,12 +64,15 @@ export const REGION_META = Object.freeze({
   toolbar: { label: '视图工具栏', pageTypes: ['workbench', 'ledger'],
     allowed: '视图模式切换、搜索、筛选、排序；每页 1 个',
     forbidden: '刷新（刷新属壳层）；对象级操作；全局设置' },
-  primary: { label: '主内容', pageTypes: ['inbox', 'workbench', 'ledger', 'reference', 'settings', 'focus'],
+  primary: { label: '主内容', pageTypes: ['workbench', 'ledger', 'reference', 'settings', 'focus'],
     allowed: '当前页型的主对象（列表 / 看板 / 表单 / 文档正文）',
     forbidden: '广告位、跨页型推荐、重复同一对象第二遍' },
-  aside: { label: '次内容', pageTypes: ['inbox', 'workbench', 'reference'],
+  aside: { label: '次内容', pageTypes: ['workbench', 'reference'],
     allowed: '摘要、图例、推荐、活动流；可折叠；每页 ≤1',
     forbidden: '主对象全量副本（如把看板客户再列一遍）；页级主操作' },
+  'inbox-grid': { label: '今日四宫格', pageTypes: ['inbox'],
+    allowed: '四个同级块：待我处理（action）/ 建议 / 今日焦点 / 最近活动；每块标题条 + 块内滚动',
+    forbidden: '其他页型；跨页型混装；页级主操作；把待办搬到页头' },
   drawer: { label: '焦点槽', pageTypes: ['focus'],
     allowed: '单个对象的切面；最多两层（对象 + 子对象），第二层须带返回',
     forbidden: '全量列表 / 跨对象比较；同一时间多于 1 个抽屉；替换式切换（丢上下文）' },

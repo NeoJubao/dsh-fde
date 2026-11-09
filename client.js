@@ -319,9 +319,51 @@ window.__ModuleLoader__.load({
 .fde-stat .fde-stat-label{font-size:12px;color:var(--fde-text-2)}
 .fde-stat.alert .fde-stat-num{color:var(--fde-danger)}
 .fde-stat.warn .fde-stat-num{color:var(--fde-warn-text)}
-.fde-grid-two{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:12px;align-items:start}
 .fde-stack{display:flex;flex-direction:column;gap:12px;min-width:0}
-@media (max-width:1100px){.fde-grid-two{grid-template-columns:1fr}}
+
+/* ---- 今日：一屏四宫格（ADR 0007 / spec §8.1） ---- */
+/* 头部一行 KPI（约 52–60px 固定，不滚动）：左问候+战况，右 4 个内联指标 */
+.fde-today{container-type:inline-size;gap:12px}
+.fde-today-head{flex:0 0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:52px;padding:2px 2px 0}
+.fde-today-greet{flex:1 1 auto;min-width:0}
+.fde-today-greet-title{font-size:16px;font-weight:650;line-height:1.35;color:var(--fde-text)}
+.fde-today-greet-sub{font-size:12px;color:var(--fde-text-2);margin-top:2px;line-height:1.5;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.fde-today-kpis{flex:0 0 auto;display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;margin-left:auto}
+.fde-kpi{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.fde-kpi-num{font-size:18px;font-weight:650;color:var(--fde-text);font-variant-numeric:tabular-nums}
+.fde-kpi-num.warn{color:var(--fde-warn-text)}
+.fde-kpi-num.alert{color:var(--fde-danger)}
+.fde-kpi-label{font-size:11px;color:var(--fde-text-2);white-space:nowrap}
+/* 四块同级：卡片 + 固定标题条 + 块内滚动 body；宽档页面级不滚动 */
+.fde-today-grid{flex:1 1 auto;min-height:0;display:grid;gap:12px;
+  grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:minmax(0,1fr)}
+.fde-today-panel{padding:0;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.fde-today-panel-head{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:10px 12px 8px;
+  border-bottom:0.5px solid var(--fde-border)}
+.fde-today-panel-title{font-size:12px;font-weight:650;color:var(--fde-text-2);letter-spacing:.5px}
+.fde-today-panel-count{font-size:11px;color:var(--fde-text-3);font-variant-numeric:tabular-nums}
+.fde-today-panel-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 10px 10px;overscroll-behavior:contain}
+.fde-today-panel-body .fde-li{padding:8px 2px}
+.fde-today-panel-body .fde-attn-group+.fde-attn-group{margin-top:6px;padding-top:4px}
+.fde-today-panel-body .fde-empty{min-height:0;padding:16px 6px;gap:4px}
+.fde-today-panel-body .fde-empty .fde-empty-mark{width:26px;height:26px;font-size:13px}
+.fde-today-panel-body .fde-empty .fde-empty-title{font-size:12px}
+.fde-today-panel-body .fde-empty .fde-row{flex-wrap:wrap;justify-content:center}
+.fde-today-panel-body .fde-error{margin:6px 0}
+.fde-today-panel-body .fde-loading{padding:14px 6px}
+/* 中档（内容宽 900–1199）：2×2 等高，各自块内滚动 */
+@container (max-width:1199px){
+  .fde-today-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr))}
+}
+/* 窄档（内容宽 <900）：单列、页面滚动，块内不再滚；顺序固定 待办→建议→焦点→活动 */
+@container (max-width:899px){
+  .fde-today-grid{display:flex;flex-direction:column;flex:0 0 auto;min-height:0}
+  .fde-today-panel{min-height:180px}
+  .fde-today-panel-body{overflow:visible;max-height:none}
+  .fde-today-greet-sub{white-space:normal}
+  .fde-today-kpis{margin-left:0;width:100%;gap:16px}
+}
 
 /* ---- 列表（注意力 / 建议 / 活动） ---- */
 .fde-list{display:flex;flex-direction:column;min-width:0}
@@ -2572,99 +2614,97 @@ window.__ModuleLoader__.load({
               h('span', { className: 'fde-dim' }, relTime(a.at)))));
       };
 
-      return h('div', { className: 'fde-view fde-view-fill' },
-        /* 顶部：问候 + 战况 + 统计 + 自主性 + 刷新 */
-        h('div', { className: 'fde-card pad-sm' },
-          /* §2.6 今日去重：自主性徽章与刷新只在壳层顶部保留一处；
-             统计数字只保留下方统计条，这里不再重复。 */
-          h('div', { className: 'fde-row' },
-            h('div', null,
-              h('div', { style: { fontSize: 16, fontWeight: 650 } }, greeting()),
-              brief.greeting
-                ? h('div', { className: 'fde-subtitle', style: { marginTop: 2 } }, brief.greeting)
-                : null),
-            h('div', { className: 'fde-spacer' })),
-          h('div', { className: 'fde-stats', style: { marginTop: 10 } },
-            Stat({ num: stats.active, label: '活跃客户' }),
-            Stat({ num: attention.length, label: '待我处理', tone: attention.length ? 'warn' : '' }),
-            Stat({ num: stats.dueToday, label: '今日到期' }),
-            Stat({ num: stats.overdue, label: '逾期', tone: (stats.overdue || 0) > 0 ? 'alert' : '' }))),
+      /* 一句战况：示例态用 DEMO_BRIEF.greeting；真实态用定性描述（数字只在 KPI 出现一次，§2.6） */
+      const battleLine = str(brief.greeting)
+        || (attention.length
+          ? '先处理要你拍板的事；建议与焦点用于判断下一步。'
+          : '今天没有待你处理的事；可以推进焦点客户或看看最近变化。');
 
-        h('div', { className: 'fde-grid-two' },
-          /* 左栏：待我处理 */
-          h('div', { className: 'fde-card' },
-            Section({
-              title: t('todayAttention') + (attention.length ? '（' + attention.length + '）' : ''),
-              children: [
-                p.briefError
-                  ? h(ErrorLine, { key: 'e', title: t('briefLoadFail'), text: p.briefError, onRetry: p.onRefreshBrief })
-                  : (p.briefLoading && !attention.length
-                    ? h(Loading, { key: 'l', text: '正在读取今日简报…' })
-                    : (attention.length
-                      ? h('div', { className: 'fde-list', key: 'list' }, groups.map((g) => {
-                        const expanded = !!expandedKinds[g.kind];
-                        const shown = expanded ? g.rows : g.rows.slice(0, 2);
-                        const hidden = g.rows.length - shown.length;
-                        return h('div', { key: 'g-' + g.kind, className: 'fde-attn-group' },
-                          h('div', { className: 'fde-attn-group-head' },
-                            h('span', { className: 'fde-attn-kind fde-attn-' + attnTone(g.kind) }, attentionMeta(meta, g.kind).label),
-                            h('span', { className: 'fde-hint' }, g.rows.length + ' 条'),
-                            h('div', { className: 'fde-spacer' }),
-                            hidden > 0
-                              ? h(Btn, { small: true, onClick: () => setExpandedKinds((cur) => Object.assign({}, cur, { [g.kind]: true })) }, '展开 ' + hidden + ' 条')
-                              : null,
-                            expanded && g.rows.length > 2
-                              ? h(Btn, { small: true, onClick: () => setExpandedKinds((cur) => Object.assign({}, cur, { [g.kind]: false })) }, '收起')
-                              : null),
-                          shown.map(attentionRow));
-                      }))
-                      : h(Empty, {
-                        key: 'empty',
-                        title: boardEmpty ? t('demoOnboardTitle') : t('todayEmptyTitle'),
-                        children: boardEmpty
-                          ? h('div', { className: 'fde-onboard' },
-                            h('div', { className: 'fde-onboard-step' },
-                              h('span', { className: 'fde-onboard-no' }, '1'),
-                              h('span', null, '新建客户：登记一个值得跟进的客户机会')),
-                            h('div', { className: 'fde-onboard-step' },
-                              h('span', { className: 'fde-onboard-no' }, '2'),
-                              h('span', null, '导入现有项目：扫描 research/ 目录，确认后再写入')),
-                            h('div', { className: 'fde-onboard-step' },
-                              h('span', { className: 'fde-onboard-no' }, '3'),
-                              h('span', null, '想看示例？设置 → 演示数据 → 重新查看示例')))
-                          : t('todayEmptyBody'),
-                        actions: boardEmpty
-                          ? h('div', { className: 'fde-row', style: { marginTop: 8, justifyContent: 'center' } },
-                            h(Btn, { small: true, kind: 'primary', onClick: p.onCreate }, '新建客户'),
-                            h(Btn, { small: true, onClick: p.onScanNow }, t('scanNow')),
-                            h(Btn, { small: true, onClick: p.onOpenSettings }, t('demoStepRestore')))
-                          : null,
-                      }))),
-              ],
-            })),
-          /* 右栏：建议 / 今日焦点 / 最近活动 */
-          h('div', { className: 'fde-stack' },
-            h('div', { className: 'fde-card' },
-              Section({
-                title: t('todayProposals') + (proposals.length ? '（' + proposals.length + '）' : ''),
-                children: proposals.length
-                  ? h('div', { className: 'fde-list' }, proposals.map(proposalRow))
-                  : h(Empty, { mark: '✓', title: '没有待采纳的建议', body: '规则引擎会在读取时生成，采纳或忽略后即消失。' }),
-              })),
-            h('div', { className: 'fde-card' },
-              Section({
-                title: t('todayFocus'),
-                children: focus.length
-                  ? h('div', { className: 'fde-list' }, focus.map(focusRow))
-                  : h(Empty, { mark: '◎', title: '暂无焦点客户', body: '看板还是空的。先导入现有项目或新建客户。' }),
-              })),
-            h('div', { className: 'fde-card' },
-              Section({
-                title: t('todayActivity'),
-                children: activity.length
-                  ? h('div', { className: 'fde-list' }, activity.map(activityRow))
-                  : h(Empty, { mark: '·', title: '还没有活动记录' }),
-              })))));
+      /* 一屏四宫格（ADR 0007 / spec §8.1）：每块 = 卡片 + 固定标题条 + 块内滚动 body */
+      const panel = (key, title, count, body) => h('div', { className: 'fde-card fde-today-panel', key },
+        h('div', { className: 'fde-today-panel-head' },
+          h('span', { className: 'fde-today-panel-title' }, title),
+          h('span', { className: 'fde-today-panel-count' }, String(typeof count === 'number' ? count : 0)),
+          h('div', { className: 'fde-spacer' })),
+        h('div', { className: 'fde-today-panel-body' }, body));
+
+      const kpi = (key, num, label, tone) => h('div', { className: 'fde-kpi', key },
+        h('span', { className: 'fde-kpi-num' + (tone ? ' ' + tone : '') },
+          String(typeof num === 'number' ? num : (num || 0))),
+        h('span', { className: 'fde-kpi-label' }, label));
+
+      /* 待我处理：错误/加载/空态/分组列表（§2.6 去重与折叠规则不变） */
+      const attentionBody = p.briefError
+        ? h(ErrorLine, { title: t('briefLoadFail'), text: p.briefError, onRetry: p.onRefreshBrief })
+        : (p.briefLoading && !attention.length
+          ? h(Loading, { text: '正在读取今日简报…' })
+          : (attention.length
+            ? h('div', { className: 'fde-list' }, groups.map((g) => {
+              const expanded = !!expandedKinds[g.kind];
+              const shown = expanded ? g.rows : g.rows.slice(0, 2);
+              const hidden = g.rows.length - shown.length;
+              return h('div', { key: 'g-' + g.kind, className: 'fde-attn-group' },
+                h('div', { className: 'fde-attn-group-head' },
+                  h('span', { className: 'fde-attn-kind fde-attn-' + attnTone(g.kind) }, attentionMeta(meta, g.kind).label),
+                  h('span', { className: 'fde-hint' }, g.rows.length + ' 条'),
+                  h('div', { className: 'fde-spacer' }),
+                  hidden > 0
+                    ? h(Btn, { small: true, onClick: () => setExpandedKinds((cur) => Object.assign({}, cur, { [g.kind]: true })) }, '展开 ' + hidden + ' 条')
+                    : null,
+                  expanded && g.rows.length > 2
+                    ? h(Btn, { small: true, onClick: () => setExpandedKinds((cur) => Object.assign({}, cur, { [g.kind]: false })) }, '收起')
+                    : null),
+                shown.map(attentionRow));
+            }))
+            : h(Empty, {
+              title: boardEmpty ? t('demoOnboardTitle') : t('todayEmptyTitle'),
+              children: boardEmpty
+                ? h('div', { className: 'fde-onboard' },
+                  h('div', { className: 'fde-onboard-step' },
+                    h('span', { className: 'fde-onboard-no' }, '1'),
+                    h('span', null, '新建客户：登记一个值得跟进的客户机会')),
+                  h('div', { className: 'fde-onboard-step' },
+                    h('span', { className: 'fde-onboard-no' }, '2'),
+                    h('span', null, '导入现有项目：扫描 research/ 目录，确认后再写入')),
+                  h('div', { className: 'fde-onboard-step' },
+                    h('span', { className: 'fde-onboard-no' }, '3'),
+                    h('span', null, '想看示例？设置 → 演示数据 → 重新查看示例')))
+                : t('todayEmptyBody'),
+              actions: boardEmpty
+                ? h('div', { className: 'fde-row', style: { marginTop: 8, justifyContent: 'center' } },
+                  h(Btn, { small: true, kind: 'primary', onClick: p.onCreate }, '新建客户'),
+                  h(Btn, { small: true, onClick: p.onScanNow }, t('scanNow')),
+                  h(Btn, { small: true, onClick: p.onOpenSettings }, t('demoStepRestore')))
+                : null,
+            })));
+
+      return h('div', { className: 'fde-view fde-view-fill fde-today' },
+        /* 顶部一行 KPI（固定，不滚动）：统计数字全页只出现这一次（§2.6） */
+        h('div', { className: 'fde-today-head' },
+          h('div', { className: 'fde-today-greet' },
+            h('div', { className: 'fde-today-greet-title' }, greeting()),
+            h('div', { className: 'fde-today-greet-sub', title: battleLine },
+              battleLine)),
+          h('div', { className: 'fde-today-kpis' },
+            kpi('active', stats.active, '活跃客户'),
+            kpi('attention', attention.length, '待我处理', attention.length ? 'warn' : ''),
+            kpi('due', stats.dueToday, '今日到期'),
+            kpi('overdue', stats.overdue, '逾期', (stats.overdue || 0) > 0 ? 'alert' : ''))),
+
+        h('div', { className: 'fde-today-grid' },
+          panel('attention', t('todayAttention'), attention.length, attentionBody),
+          panel('proposals', t('todayProposals'), proposals.length,
+            proposals.length
+              ? h('div', { className: 'fde-list' }, proposals.map(proposalRow))
+              : h(Empty, { mark: '✓', title: '没有待采纳的建议', body: '规则引擎会在读取时生成，采纳或忽略后即消失。' })),
+          panel('focus', t('todayFocus'), focus.length,
+            focus.length
+              ? h('div', { className: 'fde-list' }, focus.map(focusRow))
+              : h(Empty, { mark: '◎', title: '暂无焦点客户', body: '看板还是空的。先导入现有项目或新建客户。' })),
+          panel('activity', t('todayActivity'), activity.length,
+            activity.length
+              ? h('div', { className: 'fde-list' }, activity.map(activityRow))
+              : h(Empty, { mark: '·', title: '还没有活动记录' }))));
     }
 
     /* ============================================================

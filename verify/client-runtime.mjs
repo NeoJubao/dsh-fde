@@ -930,6 +930,17 @@ check('导航顺序：今日 → 客户 → 资料 → 流程 → 文件', (() =
   return labels.join('|') === '今日|客户|资料|流程|文件';
 })());
 check('设置走页头齿轮入口（不占页签）', !!gearBtn(tree) && !textOf(byClass(tree, 'fde-nav')[0] || {}).includes('设置'));
+check('今日四宫格：4 块 panel + 固定标题条（待我处理→建议→焦点→活动）',
+  byClass(tree, 'fde-today-panel').length === 4
+  && collect(tree, (n) => n.props && String(n.props.className || '') === 'fde-today-panel-title')
+    .map((n) => textOf(n).trim()).join('|') === '待我处理|建议|今日焦点|最近活动');
+check('今日四宫格：头部一行 4 个 KPI（活跃客户/待我处理/今日到期/逾期）',
+  byClass(tree, 'fde-kpi').length === 4
+  && collect(tree, (n) => n.props && String(n.props.className || '') === 'fde-kpi-label')
+    .map((n) => textOf(n).trim()).join('|') === '活跃客户|待我处理|今日到期|逾期');
+check('今日四宫格：旧两栏结构不再出现（fde-grid-two）',
+  byClass(tree, 'fde-grid-two').length === 0);
+
 check('注意力列表渲染（受阻/待审/逾期/建议）',
   textOf(tree).includes('受阻') && textOf(tree).includes('受阻：KPI 数据拿不到')
   && textOf(tree).includes('逾期 2 天') && textOf(tree).includes('待审阅：写会面 Brief'));
@@ -1705,9 +1716,17 @@ if (saveSettingsBtn) {
 
   check('演示模式：空看板 + demoDismissed!==true → 横幅可见',
     !!byClass(tree, 'fde-demo-banner')[0] && textOf(tree).includes('演示模式：以下为示例数据，不会写入真实看板'));
-  check('演示模式：今日用 DEMO 渲染（示例客户带「（示例）」+ 2 条注意力）',
+  check('演示模式：今日用 DEMO 渲染（示例客户带「（示例）」+ 2 条注意力 + 四宫格）',
     textOf(tree).includes('某集团（示例）') && textOf(tree).includes('某研究院（示例）')
-    && textOf(tree).includes('待我处理（2）'));
+    && byClass(tree, 'fde-today-panel').length === 4
+    && textOf(tree).includes('需要决定'));
+  check('演示模式：四宫格四块齐备且示例内容分布正确（待办 2 / 建议空态 / 焦点 3 / 活动 4）',
+    byClass(tree, 'fde-today-panel').length === 4
+    && textOf(tree).includes('待我处理')
+    && textOf(tree).includes('没有待采纳的建议')
+    && textOf(tree).includes('某材料（示例）')
+    && textOf(tree).includes('（示例）任务「补齐数据源清单」回报 progress'));
+
   check('演示模式：横幅含「开始使用（清除示例）」「了解功能（去流程页）」',
     btnByText(tree, '开始使用（清除示例）').length >= 1 && btnByText(tree, '了解功能（去流程页）').length >= 1);
 

@@ -95,8 +95,29 @@ const checks = [
   ['生财专用 CSS 已删除（fde-scys-* 不再出现在面板）',
     !c.includes('.fde-scys-') && !c.includes('fde-scys-card')],
   ['FDE API 前缀统一', c.includes("const FDE = API + '/fde'")],
-  ['今日：注意力 + 建议 + 焦点 + 活动',
-    ["t('todayAttention')", "t('todayProposals')", "t('todayFocus')", "t('todayActivity')"].every((s) => c.includes(s))],
+  ['今日：一屏四宫格结构（ADR 0007 / spec §8.1，inbox-grid）',
+    c.includes("className: 'fde-view fde-view-fill fde-today'")
+    && c.includes("className: 'fde-today-head'")
+    && c.includes("className: 'fde-today-grid'")
+    && c.includes("className: 'fde-card fde-today-panel'")
+    && ['fde-today-panel-head', 'fde-today-panel-title', 'fde-today-panel-body'].every((x) => c.includes(x))],
+  ['今日：四块顺序固定（待我处理 → 建议 → 今日焦点 → 最近活动）',
+    (() => {
+      const i = c.indexOf("className: 'fde-today-grid'");
+      const tail = i >= 0 ? c.slice(i) : '';
+      const order = ['todayAttention', 'todayProposals', 'todayFocus', 'todayActivity']
+        .map((k) => tail.indexOf("t('" + k + "')"));
+      return order.every((x) => x >= 0) && order[0] < order[1] && order[1] < order[2] && order[2] < order[3];
+    })()],
+  ['今日：头部一行 4 个内联 KPI（活跃客户/待我处理/今日到期/逾期）',
+    c.includes("className: 'fde-today-kpis'") && c.includes("className: 'fde-kpi-num'")
+    && ["'活跃客户'", "'待我处理'", "'今日到期'", "'逾期'"].every((x) => c.includes(x))],
+  ['今日：响应式三档（宽 4 列 / 中 2×2 / 窄单列，容器查询）',
+    c.includes('grid-template-columns:repeat(4,minmax(0,1fr))')
+    && c.includes('@container (max-width:1199px)') && c.includes('@container (max-width:899px)')
+    && c.includes('grid-template-columns:repeat(2,minmax(0,1fr))')],
+  ['今日：旧两栏结构已移除（不再有 fde-grid-two 标记）',
+    !c.includes("className: 'fde-grid-two'")],
   ['客户页内三态：看板（客户/任务）+ 客户清单',
     ["t('customersViewBoardCustomer')", "t('customersViewBoardTask')", "t('customersViewList')"]
       .every((s) => c.includes(s)) && c.includes('（空）')],
