@@ -5,6 +5,8 @@ dist/
 
 # 系统与编辑器
 .DS_Store
+__pycache__/
+*.pyc
 
 # 测试与本地证据（本地保留，不进仓库）
 verify/tmp-ws/

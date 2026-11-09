@@ -8,12 +8,13 @@
  * 用法: node verify/pack.mjs
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 /* npm 日志/缓存默认写 ~/.npm；该目录可能被别的账户写过导致 EPERM。
  * 打包检查不需要网络与缓存，指向临时目录即可，避免把环境问题误判成代码问题。 */
 const NPM_CACHE = mkdtempSync(join(tmpdir(), 'npm-pack-cache-'));
@@ -65,6 +66,7 @@ const FORBIDDEN = [
   ['docs-workbench.md（旧文档已移出）', /docs-workbench\.md$/],
   ['历史审计报告 *-report.md', /-report\.md$/],
   ['PDF 样本', /\.pdf$/i],
+  ['Python 字节码（__pycache__/.pyc）', /(?:^|\/)__pycache__\/|\.pyc$/],
 ];
 
 let stdout = '';
@@ -137,7 +139,7 @@ try {
 /* 0) 包元数据 */
 check('包内文件数 > 0', files.length > 0, '实际 ' + files.length);
 check('包名 = dsh-fde', meta.name === 'dsh-fde', meta.name);
-check('包版本 = 1.3.0', meta.version === '1.3.0', meta.version);
+check('包版本 = package.json.version', meta.version === pkg.version, meta.version + ' vs ' + pkg.version);
 check('包可发布（非 private）', meta.private !== true, meta.private);
 
 /* 1) 必需文件 */

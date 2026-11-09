@@ -45,7 +45,7 @@ try {
   process.exit(1);
 }
 const NAME = 'dsh-fde';
-const VERSION = '1.3.0';
+const VERSION = pkg.version; // 由 package.json 单一来源提供
 
 /* ============================ 1. 包身份 ============================ */
 console.log('\n── 1. 包身份（ADR 0004 D1） ──');

@@ -4,7 +4,7 @@
 
 > 把「客户经营」从线索到采用做成**一屏可看、可推进、可验证、可复盘**的作战台：客户看板 + 今日注意力 + 8 阶段门禁 + 任务泳道 + FDE 方法库 + 资料库 + 招采关联。
 > 跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里，中文界面，纯 JS，零运行时依赖。
-> **版本：v1.3.0** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
+> **版本：v1.3.1** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
 
 ![今日视图](assets/screenshot-today.png)
 
@@ -25,11 +25,11 @@
 git clone https://github.com/NeoJubao/dsh-fde.git
 dsh plugin --profile web add ./dsh-fde
 
-# 方式二：npm 包（v1.3.0 发布后可用）
+# 方式二：npm 包（已发布于 npm，推荐）
 dsh plugin --profile web add dsh-fde
 
 # 方式三：tarball
-npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.3.0.tgz
+npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.3.1.tgz
 ```
 
 安装后**重启 DSH**（或在「设置 → 插件」里对 `dsh-fde` 禁用→启用一次），侧栏出现「FDE 工作站」入口。客户端改动只需刷新页面。

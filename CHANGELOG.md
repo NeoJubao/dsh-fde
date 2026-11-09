@@ -2,6 +2,14 @@
 
 本文件记录 `dsh-fde`（FDE 工作站）的用户可见变化。版本号遵循 SemVer；插件市场与 `dsh plugin add` 以 `package.json` 的版本为准。
 
+## 1.3.1 — 2026-11-09
+
+发布卫生修复（不改变功能）：
+
+- 移除误提交的 `scripts/__pycache__/`（Python 字节码）；`.gitignore` 与 `verify/pack.mjs` 增加拦截。
+- 版本断言改为从 `package.json` 单一来源读取（`pack.mjs` / `open-source.mjs`），避免发版时漏改。
+- README 明确 npm 安装方式已可用。
+
 ## 1.3.0 — 2026-11-08（首个开源版本）
 
 开源就绪改造（决策见 `docs/adr/0004-open-source-readiness.md`）：
