@@ -44,7 +44,7 @@ check('main key=researchworkbench', /key: 'researchworkbench'/.test(c));
 check('Finder 三通道保留（remote.session → /open-in-app → /reveal）',
   c.includes("svc('remote.session')") && c.includes("'/open-in-app/open'") && c.includes("API + '/reveal'"));
 
-/* ---------- 2. 九视图信息架构（spec §8 / §17.7 / §19.6 / §20.5） ---------- */
+/* ---------- 2. Phase 2 IA：5 页签 + 页内子页签（spec §8 / §17.7 / §19.6 / §20.5） ---------- */
 const views = ['Today', 'Board', 'Customers', 'Process', 'Library', 'Bids', 'Artifacts', 'Methods', 'Settings'];
 check('视图组件存在（页型壳复用九组件）', views.every((v) => c.includes('function ' + v + 'View(')));
 check('5 页型壳组件存在（客户/资料/流程/设置 + 页内子页签）',
@@ -284,6 +284,32 @@ check('生财页签 / ScysView / 专用接口与 CSS 均已移除',
   !c.includes("key: 'scys'") && !c.includes('function ScysView(')
   && !c.includes("fdeGet('/scys/feed')") && !c.includes("t('tabScys')")
   && !c.includes('fde-scys-'));
+
+/* ---------- 8f. v1.5.0 只读演示模式（ADR 0006 / spec §8.8） ---------- */
+check('演示数据常量与触发条件（4 客户 / 3 任务 / 2 注意力 / 4 活动）',
+  c.includes('const DEMO_BOARD') && c.includes('const DEMO_BRIEF')
+  && ['demo-eng-1', 'demo-eng-2', 'demo-eng-3', 'demo-eng-4'].every((x) => c.includes(x))
+  && ['demo-itm-scoping', 'demo-itm-discovery', 'demo-itm-meeting'].every((x) => c.includes(x))
+  && ['demo-attn-decision', 'demo-attn-review'].every((x) => c.includes(x))
+  && (c.match(/（示例）/g) || []).length >= 8);
+check('演示触发：看板为空且 demoDismissed !== true；今日/客户用覆盖层（阶段从 meta 解析）',
+  c.includes('function isDemoEligible(')
+  && c.includes('const displayBoard = demoActive ? demoBoardView(board, meta) : board')
+  && c.includes('stageIndex: 0') && c.includes('const stages = asList(meta && meta.stages)')
+  && c.includes('const displayBrief = demoActive ? DEMO_BRIEF : brief'));
+check('演示横幅常驻（nav 与内容之间）+ 清除/了解按钮',
+  c.includes("className: 'fde-demo-banner'") && c.includes("t('demoBannerText')")
+  && c.includes("t('demoStart')") && c.includes("t('demoLearn')"));
+check('演示只读：demoGuard 包装 postJSON / runAction / openCreate / guarded 写回调',
+  c.includes('const postJSON = demoGuard(sendJSON)') && c.includes('const runAction = demoGuard(useCallback(')
+  && c.includes('const openCreate = demoGuard(useCallback(') && c.includes('const guarded = {')
+  && c.includes('moveEngagement: demoGuard(doMoveEngagement)'));
+check('一键清除写 demoDismissed:true；设置卡片可重新查看（false）',
+  c.includes("patch: { demoDismissed: true }") && c.includes("patch: { demoDismissed: false }")
+  && c.includes('demoBypass: true') && c.includes("t('demoCardTitle')"));
+check('空态三步引导 + 示例客户名带「（示例）」后缀',
+  c.includes('fde-onboard-step') && c.includes("t('demoStepRestore')")
+  && ['某集团（示例）', '某研究院（示例）', '某材料（示例）', '某能源（示例）'].every((x) => c.includes(x)));
 
 /* ---------- 9. 轮询 / 状态事实源 / 约束 ---------- */
 const poll = /const POLL_MS = (\d+);/.exec(c);

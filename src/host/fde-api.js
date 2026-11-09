@@ -1392,6 +1392,11 @@ export function settings(root, body = {}) {
     if (!wantNum(patch.bidSignalDays, 1, 365)) invalid.push('bidSignalDays 应为 1..365');
     else { next.bidSignalDays = Math.round(Number(patch.bidSignalDays)); appliedKeys.push('bidSignalDays'); }
   }
+  /* ADR 0006：演示模式开关。false = 允许在空看板显示示例；true = 已清除且不再显示。 */
+  if ('demoDismissed' in patch) {
+    if (typeof patch.demoDismissed !== 'boolean') invalid.push('demoDismissed 必须为布尔');
+    else { next.demoDismissed = patch.demoDismissed; appliedKeys.push('demoDismissed'); }
+  }
   if (invalid.length) return err(invalid.join('；'));
   if (!appliedKeys.length) return noWrite({ settings: next, appliedKeys, already: true });
   b.settings = next;

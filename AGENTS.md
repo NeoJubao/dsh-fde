@@ -15,7 +15,7 @@
 
 - 运行环境：DeepSeek Harness 0.2.0-rc.2（`engines.dsh: >=0.2.0-rc.2 <0.3.0`）；插件为纯 JS（ESM），**无编译、零新 npm 依赖**。
 - 安装：官方机制 `dsh plugin --profile <name> add <spec>`（本地路径会以 link 方式挂载，也可用 npm/git/tarball）；`tools/install_profiles.py` 只做 preflight 与打印命令，**不直接改 profile 文件**。
-- 许可：代码 MIT、方法/文档 CC BY 4.0（`LICENSE` / `LICENSE-docs`）；包名 `dsh-fde`，当前版本 `1.4.1`。
+- 许可：代码 MIT、方法/文档 CC BY 4.0（`LICENSE` / `LICENSE-docs`）；包名 `dsh-fde`，当前版本 `1.5.0`。
 - 禁止 `import '@deepseek-ai/*'`；服务一律 `ctx.get(...)` 懒取 + 容错，服务缺失时静默降级、不影响插件启动。
 - 面板只用 `--dsw-alias-*` 主题 token；不写 localStorage 作为事实源。
 

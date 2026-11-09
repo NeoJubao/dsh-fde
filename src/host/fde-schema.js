@@ -541,6 +541,9 @@ export const DEFAULT_SETTINGS = {
   bidSignalDays: 30,
   workdirs: ['research'],
   cacheTtlMs: 5000,
+  /* ADR 0006：首次上手只读演示模式。true = 用户已点「开始使用（清除示例）」，
+   * 之后空看板不再显示示例；普通布尔设置项，随 board 持久化，不新增状态文件。 */
+  demoDismissed: false,
 };
 
 /* ============================ 工具函数（派生用） ============================ */

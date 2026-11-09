@@ -4,7 +4,7 @@
 
 > 把「客户经营」从线索到采用做成**一屏可看、可推进、可验证、可复盘**的作战台：客户看板 + 今日注意力 + 8 阶段门禁 + 任务泳道 + FDE 方法库 + 资料库 + 招采关联。
 > 跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里，中文界面，纯 JS，零运行时依赖。
-> **版本：v1.4.1** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
+> **版本：v1.5.0** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
 
 ![今日视图](https://raw.githubusercontent.com/NeoJubao/dsh-fde/main/assets/screenshot-today.png)
 
@@ -14,6 +14,7 @@
 - **任务（item）** 在 5 列看板流转：待办 / 进行中 / 等外部 / 待我审 / 已完成。
 - **注意力（attention）** 汇总真正需要人决定、审阅、回答、解阻的事，推到「今日」；其余不打扰。
 - **会话（session）** 由看板按阶段模板发起（handoff），agent 执行中通过 `fde_*` 工具回报进度、产物与受阻。
+- **首次上手**：空工作区自动进入**只读示例模式**（不写盘），一键「开始使用」清除后不再出现，并给「新建客户 / 导入现有项目 / 重新查看示例」三步引导。
 - **方法与技能**：8 篇 FDE 方法 + 16 个技能（11 个 `fde-*` 编排技能 + 4 个方法库 + 长文一页纸），方法随插件分发、可离线读。
 
 ## 安装
@@ -29,7 +30,7 @@ git clone https://github.com/NeoJubao/dsh-fde.git
 dsh plugin --profile web add ./dsh-fde
 
 # 方式三：tarball
-npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.4.1.tgz
+npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-1.5.0.tgz
 ```
 >
 > **第一次用？** 先看 [10 分钟上手教程](https://github.com/NeoJubao/dsh-fde/blob/main/docs/GETTING-STARTED.md)：装好 → 建第一个客户 → 走通一轮「线索到采用」。

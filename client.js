@@ -103,7 +103,8 @@ window.__ModuleLoader__.load({
       });
     }
 
-    async function postJSON(url, body, timeoutMs) {
+    /* 实际发送函数；对外暴露的 postJSON 由 demoGuard 包裹（ADR 0006 D1：演示模式只读）。 */
+    async function sendJSON(url, body, timeoutMs) {
       /* 写请求不做在途去重：同一 path 的两次提交可能语义不同（重复提交应被用户看到）。
          timeoutMs 可单次覆盖：upload / handoff / refresh 等天然慢于默认 8s 的写操作传更长的预算。 */
       const budget = typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : FETCH_TIMEOUT_MS;
@@ -126,6 +127,10 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /* Phase 3（v1.5.0）只读演示模式：所有写请求统一走 demoGuard；
+       第 4 参 { demoBypass: true } 仅供「清除/恢复示例」这类有意的设置写入使用。 */
+    const postJSON = demoGuard(sendJSON);
+
     const fdeGet = (path) => getJSON(FDE + path);
     /* 慢路由按路径给预算：默认 8s；upload/扫描/PDF 生成/外部刷新这类天然更慢的写操作避免被误杀。
        调用点保持 fdePost(path, body) 原样（既有静态断言按该形式匹配）。 */
@@ -138,8 +143,8 @@ window.__ModuleLoader__.load({
       '/scys/auth': 30000,
       '/bids/refresh': 30000,
     };
-    const fdePost = (path, body, timeoutMs) => postJSON(
-      FDE + path, body, timeoutMs || FDE_POST_BUDGETS[path] || FETCH_TIMEOUT_MS
+    const fdePost = (path, body, timeoutMs, opts) => postJSON(
+      FDE + path, body, timeoutMs || FDE_POST_BUDGETS[path] || FETCH_TIMEOUT_MS, opts
     );
 
     /* ============================================================
@@ -207,6 +212,19 @@ window.__ModuleLoader__.load({
   cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
 .fde-iconbtn.on{border-color:color-mix(in srgb,var(--fde-accent) 46%,transparent);
   background:color-mix(in srgb,var(--fde-accent) 10%,transparent);color:var(--fde-accent)}
+/* Phase 3（v1.5.0）演示模式：常驻横幅 + 空态三步引导 */
+.fde-demo-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 18px 10px;padding:8px 12px;
+  border:1px solid color-mix(in srgb,var(--fde-accent) 40%,transparent);
+  border-radius:var(--dsw-radius-md,12px);
+  background:color-mix(in srgb,var(--fde-accent) 8%,transparent)}
+.fde-demo-badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:var(--dsw-radius-sm,8px);
+  corner-shape:round;background:color-mix(in srgb,var(--fde-accent) 16%,transparent);color:var(--fde-accent);
+  font-size:11px;font-weight:600;white-space:nowrap}
+.fde-demo-banner-text{color:var(--fde-text-2);font-size:12px}
+.fde-onboard{display:flex;flex-direction:column;gap:6px;margin-top:8px;text-align:left}
+.fde-onboard-step{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--fde-text-2)}
+.fde-onboard-no{flex:0 0 auto;width:18px;height:18px;border-radius:var(--dsw-radius-sm,8px);corner-shape:round;
+  background:var(--fde-surface-2);color:var(--fde-text-2);display:inline-flex;align-items:center;justify-content:center;font-size:11px}
 .fde-nav{display:inline-flex;gap:2px;padding:3px;border-radius:var(--dsw-radius-md,12px);background:var(--fde-surface-2);border:0.5px solid var(--fde-border);max-width:100%;overflow-x:auto}
 .fde-nav button{height:30px;padding:0 14px;border:1px solid transparent;border-radius:var(--dsw-radius-sm,8px);background:transparent;
   color:var(--fde-text-2);font-size:13px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;transition:background .15s,color .15s}
@@ -802,6 +820,26 @@ window.__ModuleLoader__.load({
       todayAttention: '待我处理', todayProposals: '建议', todayFocus: '今日焦点', todayActivity: '最近活动',
       todayEmptyTitle: '今天没有需要你处理的事', todayEmptyBody: '可以推进「今日焦点」里的客户，或看看最近活动。',
       todayOnboardTitle: '还没有客户在看板上', todayOnboardBody: '点「新建客户」手动创建，或先扫描现有 research/ 项目、确认后再导入；不会自动写入。',
+      /* Phase 3（v1.5.0）只读演示模式（ADR 0006 / spec §8.8） */
+      demoBadge: '演示模式',
+      demoBannerText: '演示模式：以下为示例数据，不会写入真实看板',
+      demoStart: '开始使用（清除示例）',
+      demoLearn: '了解功能（去流程页）',
+      demoLocked: '示例模式不可操作；点「开始使用」后即可使用真实数据',
+      demoCleared: '已开始使用，示例数据已隐藏',
+      demoClearFail: '清除示例失败',
+      demoClearing: '正在清除示例…',
+      demoCardTitle: '演示数据',
+      demoStatusOn: '示例显示中',
+      demoStatusOff: '已清除',
+      demoCardDesc: '示例数据只读，不会写入看板、也不会创建客户卷；清除后若真实看板仍为空，可从这里重新查看。',
+      demoRestore: '重新查看示例数据',
+      demoRestoring: '正在恢复示例…',
+      demoRestoreBlocked: '有真实数据时不显示示例',
+      demoRestored: '已恢复示例数据（只读）',
+      demoOnboardTitle: '开始使用 FDE 工作站',
+      demoOnboardBody: '三步上手：① 新建客户 ② 导入现有项目 ③ 想看示例？设置 → 演示数据 → 重新查看示例。',
+      demoStepRestore: '重新查看示例',
       scanNow: '扫描现有项目',
       attentionBlocked: '受阻', attentionDecision: '待决定', attentionReview: '待审阅', attentionAnswer: '待回答',
       attentionOverdue: '逾期', attentionGate: '门禁待确认', attentionStall: '停滞', attentionProposal: '建议',
@@ -2199,6 +2237,146 @@ window.__ModuleLoader__.load({
     }
 
     /* ============================================================
+     * Phase 3（v1.5.0）只读演示模式（ADR 0006 / spec §8.8）
+     * - DEMO_* 是纯客户端合成数据：不写 board、不建客户卷（只读覆盖层）；
+     * - 触发：真实看板为空且 settings.demoDismissed !== true；
+     * - 写操作由 demoGuard() 在“传输层”统一拦截（postJSON/fdePost + runAction），
+     *   并给行内提示，避免任何一处漏拦截写脏真实看板。
+     * ============================================================ */
+    const demoRuntime = { active: false, notify: null };
+    function demoGuard(fn) {
+      return function demoGuarded() {
+        const opts = arguments.length > 3 ? arguments[3] : null;
+        if (demoRuntime.active && !(opts && opts.demoBypass)) {
+          const reason = str(DICT.demoLocked || '示例模式不可操作；点「开始使用」后即可使用真实数据');
+          try { if (typeof demoRuntime.notify === 'function') demoRuntime.notify('warn', reason); } catch (e) { /* ignore */ }
+          return Promise.resolve({ ok: false, demoBlocked: true, reason });
+        }
+        return fn.apply(null, arguments);
+      };
+    }
+
+    function demoDate(offsetDays) {
+      const d = new Date();
+      d.setDate(d.getDate() + (offsetDays || 0));
+      const m = d.getMonth() + 1;
+      const day = d.getDate();
+      return d.getFullYear() + '-' + (m < 10 ? '0' + m : m) + '-' + (day < 10 ? '0' + day : day);
+    }
+    function demoIso(offsetDays, hour) {
+      const d = new Date();
+      d.setDate(d.getDate() + (offsetDays || 0));
+      d.setHours(typeof hour === 'number' ? hour : 9, 0, 0, 0);
+      return d.toISOString();
+    }
+    function demoEngagement(spec) {
+      return Object.assign({
+        paused: false, owner: '示例', tags: ['示例'], stakeholders: [],
+        source: { kind: 'demo', ref: '内置示例（不写入看板）', at: demoIso(-1, 9) },
+        value: { amount: 0, currency: 'CNY', note: '示例数字，不构成报价' },
+        gateState: {},
+        timeline: [],
+        bidWatch: false,
+      }, spec, {
+        company: spec.company || spec.name,
+        dir: spec.dir || ('demo-' + spec.id),
+        stageSince: demoIso(-(spec.stayDays || 1), 9),
+      });
+    }
+
+    /* 示例客户的阶段只记「meta.stages 的第几个」（stageIndex），渲染时由 demoBoardView 解析成 key；
+       客户端不硬编码阶段 key/顺序（spec §16.5 / 审计断言）。 */
+    const DEMO_ENGAGEMENTS = [
+      demoEngagement({
+        id: 'demo-eng-1', name: '某集团（示例）', shortName: '某集团', stageIndex: 0, priority: 'high', stayDays: 1,
+        nextAction: { text: '补齐客户来源与可检查的下一步', due: demoDate(2), owner: '示例' },
+      }),
+      demoEngagement({
+        id: 'demo-eng-2', name: '某研究院（示例）', shortName: '某研究院', stageIndex: 1, priority: 'normal', stayDays: 5,
+        nextAction: { text: '完成主体锁定与三链验证', due: demoDate(0), owner: '示例' },
+        attention: { kind: 'decision' },
+        timeline: [{ at: demoIso(-2, 10), kind: 'note', text: '（示例）线索转研判' }],
+      }),
+      demoEngagement({
+        id: 'demo-eng-3', name: '某材料（示例）', shortName: '某材料', stageIndex: 2, priority: 'high', stayDays: 9,
+        nextAction: { text: '准备会面 Brief 与合作地图', due: demoDate(-1), owner: '示例' },
+        attention: { kind: 'review' },
+        timeline: [{ at: demoIso(-1, 15), kind: 'report', text: '（示例）会面 Brief 初稿已生成' }],
+      }),
+      demoEngagement({
+        id: 'demo-eng-4', name: '某能源（示例）', shortName: '某能源', stageIndex: 3, priority: 'normal', stayDays: 12,
+        nextAction: { text: '确认一期场景与数据可得性', due: demoDate(3), owner: '示例' },
+        timeline: [{ at: demoIso(-3, 11), kind: 'note', text: '（示例）需求池收敛到 1 个场景' }],
+      }),
+    ];
+
+    const DEMO_ITEMS = [
+      { id: 'demo-itm-scoping', engagementId: 'demo-eng-4', title: '整理场景评估表 12 维评分（示例）', type: 'scoping', stage: 'todo', priority: 'high', due: demoDate(2), owner: 'agent', reports: [], attention: null, createdAt: demoIso(-1, 9) },
+      { id: 'demo-itm-discovery', engagementId: 'demo-eng-2', title: '补齐数据源清单与接口人（示例）', type: 'research', stage: 'doing', priority: 'normal', due: demoDate(-1), owner: 'agent', reports: [], attention: null, createdAt: demoIso(-2, 9) },
+      { id: 'demo-itm-meeting', engagementId: 'demo-eng-3', title: '等待客户确认会面时间（示例）', type: 'meeting', stage: 'waiting', priority: 'normal', due: demoDate(4), owner: '示例', reports: [], attention: null, createdAt: demoIso(-3, 9) },
+    ];
+
+    const DEMO_ACTIVITY = [
+      { at: demoIso(-1, 16), kind: 'report', text: '（示例）任务「补齐数据源清单」回报 progress', engagementId: 'demo-eng-2', itemId: 'demo-itm-discovery', by: 'agent' },
+      { at: demoIso(-1, 11), kind: 'note', text: '（示例）某材料：会面 Brief 初稿已生成', engagementId: 'demo-eng-3', by: 'agent' },
+      { at: demoIso(-2, 15), kind: 'stage', text: '（示例）某研究院：线索推进到研判', engagementId: 'demo-eng-2', by: 'human' },
+      { at: demoIso(-3, 10), kind: 'created', text: '（示例）某能源：纳入看板', engagementId: 'demo-eng-4', by: 'human' },
+    ];
+
+    const DEMO_BOARD = {
+      version: 1, revision: 0, updatedAt: demoIso(0, 9), demo: true,
+      settings: { autonomy: 'observe', demoDismissed: false, stallDays: 14, wipLimits: { doing: 5 }, sources: { folderWatch: true, briefOnOpen: true, bidWatch: true } },
+      engagements: DEMO_ENGAGEMENTS, items: DEMO_ITEMS, proposals: [], activity: DEMO_ACTIVITY,
+    };
+
+    const DEMO_BRIEF = {
+      headline: '演示数据：4 个示例客户 · 3 个示例任务 · 2 条注意力',
+      greeting: '（示例数据）先看它跑起来长什么样；点顶部「开始使用（清除示例）」即可换成你的真实客户。',
+      attention: [
+        {
+          key: 'demo-attn-decision', kind: 'decision', engagementId: 'demo-eng-2', engagementName: '某研究院（示例）',
+          text: '需要决定：某研究院（示例）｜一期场景选「采购比价」还是「合同审查」？', due: demoDate(1), days: 5,
+          detail: '（示例）点「开始使用」后即可处理真实注意力',
+        },
+        {
+          key: 'demo-attn-review', kind: 'review', engagementId: 'demo-eng-3', engagementName: '某材料（示例）',
+          text: '待审阅：某材料（示例）会面 Brief 初稿', due: demoDate(2), days: 9,
+          detail: '（示例数据，只读）',
+        },
+      ],
+      proposals: [],
+      focus: [],
+      activity: DEMO_ACTIVITY.map((a, i) => ({ key: 'demo-act-' + i, at: a.at, kind: a.kind, text: a.text, engagementId: a.engagementId, itemId: a.itemId })),
+      stats: { active: 4, dueToday: 1, overdue: 1 },
+    };
+
+    function isBoardEmpty(board) {
+      return asList(board && board.engagements).length === 0 && asList(board && board.items).length === 0;
+    }
+    function isDemoEligible(board) {
+      const settings = board && board.settings;
+      return !!board && isBoardEmpty(board) && !(settings && settings.demoDismissed === true);
+    }
+    function demoBoardView(board, meta) {
+      const base = board && typeof board === 'object' ? board : {};
+      const stages = asList(meta && meta.stages);
+      const engagements = DEMO_ENGAGEMENTS.map((e) => {
+        const st = stages[e.stageIndex];
+        const out = Object.assign({}, e, { stage: st ? str(st.key) : '', gateState: {} });
+        delete out.stageIndex;
+        return out;
+      });
+      return Object.assign({}, base, {
+        demo: true,
+        settings: Object.assign({}, base.settings || {}, { demoDismissed: false }),
+        engagements,
+        items: DEMO_ITEMS,
+        proposals: [],
+        activity: DEMO_ACTIVITY,
+      });
+    }
+
+    /* ============================================================
      * 五、今日视图
      * 注意力列表（blocked/decision/review/answer/overdue/gate/stall/proposal）
      * + 建议（采纳/忽略）+ 今日焦点 + 最近活动 + 战况统计。
@@ -2442,12 +2620,24 @@ window.__ModuleLoader__.load({
                       }))
                       : h(Empty, {
                         key: 'empty',
-                        title: boardEmpty ? t('todayOnboardTitle') : t('todayEmptyTitle'),
-                        body: boardEmpty ? t('todayOnboardBody') : t('todayEmptyBody'),
+                        title: boardEmpty ? t('demoOnboardTitle') : t('todayEmptyTitle'),
+                        children: boardEmpty
+                          ? h('div', { className: 'fde-onboard' },
+                            h('div', { className: 'fde-onboard-step' },
+                              h('span', { className: 'fde-onboard-no' }, '1'),
+                              h('span', null, '新建客户：登记一个值得跟进的客户机会')),
+                            h('div', { className: 'fde-onboard-step' },
+                              h('span', { className: 'fde-onboard-no' }, '2'),
+                              h('span', null, '导入现有项目：扫描 research/ 目录，确认后再写入')),
+                            h('div', { className: 'fde-onboard-step' },
+                              h('span', { className: 'fde-onboard-no' }, '3'),
+                              h('span', null, '想看示例？设置 → 演示数据 → 重新查看示例')))
+                          : t('todayEmptyBody'),
                         actions: boardEmpty
                           ? h('div', { className: 'fde-row', style: { marginTop: 8, justifyContent: 'center' } },
                             h(Btn, { small: true, kind: 'primary', onClick: p.onCreate }, '新建客户'),
-                            h(Btn, { small: true, onClick: p.onScanNow }, t('scanNow')))
+                            h(Btn, { small: true, onClick: p.onScanNow }, t('scanNow')),
+                            h(Btn, { small: true, onClick: p.onOpenSettings }, t('demoStepRestore')))
                           : null,
                       }))),
               ],
@@ -2946,7 +3136,8 @@ window.__ModuleLoader__.load({
             mark: '◎',
             actions: h('div', { className: 'fde-row', style: { justifyContent: 'center', marginTop: 8 } },
               h(Btn, { small: true, kind: 'primary', onClick: p.onCreate }, '新建客户'),
-              h(Btn, { small: true, onClick: () => { if (candidates === null) runScan(); else setShowAdopt(true); } }, t('customersAdopt'))),
+              h(Btn, { small: true, onClick: () => { if (candidates === null) runScan(); else setShowAdopt(true); } }, t('customersAdopt')),
+              p.onOpenSettings ? h(Btn, { small: true, onClick: p.onOpenSettings }, t('demoStepRestore')) : null),
           })
           : h('div', { className: 'fde-table-wrap' },
             h('div', { className: 'fde-row', style: { padding: '8px 12px', borderBottom: '0.5px solid var(--fde-border)' } },
@@ -4771,6 +4962,30 @@ window.__ModuleLoader__.load({
           })),
         h('div', { className: 'fde-card' },
           Section({
+            title: t('demoCardTitle'),
+            extra: Chip({
+              tone: p.demo && p.demo.active ? 'on' : 'muted',
+              children: p.demo && p.demo.active ? t('demoStatusOn') : t('demoStatusOff'),
+            }),
+            children: [
+              h('div', { className: 'fde-set-row' },
+                h('div', { className: 'fde-set-main' },
+                  h('div', { className: 'fde-set-desc' }, t('demoCardDesc')),
+                  p.demo && p.demo.active
+                    ? h('div', { className: 'fde-hint' }, '当前正在显示示例；点顶部横幅「开始使用（清除示例）」即可清除。')
+                    : (p.demo && !p.demo.empty ? h('div', { className: 'fde-hint' }, t('demoRestoreBlocked')) : null)),
+                h('div', { className: 'fde-set-ctl' },
+                  h(Btn, {
+                    small: true,
+                    kind: 'primary',
+                    busy: p.demoBusy === 'restore',
+                    disabled: !!(p.demo && p.demo.active),
+                    onClick: p.onDemoRestore,
+                  }, p.demoBusy === 'restore' ? t('demoRestoring') : t('demoRestore')))),
+            ],
+          })),
+        h('div', { className: 'fde-card' },
+          Section({
             title: t('settingsHealth'),
             actions: h(Btn, { small: true, onClick: runHealth, busy: healthLoading }, healthLoading ? t('settingsHealthRunning') : t('settingsHealthRun')),
             children: [
@@ -5459,6 +5674,7 @@ window.__ModuleLoader__.load({
             onOpenEngagement: p.onOpenEngagement,
             onRefresh: p.onRefresh,
             onCreate: p.onCreateEngagement,
+            onOpenSettings: p.onOpenSettings,
           })
           : h(BoardView, {
             meta: p.meta, board: p.board, busy: p.busy,
@@ -5530,6 +5746,7 @@ window.__ModuleLoader__.load({
         h(SettingsView, {
           meta: p.meta, board: p.board, busy: p.busy, bidStats: p.bidStats,
           onRefresh: p.onRefresh, onClassic: p.onClassic, onReprobe: p.onReprobe,
+          demo: p.demo, demoBusy: p.demoBusy, onDemoRestore: p.onDemoRestore,
         }));
     }
 
@@ -5579,12 +5796,20 @@ window.__ModuleLoader__.load({
       const drawerRef = useRef(drawer);
       const metaRef = useRef(meta);
       const bidLoadRef = useRef('');
+      const [demoBusy, setDemoBusy] = useState(''); /* '' | 'clear' | 'restore'（v1.5.0 演示模式） */
 
       useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
       useEffect(() => { viewRef.current = view; }, [view]);
       useEffect(() => { boardRef.current = board; }, [board]);
       useEffect(() => { drawerRef.current = drawer; }, [drawer]);
       useEffect(() => { metaRef.current = meta; }, [meta]);
+
+      /* Phase 3（v1.5.0）只读演示覆盖层：今日/客户页用 DEMO 渲染，其它页签保持真实空数据。
+         触发见 isDemoEligible()；横幅在壳层常驻，不新增页签/区域。 */
+      const demoActive = isDemoEligible(board);
+      const demoDismissed = !!(board && board.settings && board.settings.demoDismissed === true);
+      const displayBoard = demoActive ? demoBoardView(board, meta) : board;
+      const displayBrief = demoActive ? DEMO_BRIEF : brief;
 
       /* ---------- 读取：board / brief ---------- */
       const loadBoard = useCallback(async (silent) => {
@@ -5673,6 +5898,13 @@ window.__ModuleLoader__.load({
         return () => clearTimeout(id);
       }, [msg]);
 
+      /* 演示态同步给传输层 demoGuard（写请求兜底拦截）；effect 避免渲染期副作用。 */
+      useEffect(() => {
+        demoRuntime.active = demoActive;
+        demoRuntime.notify = notify;
+        return () => { demoRuntime.active = false; demoRuntime.notify = null; };
+      }, [demoActive, notify]);
+
       const copyText = useCallback(async (s) => {
         try {
           if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -5690,7 +5922,7 @@ window.__ModuleLoader__.load({
       }, [actions]);
 
       /* ---------- 变更：统一 busy + 失败行内提示 ---------- */
-      const runAction = useCallback(async (busyKey, fn) => {
+      const runAction = demoGuard(useCallback(async (busyKey, fn) => {
         setBusy(busyKey);
         let r;
         try { r = await fn(); } catch (e) { r = { ok: false, reason: errText(e) }; }
@@ -5698,7 +5930,36 @@ window.__ModuleLoader__.load({
         setBusy('');
         if (r && r.ok === false) notify('err', r.reason || t('actionFail'));
         return r;
-      }, [notify]);
+      }, [notify]));
+
+      /* ---------- 演示模式：一键清除 / 重新查看（ADR 0006 D2） ---------- */
+      const dismissDemo = useCallback(async () => {
+        setDemoBusy('clear');
+        /* 这是演示模式下唯一允许的设置写入：显式绕过 demoGuard（用户主动清除示例）。 */
+        const r = await postJSON(FDE + '/settings', { patch: { demoDismissed: true } }, 15000, { demoBypass: true });
+        if (!alive.current) return;
+        setDemoBusy('');
+        if (r && r.ok !== false) {
+          notify('ok', t('demoCleared'));
+          await refreshAll(true);
+        } else {
+          notify('err', (r && r.reason) || t('demoClearFail'));
+        }
+      }, [notify, refreshAll]);
+
+      const restoreDemo = useCallback(async () => {
+        if (!isBoardEmpty(boardRef.current)) { notify('warn', t('demoRestoreBlocked')); return; }
+        setDemoBusy('restore');
+        const r = await postJSON(FDE + '/settings', { patch: { demoDismissed: false } }, 15000, { demoBypass: true });
+        if (!alive.current) return;
+        setDemoBusy('');
+        if (r && r.ok !== false) {
+          notify('ok', t('demoRestored'));
+          await refreshAll(true);
+        } else {
+          notify('err', (r && r.reason) || t('demoClearFail'));
+        }
+      }, [notify, refreshAll]);
 
       /* ---------- 抽屉 ---------- */
       const openEngagement = useCallback((id) => {
@@ -5711,7 +5972,8 @@ window.__ModuleLoader__.load({
       const closeDrawer = useCallback(() => setDrawer(null), []);
 
       /* 新建客户 / 新建任务（§2.1）：成功后刷新 board，再打开新对象抽屉 */
-      const openCreate = useCallback((kind) => setCreateForm(kind === 'item' ? 'item' : 'engagement'), []);
+      /* 演示态下新建入口直接拦截（不打开弹层），行内提示走 demoGuard。 */
+      const openCreate = demoGuard(useCallback((kind) => setCreateForm(kind === 'item' ? 'item' : 'engagement'), []));
       const submitCreate = useCallback(async (kind, payload) => {
         const path = kind === 'item' ? '/item' : '/engagement';
         return runAction('create-' + kind, () => fdePost(path, { action: 'create', patch: payload }));
@@ -5725,8 +5987,8 @@ window.__ModuleLoader__.load({
         if (kind === 'item') openItem(obj.id); else openEngagement(obj.id);
       }, [notify, refreshAll, openItem, openEngagement]);
 
-      const drawerEngagement = drawer && drawer.type === 'engagement' ? findEngagement(board, drawer.id) : null;
-      const drawerItem = drawer && drawer.type === 'item' ? findItem(board, drawer.id) : null;
+      const drawerEngagement = drawer && drawer.type === 'engagement' ? findEngagement(displayBoard, drawer.id) : null;
+      const drawerItem = drawer && drawer.type === 'item' ? findItem(displayBoard, drawer.id) : null;
 
       useEffect(() => {
         if (!drawer) return;
@@ -6170,6 +6432,31 @@ window.__ModuleLoader__.load({
         if (r && r.ok) { await refreshAll(true); notify('ok', action === 'accept' ? '已采纳建议' : '已忽略建议'); }
       }, [runAction, refreshAll, notify]);
 
+      /* 演示态下所有写入口再包一层 demoGuard（ADR 0006 D1）：点击即给行内提示，
+         不弹确认框、不乐观更新；传输层 demoGuard 仍作为最后防线。 */
+      const guarded = {
+        moveEngagement: demoGuard(doMoveEngagement),
+        moveItem: demoGuard(moveItem),
+        evaluateGate: demoGuard(evaluateGate),
+        saveGate: demoGuard(saveGate),
+        forceGate: demoGuard(forceGate),
+        saveNext: demoGuard(saveNext),
+        saveStakeholders: demoGuard(saveStakeholders),
+        pauseEngagement: demoGuard(pauseEngagement),
+        archiveEngagement: demoGuard(archiveEngagement),
+        saveItem: demoGuard(saveItem),
+        reportItem: demoGuard(reportItem),
+        deleteItem: demoGuard(deleteItem),
+        handoff: demoGuard(handoff),
+        linkBid: demoGuard(linkBid),
+        unlinkBid: demoGuard(unlinkBid),
+        promoteBid: demoGuard(promoteBid),
+        toggleBidWatch: demoGuard(toggleBidWatch),
+        attentionAction: demoGuard(attentionAction),
+        proposalAction: demoGuard(proposalAction),
+        resolveAttention: demoGuard(resolveAttention),
+      };
+
       /* ---------- 视图导航（Phase 2：5 页签 + 页内子页签；旧 key 映射，不白屏） ---------- */
       const goView = useCallback((key) => {
         const k = str(key);
@@ -6224,12 +6511,14 @@ window.__ModuleLoader__.load({
 
       /* ---------- 统计（服务端优先，缺失时本地派生的只读口径） ---------- */
       const localStats = computeStats(board, meta);
-      const todayStats = {
-        active: stats && typeof stats.active === 'number' ? stats.active : localStats.active,
-        dueToday: stats && typeof stats.dueToday === 'number' ? stats.dueToday : localStats.dueToday,
-        overdue: stats && typeof stats.overdue === 'number' ? stats.overdue : localStats.overdue,
-      };
-      const attentionCount = asList(brief && brief.attention).length;
+      const todayStats = demoActive
+        ? { active: DEMO_BRIEF.stats.active, dueToday: DEMO_BRIEF.stats.dueToday, overdue: DEMO_BRIEF.stats.overdue }
+        : {
+          active: stats && typeof stats.active === 'number' ? stats.active : localStats.active,
+          dueToday: stats && typeof stats.dueToday === 'number' ? stats.dueToday : localStats.dueToday,
+          overdue: stats && typeof stats.overdue === 'number' ? stats.overdue : localStats.overdue,
+        };
+      const attentionCount = asList(displayBrief && displayBrief.attention).length;
       const activeCount = todayStats.active || 0;
       const engCount = asList(board && board.engagements).length;
 
@@ -6257,17 +6546,18 @@ window.__ModuleLoader__.load({
         if (activeView === 'customers') {
           return h(CustomersPage, {
             tab: activeCustomersTab, onTab: setCustomersTab,
-            meta, board, busy, scanToken,
+            meta, board: displayBoard, busy, scanToken,
             search, onSearch: setSearch,
             priority, onPriority: setPriority,
             customerFilter, onCustomerFilter: setCustomerFilter,
             onRefresh: () => refreshAll(false),
             onOpenEngagement: openEngagement, onOpenItem: openItem,
-            onMoveEngagement: (id, stage) => doMoveEngagement(id, stage),
-            onMoveItem: moveItem,
+            onMoveEngagement: (id, stage) => guarded.moveEngagement(id, stage),
+            onMoveItem: guarded.moveItem,
             onScanNow: startScan, onOpenCustomers: () => goView('customers'),
             onCreateEngagement: () => openCreate('engagement'),
             onCreateItem: () => openCreate('item'),
+            onOpenSettings: openSettings,
           });
         }
         if (activeView === 'knowledge') {
@@ -6309,10 +6599,13 @@ window.__ModuleLoader__.load({
             onClassic: p.onClassic,
             onReprobe: p.onReprobe,
             onBack: closeSettings,
+            demo: { active: demoActive, dismissed: demoDismissed, empty: isBoardEmpty(board) },
+            demoBusy,
+            onDemoRestore: restoreDemo,
           });
         }
         return h(TodayView, {
-          meta, board, brief, stats: todayStats,
+          meta, board: displayBoard, brief: displayBrief, stats: todayStats,
           briefLoading, briefError,
           busy,
           onRefresh: () => refreshAll(false),
@@ -6320,11 +6613,12 @@ window.__ModuleLoader__.load({
           onOpenEngagement: openEngagement,
           onOpenItem: openItem,
           onAttentionOpen: attentionOpen,
-          onAttentionAction: attentionAction,
-          onProposalAction: proposalAction,
+          onAttentionAction: guarded.attentionAction,
+          onProposalAction: guarded.proposalAction,
           onScanNow: startScan,
           onCustomers: openCustomersList,
           onCreate: () => openCreate('engagement'),
+          onOpenSettings: openSettings,
         });
       };
 
@@ -6358,6 +6652,16 @@ window.__ModuleLoader__.load({
               className: activeView === n.key ? 'on' : '',
               onClick: () => goView(n.key),
             }, n.label, n.count ? h('span', { className: 'fde-cnt' }, String(n.count)) : null)))),
+        demoActive ? h('div', { className: 'fde-demo-banner', role: 'status', 'aria-live': 'polite' },
+          h('span', { className: 'fde-demo-badge' }, t('demoBadge')),
+          h('span', { className: 'fde-demo-banner-text' }, t('demoBannerText')),
+          h('div', { className: 'fde-spacer' }),
+          h(Btn, {
+            small: true, kind: 'primary',
+            busy: demoBusy === 'clear',
+            onClick: dismissDemo,
+          }, demoBusy === 'clear' ? t('demoClearing') : t('demoStart')),
+          h(Btn, { small: true, onClick: () => goView('process') }, t('demoLearn'))) : null,
         msg ? h('div', { style: { padding: '0 18px' } },
           h(MsgLine, { kind: msg.kind, text: msg.text, onClose: () => setMsg(null) })) : null,
         h('div', { className: 'fde-main' }, viewNode()),
@@ -6366,26 +6670,26 @@ window.__ModuleLoader__.load({
         drawer && drawerEngagement && drawer.type === 'engagement'
           ? h(EngagementDrawer, {
             key: 'eng-' + drawerEngagement.id,
-            meta, board,
+            meta, board: displayBoard,
             engagement: drawerEngagement,
             gateInfo, gateLoading, gateError,
             files: drawerFiles, filesLoading: drawerFilesLoading, filesBase: drawerFilesBase,
             bids: drawerBids, bidsLoading: drawerBidsLoading, bidsError: drawerBidsError, bidBusy: busy,
             onBidsRefresh: refreshDrawerBids,
-            onBidLink: linkBid, onBidUnlink: unlinkBid, onBidPromote: promoteBid,
-            onToggleBidWatch: toggleBidWatch,
+            onBidLink: guarded.linkBid, onBidUnlink: guarded.unlinkBid, onBidPromote: guarded.promoteBid,
+            onToggleBidWatch: guarded.toggleBidWatch,
             onClose: closeDrawer,
-            onMoveStage: (stage) => doMoveEngagement(drawerEngagement.id, stage),
-            onMoveBack: (stage) => doMoveEngagement(drawerEngagement.id, stage),
-            onGateEvaluate: evaluateGate,
-            onGateSave: saveGate,
-            onForceGate: forceGate,
-            onSaveNext: saveNext,
-            onSaveStakeholders: saveStakeholders,
+            onMoveStage: (stage) => guarded.moveEngagement(drawerEngagement.id, stage),
+            onMoveBack: (stage) => guarded.moveEngagement(drawerEngagement.id, stage),
+            onGateEvaluate: guarded.evaluateGate,
+            onGateSave: guarded.saveGate,
+            onForceGate: guarded.forceGate,
+            onSaveNext: guarded.saveNext,
+            onSaveStakeholders: guarded.saveStakeholders,
             onLoadFiles: () => loadDrawerFiles(drawerEngagement),
-            onHandoff: () => handoff('engagement', drawerEngagement.id),
-            onPause: pauseEngagement,
-            onArchive: archiveEngagement,
+            onHandoff: () => guarded.handoff('engagement', drawerEngagement.id),
+            onPause: guarded.pauseEngagement,
+            onArchive: guarded.archiveEngagement,
             onOpenItem: openItem,
             onOpenPath: actions.openPath,
           })
@@ -6393,15 +6697,15 @@ window.__ModuleLoader__.load({
         drawer && drawerItem && drawer.type === 'item'
           ? h(ItemDrawer, {
             key: 'itm-' + drawerItem.id,
-            meta, board,
+            meta, board: displayBoard,
             item: drawerItem,
             onClose: closeDrawer,
-            onSave: saveItem,
-            onReport: reportItem,
-            onDelete: deleteItem,
-            onHandoff: () => handoff('item', drawerItem.id),
+            onSave: guarded.saveItem,
+            onReport: guarded.reportItem,
+            onDelete: guarded.deleteItem,
+            onHandoff: () => guarded.handoff('item', drawerItem.id),
             onOpenSession: gotoSession,
-            onResolveAttention: resolveAttention,
+            onResolveAttention: guarded.resolveAttention,
           })
           : null,
         /* 新建客户 / 任务弹层（§2.1） */

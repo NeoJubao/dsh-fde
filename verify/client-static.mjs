@@ -222,6 +222,37 @@ const checks = [
       return !/AutonomyBadge\(\{ meta, mode: autonomyKey\(meta, board\) \}\)/.test(before);
     })()],
 
+  /* ---- 6e. v1.5.0 只读演示模式（ADR 0006 / spec §8.8） ---- */
+  ['演示模式：内置 DEMO_BOARD / DEMO_BRIEF（4 示例客户跨 4 阶段 + 3 任务 + 2 注意力 + 4 活动）',
+    c.includes('const DEMO_BOARD') && c.includes('const DEMO_BRIEF')
+    && ['demo-eng-1', 'demo-eng-2', 'demo-eng-3', 'demo-eng-4'].every((x) => c.includes(x))
+    && ['demo-itm-scoping', 'demo-itm-discovery', 'demo-itm-meeting'].every((x) => c.includes(x))
+    && ['demo-attn-decision', 'demo-attn-review'].every((x) => c.includes(x))
+    && (c.match(/（示例）/g) || []).length >= 8],
+  ['演示阶段从 meta.stages 解析（不硬编码阶段 key/顺序，spec §16.5）',
+    c.includes('stageIndex: 0') && c.includes('demoBoardView(board, meta)')
+    && c.includes('const stages = asList(meta && meta.stages)')],
+  ['演示触发：真实看板为空且 settings.demoDismissed !== true',
+    c.includes('function isDemoEligible(') && c.includes('function isBoardEmpty(')
+    && c.includes('settings.demoDismissed === true')],
+  ['演示只读：demoGuard 包装写请求与写回调（runAction / openCreate / postJSON）',
+    c.includes('const postJSON = demoGuard(sendJSON)')
+    && c.includes('const runAction = demoGuard(useCallback(')
+    && c.includes('const openCreate = demoGuard(useCallback(')
+    && c.includes('const guarded = {')],
+  ['演示只读：抽屉/看板/注意力写入口全走 guarded（漏一处即 bug）',
+    ['moveEngagement', 'moveItem', 'evaluateGate', 'saveGate', 'forceGate', 'saveNext', 'saveStakeholders',
+      'pauseEngagement', 'archiveEngagement', 'saveItem', 'reportItem', 'deleteItem', 'handoff',
+      'attentionAction', 'proposalAction'].every((k) => c.includes(k + ': demoGuard('))],
+  ['演示横幅（nav 与内容之间）+ 一键清除 POST settings demoDismissed:true（唯一 bypass 写）',
+    c.includes("className: 'fde-demo-banner'") && c.includes("patch: { demoDismissed: true }")
+    && c.includes('demoBypass: true') && c.includes("t('demoStart')")],
+  ['演示卡片：设置页状态 + 重新查看示例（demoDismissed:false）',
+    c.includes("t('demoCardTitle')") && c.includes("patch: { demoDismissed: false }")
+    && c.includes('onDemoRestore')],
+  ['空态三步引导（新建客户 / 导入现有项目 / 重新查看示例）',
+    c.includes('fde-onboard-step') && c.includes("t('demoStepRestore')") && c.includes("t('demoOnboardTitle')")],
+
   /* ---- 7. 约束 ---- */
   ['不 import @deepseek-ai/*', !c.includes('@deepseek-ai')],
   ['不写 localStorage 作为事实源', !c.includes('localStorage') && !c.includes('sessionStorage')],

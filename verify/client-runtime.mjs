@@ -6,6 +6,7 @@
  * window/document/fetch，eval client.js 后真实渲染面板，走通：
  *  - FDE 九视图渲染（含流程 v2 与资料库）、今日注意力动作、建议采纳
  *  - 看板客户模式/任务模式、HTML5 拖拽、Alt+方向键、门禁缺项确认、证据确认
+ *  - v1.5.0 只读演示模式：空板横幅 / DEMO 渲染 / 写操作拦截 / 一键清除 / 设置卡恢复
  *  - 客户/任务抽屉、门禁人工勾选与证据、启动会话、归档/删除确认
  *  - 客户导入（adopt scan/apply）、工件（Finder/导出）、方法、设置
  *  - 兼容页 + 经典模式五页签 + Finder 三通道降级
@@ -1681,6 +1682,97 @@ if (saveSettingsBtn) {
   libMode = 'ok';
   const todayNav = navBtn(tree, '今日');
   if (todayNav) tree = await act(PanelApp, makeProps(), () => todayNav.props.onClick());
+}
+
+/* ================= 场景五·续5：v1.5.0 只读演示模式（ADR 0006 / spec §8.8） ================= */
+{
+  const demoEmpty = makeBoard();
+  demoEmpty.engagements = [];
+  demoEmpty.items = [];
+  demoEmpty.proposals = [];
+  demoEmpty.activity = [];
+  demoEmpty.settings = Object.assign({}, demoEmpty.settings || {}, { demoDismissed: false });
+  currentBoard = demoEmpty;
+  CURRENT_BRIEF = { attention: [], proposals: [], focus: [], activity: [], stats: { active: 0, dueToday: 0, overdue: 0 } };
+  /* 设置写入落盘到 currentBoard.settings（模拟宿主持久化），供清除/恢复后重新拉 board */
+  stub('POST', '/research-workbench/api/fde/settings', (call) => {
+    const patch = (call.body || {}).patch || {};
+    if ('demoDismissed' in patch) currentBoard.settings.demoDismissed = !!patch.demoDismissed;
+    return { ok: true, settings: currentBoard.settings };
+  });
+  instances.clear();
+  tree = await renderStable(PanelApp, makeProps());
+
+  check('演示模式：空看板 + demoDismissed!==true → 横幅可见',
+    !!byClass(tree, 'fde-demo-banner')[0] && textOf(tree).includes('演示模式：以下为示例数据，不会写入真实看板'));
+  check('演示模式：今日用 DEMO 渲染（示例客户带「（示例）」+ 2 条注意力）',
+    textOf(tree).includes('某集团（示例）') && textOf(tree).includes('某研究院（示例）')
+    && textOf(tree).includes('待我处理（2）'));
+  check('演示模式：横幅含「开始使用（清除示例）」「了解功能（去流程页）」',
+    btnByText(tree, '开始使用（清除示例）').length >= 1 && btnByText(tree, '了解功能（去流程页）').length >= 1);
+
+  /* 写操作被拦截：点注意力动作「回答」→ 不发请求 + 行内提示 */
+  const beforeWrites = fetchCalls.filter((c) => c.method === 'POST').length;
+  const answerBtn = buttons(tree).filter((b) => textOf(b).trim() === '回答')[0];
+  check('演示模式：今日注意力行有可点动作（用于验证拦截）', !!answerBtn);
+  if (answerBtn) tree = await act(PanelApp, makeProps(), () => answerBtn.props.onClick());
+  check('演示模式：写操作被拦截（不发 POST + 行内提示）',
+    fetchCalls.filter((c) => c.method === 'POST').length === beforeWrites
+    && textOf(tree).includes('示例模式不可操作'));
+
+  /* 客户页：DEMO 看板 + 任务泳道均为只读示例卡 */
+  const demoCustNav = navBtn(tree, '客户');
+  if (demoCustNav) tree = await act(PanelApp, makeProps(), () => demoCustNav.props.onClick());
+  check('演示模式：客户页看板渲染 4 张示例卡', byClass(tree, 'fde-card').length >= 4
+    && textOf(tree).includes('某研究院（示例）'));
+  const demoTaskTab = pageTab(tree, '看板 · 任务');
+  if (demoTaskTab) tree = await act(PanelApp, makeProps(), () => demoTaskTab.props.onClick());
+  check('演示模式：任务泳道渲染 3 个示例任务',
+    textOf(tree).includes('整理场景评估表 12 维评分（示例）')
+    && textOf(tree).includes('等待客户确认会面时间（示例）'));
+
+  /* 一键清除：POST settings demoDismissed:true → 横幅消失 + 三步引导 */
+  const clearBtn = byClass(tree, 'fde-demo-banner')[0]
+    ? buttons(byClass(tree, 'fde-demo-banner')[0]).filter((b) => textOf(b).includes('开始使用'))[0] : null;
+  check('演示模式：横幅有清除按钮', !!clearBtn);
+  if (clearBtn) tree = await act(PanelApp, makeProps(), () => clearBtn.props.onClick());
+  const clearCall = lastCall('POST', '/fde/settings');
+  check('演示模式：清除 → POST /fde/settings patch.demoDismissed=true',
+    !!clearCall && clearCall.body && clearCall.body.patch && clearCall.body.patch.demoDismissed === true,
+    JSON.stringify(clearCall && clearCall.body));
+  const backToday = navBtn(tree, '今日');
+  if (backToday) tree = await act(PanelApp, makeProps(), () => backToday.props.onClick());
+  check('演示模式：清除后横幅消失',
+    !byClass(tree, 'fde-demo-banner').length,
+    textOf(tree).slice(0, 200));
+  check('演示模式：清除后今日空态三步引导',
+    byClass(tree, 'fde-onboard-step').length === 3,
+    String(byClass(tree, 'fde-onboard-step').length));
+  check('演示模式：清除后今日回真实空数据（无 DEMO 客户）',
+    !textOf(tree).includes('某集团（示例）'),
+    textOf(tree).slice(0, 300));
+
+  /* 设置页「演示数据」卡：已清除 + 重新查看示例（demoDismissed:false） */
+  const gear = gearBtn(tree);
+  check('演示模式：设置页可从页头齿轮进入', !!gear);
+  if (gear) tree = await act(PanelApp, makeProps(), () => gear.props.onClick());
+  check('演示模式：设置页演示卡显示状态与「重新查看示例数据」',
+    textOf(tree).includes('演示数据') && textOf(tree).includes('已清除')
+    && btnByText(tree, '重新查看示例数据').length >= 1);
+  const restoreBtn = btnByText(tree, '重新查看示例数据')[0];
+  if (restoreBtn) tree = await act(PanelApp, makeProps(), () => restoreBtn.props.onClick());
+  const restoreCall = lastCall('POST', '/fde/settings');
+  check('演示模式：重新查看 → POST /fde/settings patch.demoDismissed=false',
+    !!restoreCall && restoreCall.body && restoreCall.body.patch && restoreCall.body.patch.demoDismissed === false,
+    JSON.stringify(restoreCall && restoreCall.body));
+  check('演示模式：恢复后横幅重新出现（示例只读覆盖层）', !!byClass(tree, 'fde-demo-banner')[0]);
+
+  /* 复位：用真实数据重新挂载 FdeApp，让 demoRuntime 复位（否则经典模式写请求会被误拦） */
+  currentBoard = makeBoard();
+  CURRENT_BRIEF = makeBrief(currentBoard);
+  installFdeStubs();
+  instances.clear();
+  tree = await renderStable(PanelApp, makeProps());
 }
 
 /* ================= 场景六：兼容页 + 经典模式 + Finder 三通道 ================= */

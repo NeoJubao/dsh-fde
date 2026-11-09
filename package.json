@@ -1,6 +1,6 @@
 {
   "name": "dsh-fde",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "type": "module",
   "description": "FDE 工作站：跑在 DeepSeek Harness 里的单机插件——把客户经营从线索到采用做成可推进、可验证、可复盘的一屏作战台（看板 + 今日 + 8 阶段门禁 + FDE 方法库 + 资料库 + 招采关联）。",
   "license": "MIT",

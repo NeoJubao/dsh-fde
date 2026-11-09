@@ -561,6 +561,24 @@ section('设置与自主性（spec §6）');
   const assisted = api.applySafeProposals(ws, b.board);
   check('assisted 模式执行安全建议', assisted.ok && assisted.mode === 'assisted', assisted);
   api.settings(ws, { patch: { autonomy: 'observe' } });
+
+  /* ADR 0006：演示模式一键清除位（只读示例，不写盘） */
+  const dm0 = api.board(ws);
+  check('默认 settings.demoDismissed=false（空看板可显示示例）',
+    dm0.ok && dm0.board.settings.demoDismissed === false, dm0.board && dm0.board.settings && dm0.board.settings.demoDismissed);
+  check('meta.defaults.settings.demoDismissed=false（客户端 normalizeMeta 拍平为 settingsDefaults）',
+    api.meta().meta.defaults.settings.demoDismissed === false);
+  const dm1 = api.settings(ws, { patch: { demoDismissed: true } });
+  check('settings.demoDismissed=true 持久化 + appliedKeys 记录',
+    dm1.ok && dm1.settings.demoDismissed === true && dm1.appliedKeys.includes('demoDismissed'), dm1.reason);
+  const dm2 = api.board(ws);
+  check('board 读回 demoDismissed=true（清除后不再显示示例）',
+    dm2.ok && dm2.board.settings.demoDismissed === true);
+  const dm3 = api.settings(ws, { patch: { demoDismissed: 'yes' } });
+  check('非法 demoDismissed 被拒（必须布尔）', dm3.ok === false && dm3.code === 'INVALID', dm3.code);
+  const dm4 = api.settings(ws, { patch: { demoDismissed: false } });
+  check('demoDismissed 可重置为 false（设置页「重新查看示例」）',
+    dm4.ok && dm4.settings.demoDismissed === false);
 }
 
 /* ============================ 模拟 bidIntel 服务（§17 测试用，不读真实 42MB 索引） ============================ */
