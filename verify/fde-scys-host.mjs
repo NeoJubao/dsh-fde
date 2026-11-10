@@ -12,8 +12,10 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as scys from '../src/host/fde-scys.js';
+
+const __toUrl = (p) => (String(p).startsWith('file:') ? p : pathToFileURL(p).href);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -508,7 +510,7 @@ console.log('\n── 10. text/event-stream 响应兼容 ──');
 /* ================= 11. index.js：路由 / scys_fde 工具 / 定时器 / HTTP 200 降级 ================= */
 console.log('\n── 11. index.js：2 路由 + scys_fde 工具 + 未授权 HTTP 200 降级 ──');
 {
-  const mod = await import(join(ROOT, 'index.js'));
+  const mod = await import(__toUrl(join(ROOT, 'index.js')));
   const ws = newWs();
   useStateDir(newStateDir());
   scys.resetScysState();
@@ -627,7 +629,8 @@ console.log('\n── 12. 生财三路授权：链接 / 环境变量 / 兼容文
   const saved = scys.saveAuthFromInput(ws, { url: 'https://auth.example/cb?access_token=' + TOKEN });
   const authFile = scys.authFilePath(ws);
   const mode = (statSync(authFile).mode & 0o777).toString(8);
-  check('保存链接授权：ok + 文件存在 + 0600', saved.ok === true && existsSync(authFile) && mode === '600', mode);
+  // NTFS 不承载 POSIX 权限位（Windows stat 恒 0o666），平台差异跳过而非判失败
+  check('保存链接授权：ok + 文件存在 + 0600', saved.ok === true && existsSync(authFile) && (process.platform === 'win32' || mode === '600'), process.platform === 'win32' ? 'win32 跳过（NTFS 无 POSIX 权限位）' : mode);
   const sum = scys.authSummary(ws);
   check('授权摘要：available + source=link + 不含 token',
     sum.available === true && sum.source === 'link' && !JSON.stringify(sum).includes(TOKEN), JSON.stringify(sum));

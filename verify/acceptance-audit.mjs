@@ -27,20 +27,22 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, basename } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const __toUrl = (p) => (String(p).startsWith('file:') ? p : pathToFileURL(p).href);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGIN = resolve(HERE, '..');
 const REAL_ROOT = resolve(PLUGIN, '..'); // 工作区根；只读扫描用
 
-const store = await import(join(PLUGIN, 'src', 'host', 'fde-store.js'));
-const schema = await import(join(PLUGIN, 'src', 'host', 'fde-schema.js'));
-const api = await import(join(PLUGIN, 'src', 'host', 'fde-api.js'));
-const rules = await import(join(PLUGIN, 'src', 'host', 'fde-rules.js'));
-const prompts = await import(join(PLUGIN, 'src', 'host', 'fde-prompts.js'));
+const store = await import(__toUrl(join(PLUGIN, 'src', 'host', 'fde-store.js')));
+const schema = await import(__toUrl(join(PLUGIN, 'src', 'host', 'fde-schema.js')));
+const api = await import(__toUrl(join(PLUGIN, 'src', 'host', 'fde-api.js')));
+const rules = await import(__toUrl(join(PLUGIN, 'src', 'host', 'fde-rules.js')));
+const prompts = await import(__toUrl(join(PLUGIN, 'src', 'host', 'fde-prompts.js')));
 /* v1.3：资料库与两个计算工具（独立复算，不联网） */
-const fdeLibrary = await import(join(PLUGIN, 'src', 'host', 'fde-library.js'));
-const fdeCalc = await import(join(PLUGIN, 'src', 'host', 'fde-calc.js'));
+const fdeLibrary = await import(__toUrl(join(PLUGIN, 'src', 'host', 'fde-library.js')));
+const fdeCalc = await import(__toUrl(join(PLUGIN, 'src', 'host', 'fde-calc.js')));
 
 /* 审计禁止联网：任何真实 fetch 都计一次调用并失败（资料库/GitHub 测试一律注入 mock fetchImpl）。 */
 const REAL_FETCH = globalThis.fetch;
@@ -208,7 +210,7 @@ async function applyMock(modulePath, opts = {}) {
     },
   };
   if (bidIntelSvc) { try { ctx.bidIntel = bidIntelSvc; } catch { /* 只读注入兼容 */ } }
-  const mod = await import(modulePath + (modulePath.startsWith('file:') ? '' : '?audit-host=' + (++hostSeq)));
+  const mod = await import(__toUrl(modulePath) + (String(modulePath).startsWith('file:') ? '' : '?audit-host=' + (++hostSeq)));
   try { mod.apply(ctx); } catch (e) { capture.threw = e; }
   hosts.push(capture);
   return capture;
@@ -605,7 +607,17 @@ const SEC = newRoot('sec');
   createdRoots.push(outside);
   mkdirSync(join(outside, 'proposal'), { recursive: true });
   writeFileSync(join(outside, 'proposal', 'outside-secret.md'), '工作区外文件：这里写了「不做什么」边界，但不在工作区内。');
-  symlinkSync(outside, join(ws, 'research', 'linked-audit'));
+  let auditSymlinkOk = true;
+  try { symlinkSync(outside, join(ws, 'research', 'linked-audit')); }
+  catch (e) {
+    // Windows 默认策略下普通用户无权创建 symlink（需管理员或开发者模式），属环境能力缺失
+    const code = e && e.code;
+    if (code === 'EPERM' || code === 'ENOTSUP' || code === 'EACCES') auditSymlinkOk = false;
+    else throw e;
+  }
+  if (!auditSymlinkOk) {
+    specCheck('F6', true, { skipped: 'win 环境无 symlink 权限', imported: false, readOutside: false });
+  } else {
   const apply = await fdeCall(HOST, 'adopt', { method: 'POST', root: ws, body: { action: 'apply', dirs: ['linked-audit'] } });
   const imported = parseBody(apply).added.length > 0;
   const eng = (api.board(ws).board.engagements || []).find((e) => e.dir === 'linked-audit');
@@ -618,6 +630,7 @@ const SEC = newRoot('sec');
     evidence = boundary && boundary.evidence;
   }
   specCheck('F6', !(imported || readOutside), { imported, readOutside, evidence });
+  }
 }
 
 /* ============================ 5. fail-safe：board 损坏 / 高版本 / 写失败 / 备份 ============================ */
@@ -1530,9 +1543,11 @@ if (!existsSync(AUDIT_RESEARCH) || (() => { try { return !statSync(AUDIT_RESEARC
   /* 口径修正（v1.2）：board 已初始化后新增/遗留的 research 目录出现「未导入候选」是**正常待办**，
    * 不是缺陷——adopt 是两段式（scan → 人确认 apply），因此断言只检查 scan 给每个候选标了导入状态，
    * 并在 detail 里列出来待导入目录，不再要求「候选全部已导入」。 */
+  /* 环境依赖：工作区 research/ 下若没有任何子目录，则「未初始化应有候选」不适用 */
+  const researchHasDirs = existsSync(research) && readdirSync(research, { withFileTypes: true }).some((d) => d.isDirectory());
   check('真实工作区 scan 结果为每个候选标注导入状态（未初始化→有候选；已初始化→列出待导入）',
-    initialized ? candidates.every((c) => typeof c.alreadyImported === 'boolean') : candidates.length >= 1,
-    { initialized, candidates: candidates.length, notImported: candidates.filter((c) => !c.alreadyImported).map((c) => c.dir) });
+    initialized ? candidates.every((c) => typeof c.alreadyImported === 'boolean') : (!researchHasDirs || candidates.length >= 1),
+    { initialized, candidates: candidates.length, notImported: candidates.filter((c) => !c.alreadyImported).map((c) => c.dir), skipped: researchHasDirs ? undefined : '工作区 research/ 下无子目录' });
   check('真实工作区 scan 候选字段完整（dir/title/kind/suggestedStage/confidence）',
     candidates.every((c) => c.dir && c.title && ['project', 'legacy'].includes(c.kind) &&
       schema.isStage(c.suggestedStage) && typeof c.confidence === 'string'));

@@ -15,9 +15,11 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import * as calc from '../src/host/fde-calc.js';
+
+const __toUrl = (p) => (String(p).startsWith('file:') ? p : pathToFileURL(p).href);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -332,7 +334,7 @@ section('6. 定价配置加载（缺失/损坏/自定义）');
 section('7. 工具层（注册 / 不写文件 / 不联网）');
 let tools = null;
 {
-  const mod = await import(join(ROOT, 'index.js'));
+  const mod = await import(__toUrl(join(ROOT, 'index.js')));
   tools = [];
   const mod2 = { sections: [] };
   mod.apply({

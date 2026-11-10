@@ -14,11 +14,13 @@
 import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 
+const __toUrl = (p) => (String(p).startsWith('file:') ? p : pathToFileURL(p).href);
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const mod = await import(join(ROOT, 'index.js'));
+const mod = await import(__toUrl(join(ROOT, 'index.js')));
 
 const fail = [];
 const ok = [];

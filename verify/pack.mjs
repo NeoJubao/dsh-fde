@@ -70,10 +70,14 @@ const FORBIDDEN = [
 ];
 
 let stdout = '';
+/* Windows 下 npm 是 npm.cmd 包装器：Node 20+（CVE-2024-27980 修复）禁止不经 shell 直接 spawn .cmd/.bat，
+ * 故 win32 走 shell:true 并以裸名调用；其它平台保持 execFile 直连。 */
+const useShell = process.platform === 'win32';
 try {
   /* --ignore-scripts：prepack 的 stdout 会混进 --json 输出，导致解析失败（CI 上实测）；
    * 产物一致性由 open-source.mjs 与 build 步骤单独校验。 */
   stdout = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts', '--cache', NPM_CACHE], {
+    shell: useShell,
     cwd: ROOT,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
