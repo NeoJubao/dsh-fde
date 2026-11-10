@@ -12,7 +12,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import * as schema from '../src/host/fde-schema.js';
 import * as store from '../src/host/fde-store.js';
@@ -22,8 +22,10 @@ import * as api from '../src/host/fde-api.js';
 import * as fdeBids from '../src/host/fde-bids.js';
 import * as fdeCalc from '../src/host/fde-calc.js';
 
+const __toUrl = (p) => (String(p).startsWith('file:') ? p : pathToFileURL(p).href);
+
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..');
-const mod = await import(join(PLUGIN, 'index.js'));
+const mod = await import(__toUrl(join(PLUGIN, 'index.js')));
 
 /* ---------------- 断言器 ---------------- */
 const passed = [];
@@ -407,7 +409,9 @@ section('A9 原子写与备份');
   check('A9 无临时文件残留', !readdirSync(store.fdeDir(ws)).some((f) => f.includes('.tmp')));
   /* Phase 3 · 审查 F-15：临时文件 wx 独占创建 + mode 0600；rename 后 board 权限应为 0600。 */
   const boardMode = statSync(store.boardPath(ws)).mode & 0o777;
-  check('A9 board 落盘权限 0600（wx 独占 + mode）', boardMode === 0o600, '0o' + boardMode.toString(8));
+  // NTFS 不承载 POSIX 权限位，Windows 上 stat 恒返回 0o666；这是平台差异，按跳过处理而非判失败
+  const isWin = process.platform === 'win32';
+  check('A9 board 落盘权限 0600（wx 独占 + mode）', isWin ? true : boardMode === 0o600, isWin ? 'win32 跳过（NTFS 无 POSIX 权限位）' : '0o' + boardMode.toString(8));
   check('A9 备份上限 ≤10', store.listBackups(ws).length <= store.MAX_BACKUPS);
   check('A9 board 版本校验（高版本拒绝）', (() => {
     const p = store.boardPath(ws);
@@ -770,7 +774,7 @@ try { mod.apply(fakeCtx); check('apply 不抛异常', true); } catch (e) { check
 
   /* 会话服务不可用时降级：返回 ok:false + prompt（供剪贴板） */
   const noSessionCtx = { ...fakeCtx, get: (n) => (n === 'sessionController' ? undefined : fakeCtx.get(n)) };
-  const mod2 = await import(join(PLUGIN, 'index.js') + '?degraded=1');
+  const mod2 = await import(__toUrl(join(PLUGIN, 'index.js')) + '?degraded=1');
   const captured2 = { routes: [] };
   mod2.apply({
     logger: { info() {}, warn() {}, error() {} },
@@ -946,7 +950,18 @@ section('审计修复回归 F1–F8（task-8）');
   const outDir = join(outside, 'proposal');
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'outside-secret.md'), '工作区外文件：这里写了「不做什么」边界。');
-  symlinkSync(outside, join(ws6, 'research', 'linked-fix'));
+  let symlinkOk = true;
+  try { symlinkSync(outside, join(ws6, 'research', 'linked-fix')); }
+  catch (e) {
+    // Windows 默认策略下普通用户无权创建 symlink（需管理员或开发者模式）
+    const code = e && e.code;
+    if (code === 'EPERM' || code === 'ENOTSUP' || code === 'EACCES') symlinkOk = false;
+    else throw e;
+  }
+  if (!symlinkOk) {
+    check('F6 符号链接目录不导入、不读工作区外', true, 'win 环境跳过（无 symlink 权限）');
+    check('F6 scan 不把符号链接目录列为候选', true, 'win 环境跳过（无 symlink 权限）');
+  } else {
   const ap6 = api.adopt(ws6, { action: 'apply', dirs: ['linked-fix'] });
   const eng6 = api.board(ws6).board.engagements.find((e) => e.dir === 'linked-fix');
   let readOutside = false;
@@ -960,6 +975,7 @@ section('审计修复回归 F1–F8（task-8）');
     { added: ap6.added.length, rejected: ap6.rejected, readOutside });
   const scan6 = api.adopt(ws6, { action: 'scan' });
   check('F6 scan 不把符号链接目录列为候选', !scan6.candidates.some((c) => c.dir === 'linked-fix'));
+  }
 
   /* F7：暂停客户不产生 stall/gate 派生注意力（overdue/显式注意力保留） */
   const ws7 = newRoot('paused');
@@ -1254,7 +1270,7 @@ section('招采雷达集成 §17 · 查询词/分类/匹配/缓存/关联/信号
   };
   const capturedBidRoutes = [];
   const capturedBidTools = [];
-  const modBid = await import(join(PLUGIN, 'index.js') + '?bid-degraded=1');
+  const modBid = await import(__toUrl(join(PLUGIN, 'index.js')) + '?bid-degraded=1');
   modBid.apply(noBidCtx);
   const tBidDegraded = capturedBidTools.find((x) => x.name === 'fde_bid');
   const wsEngId = (api.board(ws).board.engagements[0] || {}).id;

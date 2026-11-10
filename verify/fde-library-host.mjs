@@ -12,9 +12,11 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import * as lib from '../src/host/fde-library.js';
+
+const __toUrl = (p) => (String(p).startsWith('file:') ? p : pathToFileURL(p).href);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -601,7 +603,7 @@ section('10. compactFeed 过滤（group/kind/stage/q/limit）');
 /* ================= 11. index.js：2 条路由 + fde_library 工具 + 定时器 ================= */
 section('11. index.js：library 路由 / fde_library 工具 / 定时器注册');
 {
-  const mod = await import(join(ROOT, 'index.js'));
+  const mod = await import(__toUrl(join(ROOT, 'index.js')));
   const ws = newWs();
   const catPath = writeCatalog(ws, baseCatalog());
   /* 工具/路由走模块默认 catalog 路径：用环境变量覆盖到临时 catalog（测试隔离，不影响生产默认） */
