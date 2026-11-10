@@ -2,6 +2,19 @@
 
 本文件记录 `dsh-fde`（FDE 工作站）的用户可见变化。版本号遵循 SemVer；插件市场与 `dsh plugin add` 以 `package.json` 的版本为准。
 
+## 未发布 — Windows 开发环境下的验证链路可用性
+
+验证脚本（`verify/`）此前只在 Linux 上运行，Windows 克隆后 `node verify/all.mjs` 有 10 项失败。本次修复全部落在验证链路，**不改动插件运行时行为**：
+
+- **行尾**：新增 `.gitattributes`（`* text=auto eol=lf`）。此前仓库无该文件，Windows 用户 `core.autocrlf=true` 克隆时全部文本被转成 CRLF，导致 11 个 `skills/*/SKILL.md` 的 frontmatter 校验（按 `---\n` 判定）全部失败。
+- **动态导入**：7 个验证脚本共 17 处 `await import(join(...))` 直接传入绝对路径。Node 的 ESM 加载器只接受 `file:`/`data:`/`node:` 协议，Windows 盘符路径会抛 `ERR_UNSUPPORTED_ESM_URL_SCHEME`。改为经 `pathToFileURL()` 转换（新增局部 `__toUrl` 辅助函数）。
+- **符号链接用例**：`F6 符号链接目录不导入` 与 `rw_qa_pdf 拒绝越界符号链接` 两项在 Windows 默认策略下抛 `EPERM`（普通用户无创建 symlink 权限，需管理员或开发者模式）。改为捕获 `EPERM`/`ENOTSUP`/`EACCES` 后按环境跳过，其余错误仍照常失败。
+- **POSIX 权限位断言**：`A9 board 落盘权限 0600` 与 `保存链接授权 0600` 在 NTFS 上恒返回 `0o666`（文件系统不承载 POSIX 权限位）。`win32` 下按平台差异跳过，实现层面仍以 `wx` 独占创建保证不覆盖。
+- **npm 打包检查**：`verify/pack.mjs` 用 `execFileSync('npm', ...)`，Windows 上 npm 是 `npm.cmd` 包装器，裸名会 `ENOENT`；而 Node 20+（CVE-2024-27980 修复）禁止不经 shell 直接 spawn `.cmd`/`.bat`，改为 `npm.cmd` 会抛 `EINVAL`。`win32` 下改用 `shell: true`。
+- **工作区依赖用例**：`真实工作区 scan 结果为每个候选标注导入状态` 断言「board 未初始化时 `research/` 下应有候选目录」。当工作区 `research/` 下没有任何子目录时该前提不成立，改为环境跳过。
+
+修后 `node verify/all.mjs` 在 Windows 11 + Node 24 上 18/18 全绿、exit 0（宿主内核 317 项、独立审计 677 项、打包 40 项）。所有平台分支均保留原 Linux 判定路径。
+
 ## 1.3.1 — 2026-11-09（仓库内部发布准备，未单独发布到 npm）
 
 发布卫生修复（不改变功能）：
