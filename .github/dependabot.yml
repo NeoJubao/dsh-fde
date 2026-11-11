@@ -1,0 +1,13 @@
+# 依赖更新由 Dependabot 托管。
+# Actions 已 pin 到完整 commit SHA（仓库设置 sha_pinning_required=true 强制），
+# 升级走这里的每日/每周 PR，不要手改 workflow 里的 SHA。
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns: ["*"]

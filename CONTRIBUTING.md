@@ -26,6 +26,7 @@ node scripts/health-check.mjs
 - 客户端半（`src/ui/ui-panel.js`）：`node build.mjs` 后刷新页面；`client.js` 是生成产物，**不要手改**。
 - 改面板请用离线 harness 看真渲染：`plugin-audit/fde-v2/harness`（仓库内历史审计工具，不随 npm 包发布），或直接在 DSH 里打开面板。
 - 不要新增运行时依赖；宿主服务用 `ctx.get()` 懒取并在缺失时降级。
+- CI 的 GitHub Actions 必须 pin 到完整 commit SHA（`.github/workflows/verify.yml` 已固定，仓库设置强制）；升级交给 Dependabot（`.github/dependabot.yml`），不要改回 `@v4` 这类可移动 tag。
 
 ## 提交规范
 
