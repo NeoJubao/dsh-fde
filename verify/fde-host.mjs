@@ -8,7 +8,7 @@
  */
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync,
-  existsSync, rmSync, symlinkSync, statSync,
+  existsSync, rmSync, symlinkSync, statSync, lstatSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -36,6 +36,12 @@ const check = (name, cond, extra) => {
   failed.push(name + detail);
   console.log('  ✗ ' + name + detail);
   return false;
+};
+/* 环境能力缺失导致的未验证项：显式 SKIP（日志可见、汇总单列），既不算通过也不判失败。 */
+const skipped = [];
+const skip = (name, why) => {
+  skipped.push(name + (why ? '（' + why + '）' : ''));
+  console.log('  ⚠ SKIP ' + name + (why ? ' → ' + why : ''));
 };
 const section = (t) => console.log('\n── ' + t + ' ──');
 
@@ -408,10 +414,16 @@ section('A9 原子写与备份');
   check('A9 写入失败不破坏旧 board', readFileSync(store.boardPath(ws), 'utf8') === good);
   check('A9 无临时文件残留', !readdirSync(store.fdeDir(ws)).some((f) => f.includes('.tmp')));
   /* Phase 3 · 审查 F-15：临时文件 wx 独占创建 + mode 0600；rename 后 board 权限应为 0600。 */
-  const boardMode = statSync(store.boardPath(ws)).mode & 0o777;
-  // NTFS 不承载 POSIX 权限位，Windows 上 stat 恒返回 0o666；这是平台差异，按跳过处理而非判失败
-  const isWin = process.platform === 'win32';
-  check('A9 board 落盘权限 0600（wx 独占 + mode）', isWin ? true : boardMode === 0o600, isWin ? 'win32 跳过（NTFS 无 POSIX 权限位）' : '0o' + boardMode.toString(8));
+  const boardStat = lstatSync(store.boardPath(ws));
+  const boardMode = boardStat.mode & 0o777;
+  /* 跨平台：落盘结果是普通文件，不是符号链接（wx 创建 + rename 不跟随预置链）。 */
+  check('A9 board 落盘为普通文件（非符号链接）', boardStat.isFile() && !boardStat.isSymbolicLink());
+  /* NTFS 不承载 POSIX 权限位（stat 恒 0o666）：win32 显式 SKIP 并记录，不伪装成「已验证」。 */
+  if (process.platform === 'win32') {
+    skip('A9 board 落盘权限 0600（wx 独占 + mode）', 'win32 无 POSIX 权限位，由 Linux/macOS 断言');
+  } else {
+    check('A9 board 落盘权限 0600（wx 独占 + mode）', boardMode === 0o600, '0o' + boardMode.toString(8));
+  }
   check('A9 备份上限 ≤10', store.listBackups(ws).length <= store.MAX_BACKUPS);
   check('A9 board 版本校验（高版本拒绝）', (() => {
     const p = store.boardPath(ws);
@@ -959,8 +971,8 @@ section('审计修复回归 F1–F8（task-8）');
     else throw e;
   }
   if (!symlinkOk) {
-    check('F6 符号链接目录不导入、不读工作区外', true, 'win 环境跳过（无 symlink 权限）');
-    check('F6 scan 不把符号链接目录列为候选', true, 'win 环境跳过（无 symlink 权限）');
+    skip('F6 符号链接目录不导入、不读工作区外', '当前环境不允许创建 symlink，未验证');
+    skip('F6 scan 不把符号链接目录列为候选', '同上');
   } else {
   const ap6 = api.adopt(ws6, { action: 'apply', dirs: ['linked-fix'] });
   const eng6 = api.board(ws6).board.engagements.find((e) => e.dir === 'linked-fix');
@@ -1524,7 +1536,11 @@ section('v1.3 第 9–11 个 FDE 工具（资料库 / 场景评估 / 成本报�
 
 /* ============================ 汇总 ============================ */
 console.log('\n=== 汇总 ===');
-console.log(`通过 ${passed.length} 项，失败 ${failed.length} 项`);
+console.log(`通过 ${passed.length} 项，失败 ${failed.length} 项` + (skipped.length ? `，跳过 ${skipped.length} 项` : ''));
+if (skipped.length) {
+  console.log('\n跳过项（环境限制，未验证）：');
+  for (const s of skipped) console.log('  ⚠ SKIP ' + s);
+}
 if (failed.length) {
   console.log('\n失败项：');
   for (const f of failed) console.log('  ✗ ' + f);

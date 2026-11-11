@@ -76,7 +76,10 @@ const useShell = process.platform === 'win32';
 try {
   /* --ignore-scripts：prepack 的 stdout 会混进 --json 输出，导致解析失败（CI 上实测）；
    * 产物一致性由 open-source.mjs 与 build 步骤单独校验。 */
-  stdout = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts', '--cache', NPM_CACHE], {
+  /* 不传 `--cache` CLI 参数：环境变量 npm_config_cache 已设置且会被子进程继承。
+   * win32 走 shell:true 时参数由 Node join(' ') 交给 cmd，路径含空格/元字符会被拆开，
+   * 去掉这个用户可控路径参数即可消除该风险面。 */
+  stdout = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
     shell: useShell,
     cwd: ROOT,
     encoding: 'utf8',

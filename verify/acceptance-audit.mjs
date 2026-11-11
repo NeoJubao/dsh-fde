@@ -86,6 +86,8 @@ let passed = 0;
 const failed = [];
 const findingsOpen = new Set();
 const observationsHit = new Set();
+/* 环境能力缺失导致的未验证项：显式记录，汇总里单列，不伪装成「通过」。 */
+const skipped = [];
 let sectionName = '';
 
 function sec(name) {
@@ -616,7 +618,9 @@ const SEC = newRoot('sec');
     else throw e;
   }
   if (!auditSymlinkOk) {
-    specCheck('F6', true, { skipped: 'win 环境无 symlink 权限', imported: false, readOutside: false });
+    /* 环境能力缺失：显式记录为「未验证」，日志与汇总都能看到，不伪装成通过。 */
+    skipped.push('F6 符号链接目录边界（环境无 symlink 权限）');
+    console.log('  ⚠ SKIP [F6·P2] 符号链接边界断言：当前环境不允许创建 symlink，未验证');
   } else {
   const apply = await fdeCall(HOST, 'adopt', { method: 'POST', root: ws, body: { action: 'apply', dirs: ['linked-audit'] } });
   const imported = parseBody(apply).added.length > 0;
@@ -2953,6 +2957,7 @@ check('审计全程未发起真实网络请求（fetch 拦截计数 = 0）', glo
 
 console.log('\n════════════════ 审计汇总 ════════════════');
 console.log('断言通过：' + passed + ' 项；失败：' + failed.length + ' 项');
+if (skipped.length) console.log('环境跳过（未验证）：' + skipped.join('、'));
 if (findingsOpen.size) {
   console.log('\n未通过的发现（按 spec 断言失败 = 问题仍存在）：');
   for (const id of [...findingsOpen].sort()) console.log('  ' + id + ' [' + FINDINGS[id].sev + '] ' + FINDINGS[id].title);
@@ -2969,6 +2974,8 @@ if (failed.length) {
 }
 if (typeof pending17 !== 'undefined' && pending17.length) {
   console.log('\n审计结论：既有断言全绿；第三轮 §17 等待实现 ' + pending17.length + ' 项（宿主/面板就绪后自动转为断言）。');
+} else if (skipped.length) {
+  console.log('\n审计结论：断言全绿；但有 ' + skipped.length + ' 项因环境限制未验证（见上）。');
 } else {
   console.log('\n审计结论：全部 spec 断言通过（无发现）。');
 }

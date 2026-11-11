@@ -371,20 +371,28 @@ const callRoute = async (pathWithQuery, method, body) => {
     const outsideFile = join(outsideDir, 'secret.pdf');
     writeFileSync(outsideFile, '%PDF-1.4 outside', 'utf8');
     const linkPath = join(cleanDir, 'link.pdf');
+    let linkReady = false;
     try {
       rmSync(linkPath, { force: true });
       symlinkSync(outsideFile, linkPath);
-      const qaLink = await qaTool.execute({ pdf: 'research/_pw-clean/link.pdf' });
-      if (qaLink.ok !== false || !/符号链接|越界/.test(String(qaLink.reason || qaLink.text))) fail.push('rw_qa_pdf 未拒绝指向工作区外的符号链接：' + JSON.stringify(qaLink).slice(0, 160));
-      else ok.push('rw_qa_pdf 拒绝指向工作区外的符号链接（realpath 前缀）');
+      linkReady = true;
     } catch (e) {
       const code = e && e.code;
-      // Windows 默认策略下普通用户无权创建 symlink（需管理员或开发者模式），属环境能力缺失而非代码缺陷
+      // 只有创建符号链接这一步的 EPERM/ENOTSUP/EACCES 才算环境能力缺失；
+      // 工具执行期的错误不能被吞成「环境跳过」，否则会掩盖真实缺陷。
       if (code === 'EPERM' || code === 'ENOTSUP' || code === 'EACCES') ok.push('符号链接用例跳过（当前环境不允许创建 symlink）');
       else fail.push('符号链接用例无法执行（环境不支持 symlink）：' + String((e && e.message) || e));
-    } finally {
-      rmSync(outsideDir, { recursive: true, force: true });
     }
+    if (linkReady) {
+      try {
+        const qaLink = await qaTool.execute({ pdf: 'research/_pw-clean/link.pdf' });
+        if (qaLink.ok !== false || !/符号链接|越界/.test(String(qaLink.reason || qaLink.text))) fail.push('rw_qa_pdf 未拒绝指向工作区外的符号链接：' + JSON.stringify(qaLink).slice(0, 160));
+        else ok.push('rw_qa_pdf 拒绝指向工作区外的符号链接（realpath 前缀）');
+      } catch (e) {
+        fail.push('rw_qa_pdf 符号链接用例执行异常：' + String((e && e.message) || e));
+      }
+    }
+    rmSync(outsideDir, { recursive: true, force: true });
 
     /* 子进程主路径（F-04）：优先 ctx.subprocess.spawn，spec 显式 cwd/stdio/grace。 */
     subCalls.length = 0;
