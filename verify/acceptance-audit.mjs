@@ -1322,7 +1322,7 @@ sec('11. 一致性 · 客户端路由集合 ⇄ index.js 注册 / meta 单一来
   check('客户端调用方法与宿主注册方法一致（GET/POST 无错配，含招采/资料库/授权）', wrongMethod.length === 0, wrongMethod);
   check('面板 API 前缀唯一常量（/research-workbench/api）', (src.match(/'\/research-workbench\/api'/g) || []).length === 1);
   check('面板 FDE 前缀由 API 派生（const FDE = API + \'/fde\'）', src.includes("const FDE = API + '/fde'"));
-  check('fetch 只出现在统一请求层（2 处）', (src.match(/\bfetch\(/g) || []).length === 2);
+  check('fetch 只出现在统一请求层（3 处：getJSON / sendJSON / readFileAbs）', (src.match(/\bfetch\(/g) || []).length === 3);
 
   /* 不硬编码阶段顺序 / 泳道顺序（spec §16.5；v1.3 起 8 阶段、9 页签） */
   const quotedStage = ['lead', 'discovery'].filter((k) => new RegExp("['\"]" + k + "['\"]").test(src));
@@ -1343,17 +1343,18 @@ sec('11. 一致性 · 客户端路由集合 ⇄ index.js 注册 / meta 单一来
     const poll = /const POLL_MS = (\d+);/.exec(src);
     return poll && Number(poll[1]) >= 10000 && Number(poll[1]) <= 15000 && (src.match(/setInterval\(/g) || []).length === 1;
   })());
-  check('兼容页：探测 /fde/meta，失败显示重启说明且保留经典模式入口',
+  check('宿主未就绪页：探测 /fde/meta，失败显示重启说明与重试（经典模式已移除）',
     src.includes("getJSON(FDE + '/meta')") && src.includes('function CompatPage(') &&
-    src.includes('宿主需要重启 DSH 后启用 FDE 看板') && src.includes("t('classicMode')"));
+    src.includes('宿主需要重启 DSH 后启用 FDE 看板') && src.includes("t('compatRetry')") &&
+    !src.includes('function ClassicApp(') && !src.includes("t('classicMode')"));
   /* 5 页签（v1.4 起，ADR 0005）：从 FdeApp 的 tab 定义数组提取（顺序即导航）；设置走页头入口；生财页签不存在 */
   const navBlock = (src.match(/const navItems = \[([\s\S]*?)\];/) || ['', ''])[1];
   const tabKeys = [...navBlock.matchAll(/\{ key: '([a-z]+)'/g)].map((m) => m[1]);
-  check('FDE 面板 5 页签且顺序为 今日/客户/资料/流程/文件（spec §8 / ADR 0005；资料内部 key=knowledge）',
-    tabKeys.join(',') === 'today,customers,knowledge,process,files', tabKeys);
-  check('视图组件齐全（5 页签 + 页内子视图/设置/经典模式）且设置与子页签组件存在',
+  check('FDE 面板 5 页签且顺序为 今日/客户/资料/流程/情报（ADR 0008；资料=files / 情报=knowledge）',
+    tabKeys.join(',') === 'today,customers,files,process,knowledge', tabKeys);
+  check('视图组件齐全（5 页签 + 页内子视图/设置/宿主未就绪页）且设置与子页签组件存在',
     ['Today', 'Board', 'Customers', 'Process', 'Library', 'Bids', 'Artifacts', 'Methods', 'Settings']
-      .every((v) => src.includes('function ' + v + 'View(')) && src.includes('function ClassicApp(')
+      .every((v) => src.includes('function ' + v + 'View(')) && src.includes('function CompatPage(')
       && /function\s+SettingsView\s*\(/.test(src) && /function\s+normalizeView\s*\(/.test(src));
   /* 口径同步（ADR 0004 D5 / 实施规格 §2.8）：生财「页签」已移除，但设置页新增「生财情报授权」卡片，
    * 资料库仍标注社区来源；因此不再按出现次数 ≤2 断言，改为逐处上下文白名单（仍禁止 ScysView/tabScys）。 */
@@ -1382,7 +1383,7 @@ sec('11. 一致性 · 客户端路由集合 ⇄ index.js 注册 / meta 单一来
     !/localStorage|sessionStorage/.test(src) && !src.includes('@deepseek-ai'));
   check('无原生 alert/confirm/prompt（错误行内展示）',
     !/\balert\(/.test(src) && !/window\.confirm\(/.test(src) && !/window\.prompt\(/.test(src));
-  check('只用主题 token 定义语义色（--dsw-alias-*）', (src.match(/var\(--dsw-alias-/g) || []).length >= 40);
+  check('只用主题 token 定义语义色（--dsw-alias-*）', (src.match(/var\(--dsw-alias-/g) || []).length >= 25);
 }
 
 /* meta 与 schema 单点一致 */

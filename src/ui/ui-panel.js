@@ -1,15 +1,15 @@
 /* ================================================================
  * FDE 工作站 · 客户端面板（Harness Web UI 插件，无 JSX）
  *
- * 九视图：今日 / 看板 / 客户 / 流程 / 资料库 / 招采 / 工件 / 方法 / 设置
+ * 主面板：今日 / 客户 / 资料 / 流程 / 情报（5 页签 + 页头设置入口）
  * 结构分区：请求层 → 设计 token 与 CSS → 字典与工具 → 通用组件
- *           → 九视图 → 抽屉 → 兼容页与经典模式 → 注册
+ *           → 各视图 → 抽屉 → 宿主未就绪页/注册
  * v1.3：新增「流程」（8 阶段 playbook，spec §20.5）与「资料库」
  *       （策展资料 + GitHub 指标 + 社区动态，spec §19.6）；移除「生财」
  *       页签（宿主 scys 能力保留，社区内容并入资料库来源组）。
  *
- * 兼容：宿主未提供 GET /fde/meta（旧宿主未重启）时显示兼容页，
- *       并保留「经典模式」（旧五页签与旧 API 全部可用），绝不白屏。
+ * 兼容：宿主未提供 GET /fde/meta（旧宿主未重启）时显示精简的
+ *       「宿主未就绪」页（只给重试与重启说明），绝不白屏。
  * 事实来源：board 状态只在服务端 research/.fde/board.json；客户端
  *       每次写操作后重新拉取，不把本地 state 当事实源。
  * 主题：只用 --dsw-alias-* token（带浅色回退），明暗主题均可读。
@@ -101,6 +101,20 @@ window.__ModuleLoader__.load({
           };
         }
       });
+    }
+
+    /* 资料预览读取：走宿主同源已鉴权路由 GET /api/file（文本 / PDF 字节 / 图片直链）。
+       面板组件不直接 fetch；文件大小上限由宿主控制（默认 50MiB），这里只做超时与错误归一。 */
+    async function readFileAbs(abs, as) {
+      const url = '/api/file?path=' + encodeURIComponent(String(abs || ''));
+      try {
+        const r = await fetch(url, { credentials: 'same-origin', signal: timeoutSignal(30000) });
+        if (!r || !r.ok) return { ok: false, reason: 'HTTP ' + ((r && r.status) || '?') };
+        if (as === 'blob') return { ok: true, blob: await r.blob() };
+        return { ok: true, text: await r.text() };
+      } catch (e) {
+        return { ok: false, reason: errText(e) };
+      }
     }
 
     /* 实际发送函数；对外暴露的 postJSON 由 demoGuard 包裹（ADR 0006 D1：演示模式只读）。 */
@@ -718,7 +732,7 @@ window.__ModuleLoader__.load({
 .fde-missing{display:flex;flex-direction:column;gap:4px;margin:0;padding-left:18px;font-size:12px;color:var(--fde-danger)}
 .fde-missing li{line-height:1.55}
 
-/* ---- 兼容页 / 经典模式 ---- */
+/* ---- 宿主未就绪页 ---- */
 .fde-compat{display:flex;align-items:center;justify-content:center;flex:1 1 auto;padding:24px}
 .fde-compat-card{max-width:620px;width:100%;display:flex;flex-direction:column;gap:12px;padding:22px;
   background:var(--fde-surface);border:0.5px solid var(--fde-border);border-radius:var(--dsw-radius-xl,20px)}
@@ -729,8 +743,6 @@ window.__ModuleLoader__.load({
 .fde-compat-body code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--fde-surface-2);
   padding:1px 5px;border-radius:var(--dsw-radius-xs,4px);color:var(--fde-text)}
 .fde-compat-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
-.fde-classic-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 18px;border-bottom:0.5px solid var(--fde-border);flex:0 0 auto}
-.fde-classic-title{font-size:13px;font-weight:650}
 .fde-tip{border-left:0.5px solid var(--fde-border-2);padding-left:10px;font-size:12px;color:var(--fde-text-3);line-height:1.6}
 
 @media (max-width:720px){
@@ -747,48 +759,90 @@ window.__ModuleLoader__.load({
   .fde-root *{animation-duration:.001ms !important;transition-duration:.001ms !important}
 }
 
-/* ---- 经典模式（旧五页签，保留原 .rw-* 视觉） ---- */
-.rw-root{display:flex;flex-direction:column;gap:12px;padding:14px 16px 24px;height:100%;overflow:auto;font-size:13px;line-height:1.6;color:var(--dsw-alias-label-primary,#1f2329)}
-.rw-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.rw-title{font-size:20px;font-weight:650}
-.rw-sub{font-size:12px;color:var(--dsw-alias-label-secondary,#646a73)}
-.rw-warn{color:var(--dsw-alias-state-warn-label,#b26a00);font-size:12px}
-.rw-ok{color:var(--dsw-alias-state-success-primary,#1a7f45);font-size:12px}
-.rw-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--dsw-alias-bg-layer-1,#fff);border:0.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.08));border-radius:var(--dsw-radius-md,12px);padding:10px 14px}
-.rw-tabs{display:flex;gap:6px;flex-wrap:wrap}
-.rw-tabs button{height:30px;padding:0 12px;border-radius:var(--dsw-radius-sm,8px);border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-secondary,#646a73);cursor:pointer;font-size:13px}
-.rw-tabs button.on{background:var(--dsw-alias-bg-layer-2,#f5f6f7);border-color:var(--dsw-alias-border-l1,rgba(0,0,0,.08));color:var(--dsw-alias-label-primary,#1f2329);font-weight:600}
-.rw-card{background:var(--dsw-alias-bg-layer-1,#fff);border:0.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.08));border-radius:var(--dsw-radius-md,12px);padding:14px}
-.rw-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
-.rw-field{display:flex;flex-direction:column;gap:4px}
-.rw-field label{font-size:12px;color:var(--dsw-alias-label-secondary,#646a73)}
-.rw-input,.rw-select{height:32px;padding:0 10px;border-radius:var(--dsw-radius-md,12px);border:0.5px solid var(--dsw-alias-border-l2,rgba(0,0,0,.14));background:var(--dsw-alias-bg-layer-2,#f5f6f7);color:inherit;font-size:13px}
-.rw-input:focus,.rw-select:focus{outline:none;border-color:var(--dsw-alias-state-business-primary,#4d6bfe);box-shadow:0 0 0 2px color-mix(in srgb,var(--dsw-alias-state-business-primary,#4d6bfe) 22%,transparent)}
-.rw-full{grid-column:1/-1}
-.rw-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.rw-btn{height:32px;padding:0 14px;border-radius:var(--dsw-radius-md,12px);border:0.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.08));background:var(--dsw-alias-bg-layer-2,#f5f6f7);color:inherit;cursor:pointer;font-size:13px}
-.rw-btn.primary{background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#1f2329));border-color:transparent;color:var(--dsw-alias-label-primary-inverted,#fff);font-weight:600}
-.rw-btn.small{height:26px;padding:0 10px;font-size:12px;border-radius:var(--dsw-radius-sm,8px)}
-.rw-btn:disabled{opacity:.55;cursor:not-allowed}
-.rw-proj{padding:12px 0;border-bottom:1px dashed var(--dsw-alias-border-l1,rgba(0,0,0,.08))}
-.rw-proj:last-child{border-bottom:0}
-.rw-pname{font-weight:600;font-size:14px}
-.rw-prow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
-.rw-chip{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;font-size:12px;border:0.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.08));background:var(--dsw-alias-bg-layer-2,#f5f6f7);color:var(--dsw-alias-label-secondary,#646a73);corner-shape:round}
-.rw-chip.on{background:color-mix(in srgb,var(--dsw-alias-state-business-primary,#4d6bfe) 14%,transparent);border-color:color-mix(in srgb,var(--dsw-alias-state-business-primary,#4d6bfe) 40%,transparent);color:var(--dsw-alias-state-business-primary,#4d6bfe);font-weight:600}
-.rw-files{margin-top:8px;display:flex;flex-direction:column;gap:4px}
-.rw-file{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 8px;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-2,#f5f6f7)}
-.rw-file code{font-size:12px;flex:1 1 240px;word-break:break-all}
-.rw-mth{display:flex;flex-wrap:wrap;gap:6px}
-.rw-mth button{font-size:12px;padding:5px 10px;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-2,#f5f6f7);border:0.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.08));color:inherit;cursor:pointer;text-align:left}
-.rw-pre{white-space:pre-wrap;font-size:12px;line-height:1.7;max-height:58vh;overflow:auto;background:var(--dsw-alias-bg-layer-2,#f5f6f7);border-radius:var(--dsw-radius-md,12px);padding:12px;margin:0}
-.rw-empty{font-size:13px;color:var(--dsw-alias-label-secondary,#646a73);padding:6px 0}
-.rw-drop{margin:8px 0;padding:16px;border:1px dashed var(--dsw-alias-border-l2,rgba(0,0,0,.18));border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-2,#f5f6f7);cursor:pointer;text-align:center;transition:all .15s}
-.rw-drop.on{border-color:var(--dsw-alias-state-business-primary,#4d6bfe);background:color-mix(in srgb,var(--dsw-alias-state-business-primary,#4d6bfe) 10%,transparent)}
-.rw-drop .rw-sub{margin-top:4px}
-.rw-loc{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 8px;padding:6px 8px;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-2,#f5f6f7)}
-.rw-loc code{font-size:12px;flex:1 1 260px;word-break:break-all}
 
+/* ---- 资料页（v1.7；ADR 0008）：列表 + 内嵌预览 ---- */
+.fde-materials{display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0;position:relative}
+.fde-mat-head{display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
+.fde-mat-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fde-mat-title{font-size:14px;font-weight:650;color:var(--fde-text)}
+.fde-mat-search{width:220px;height:28px;font-size:12px;border-radius:999px}
+.fde-mat-filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fde-mat-pills{display:inline-flex;align-items:center;gap:2px;flex-wrap:wrap}
+.fde-pill{height:24px;padding:0 9px;border-radius:999px;border:0.5px solid transparent;background:transparent;color:var(--fde-text-2);font-size:12px;cursor:pointer;white-space:nowrap}
+.fde-pill.on{background:var(--fde-surface);border-color:var(--fde-border-2);color:var(--fde-text);font-weight:600}
+.fde-mat-body{display:flex;gap:10px;flex:1 1 auto;min-height:0}
+.fde-mat-list{flex:0 0 380px;min-width:300px;display:flex;flex-direction:column;gap:2px;overflow:auto;padding-right:4px;border-right:0.5px solid var(--fde-border)}
+.fde-mat-custs{display:flex;flex-direction:column;gap:2px}
+.fde-mat-cust-item{display:flex;flex-direction:column}
+.fde-mat-cust{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:var(--dsw-radius-sm,8px);cursor:pointer;min-height:32px;user-select:none}
+.fde-mat-cust-name{font-size:12px;font-weight:650;color:var(--fde-text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fde-mat-cust-files{display:flex;flex-direction:column;gap:1px;padding-left:8px}
+.fde-mat-recent{display:flex;flex-direction:column;gap:1px}
+.fde-mat-file{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--dsw-radius-sm,8px);cursor:pointer;min-width:0}
+.fde-mat-file.on{background:color-mix(in srgb,var(--fde-accent) 9%,transparent)}
+.fde-mat-file-main{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1 1 auto}
+.fde-mat-file-name{font-size:12px;color:var(--fde-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;word-break:break-all}
+.fde-mat-file-cust{font-size:11px;color:var(--fde-text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fde-mat-file-meta{font-size:11px;color:var(--fde-text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+.fde-mat-raw{flex:0 0 auto;font-size:10px;color:var(--fde-text-3);border:0.5px solid var(--fde-border);border-radius:999px;padding:0 5px;line-height:16px}
+.fde-mat-more{flex:0 0 auto;width:22px;height:22px;border-radius:6px;line-height:1}
+.fde-mat-menu-wrap{position:relative;display:inline-flex;flex:0 0 auto}
+.fde-mat-menu{position:absolute;right:0;top:24px;z-index:40;min-width:132px;padding:4px;border-radius:var(--dsw-radius-md,12px);background:var(--fde-surface);border:0.5px solid var(--fde-border);box-shadow:0 8px 24px color-mix(in srgb,var(--dsw-alias-label-primary,#000) 16%,transparent)}
+.fde-mat-menu-item{display:block;width:100%;text-align:left;padding:6px 9px;border:0;background:transparent;color:var(--fde-text);font-size:12px;border-radius:var(--dsw-radius-sm,8px);cursor:pointer;white-space:nowrap}
+.fde-mat-upload{display:flex;flex-direction:column;gap:4px;padding:8px;border:0.5px solid var(--fde-border);border-radius:var(--dsw-radius-md,12px);background:var(--fde-surface);margin-bottom:4px}
+.fde-mat-drop{padding:10px}
+.fde-mat-materials{margin-top:6px;border-top:0.5px solid var(--fde-border);padding-top:4px}
+.fde-mat-subfiles{display:flex;flex-direction:column;gap:1px;padding:2px 0 6px 12px;max-height:240px;overflow:auto}
+.fde-mat-subfile{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px}
+.fde-mat-preview{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--fde-surface);border:0.5px solid var(--fde-border);border-radius:var(--dsw-radius-xl,20px);overflow:hidden}
+.fde-mat-preview.full{position:absolute;inset:0;z-index:35;box-shadow:0 18px 48px color-mix(in srgb,var(--dsw-alias-label-primary,#000) 22%,transparent)}
+.fde-pv-head{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-bottom:0.5px solid var(--fde-border);flex:0 0 auto;flex-wrap:wrap}
+.fde-pv-head-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 240px}
+.fde-pv-title{font-size:13px;font-weight:650;color:var(--fde-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fde-pv-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.fde-pv-path{font-size:11px;color:var(--fde-text-3);max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace}
+.fde-pv-actions{display:flex;align-items:center;gap:4px;flex-wrap:wrap;flex:0 0 auto}
+.fde-pv-body{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column}
+.fde-pv-center{padding:12px;display:flex;justify-content:center;align-items:flex-start;min-height:0}
+.fde-pv-img{max-width:100%;height:auto;display:block;border-radius:var(--dsw-radius-sm,8px)}
+.fde-pv-frame{flex:1 1 auto;width:100%;min-height:420px;border:0;background:var(--fde-surface-2)}
+.fde-pv-pre{margin:0;padding:12px 14px;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.7;color:var(--fde-text);background:transparent}
+.fde-pv-html{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+.fde-pv-subbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:0.5px solid var(--fde-border);flex:0 0 auto}
+.fde-pv-note{padding:8px 14px;font-size:11px;color:var(--fde-text-3);border-top:0.5px solid var(--fde-border)}
+.fde-pv-md{padding:16px 20px;max-width:860px;font-size:13px;line-height:1.75;color:var(--fde-text)}
+.fde-md-block{margin:0 0 10px}
+.fde-md-p{margin:0 0 8px}
+.fde-md-h{margin:14px 0 8px;line-height:1.4;color:var(--fde-text);font-weight:650}
+.fde-md-h1{font-size:19px}.fde-md-h2{font-size:17px}.fde-md-h3{font-size:15px}.fde-md-h4,.fde-md-h5,.fde-md-h6{font-size:13px}
+.fde-md-hr{border:0;border-top:0.5px solid var(--fde-border);margin:12px 0}
+.fde-md-quote{margin:0 0 10px;padding:2px 12px;border-left:2px solid var(--fde-border-2);color:var(--fde-text-2)}
+.fde-md-list{margin:0 0 10px;padding-left:20px}
+.fde-md-list li{margin:2px 0}
+.fde-md-task{list-style:none;margin-left:-18px;display:flex;align-items:flex-start;gap:6px}
+.fde-md-task input{margin-top:4px}
+.fde-md-pre{margin:0 0 10px;padding:10px 12px;background:var(--fde-surface-2);border-radius:var(--dsw-radius-sm,8px);overflow:auto;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.6}
+.fde-md-code{padding:1px 5px;border-radius:5px;background:var(--fde-surface-2);font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.fde-md-link{color:var(--fde-accent);text-decoration:none}
+.fde-md-img{display:block;max-width:100%;height:auto;margin:8px 0;border-radius:var(--dsw-radius-sm,8px)}
+.fde-md-table-wrap{overflow:auto;margin:0 0 10px}
+.fde-md-table{border-collapse:collapse;font-size:12px;min-width:320px}
+.fde-md-table th,.fde-md-table td{border:0.5px solid var(--fde-border);padding:5px 8px;text-align:left;vertical-align:top}
+.fde-md-table th{background:var(--fde-surface-2);font-weight:650}
+.fde-md-fm{display:flex;flex-direction:column;gap:2px;margin:0 0 12px;padding:8px 10px;background:var(--fde-surface-2);border-radius:var(--dsw-radius-sm,8px)}
+.fde-md-fm-row{display:flex;gap:8px;font-size:12px}
+.fde-md-fm-k{flex:0 0 132px;color:var(--fde-text-3);overflow:hidden;text-overflow:ellipsis}
+.fde-md-fm-v{flex:1 1 auto;color:var(--fde-text);word-break:break-word}
+/* 左右拖动分隔条（资料页 master-detail） */
+.fde-mat-splitter{flex:0 0 7px;margin:0 -3px;border-radius:4px;cursor:col-resize;position:relative;z-index:1;background:transparent;
+  border:0;outline:none;touch-action:none}
+.fde-mat-splitter::after{content:'';position:absolute;left:3px;top:8px;bottom:8px;width:1px;background:var(--fde-border-2);opacity:.7}
+.fde-mat-splitter:focus-visible{outline:none;box-shadow:var(--fde-focus)}
+.fde-mat-splitter:active::after{background:var(--fde-accent);opacity:1}
+/* 窄面板（容器实测宽度 <860）不上下堆叠，改成「列表 ⇄ 预览」单列切换（见 ArtifactsView.narrow） */
+.fde-mat-body.narrow .fde-mat-list{flex:1 1 auto;min-width:0;max-height:none;border-right:0;padding-right:0}
+.fde-mat-body.narrow .fde-mat-preview{flex:1 1 auto}
+.fde-pv-back{flex:0 0 auto;margin-right:2px}
 
 /* ---- hover 交互（官方 web-styling：:hover 必须位于 @media (hover:hover) 内） ---- */
 @media (hover: hover){
@@ -811,12 +865,16 @@ window.__ModuleLoader__.load({
   .fde-table tbody tr:hover{background:var(--fde-hover)}
   .fde-drop:hover{border-color:var(--fde-accent)}
   .fde-acc-head:hover{background:var(--fde-hover)}
+  .fde-pill:hover{color:var(--fde-text);background:var(--fde-hover)}
+  .fde-mat-file:hover{background:var(--fde-hover)}
+  .fde-mat-cust:hover{background:var(--fde-hover)}
+  .fde-mat-menu-item:hover{background:var(--fde-hover)}
+  .fde-mat-subfile:hover{background:var(--fde-hover)}
+  .fde-md-link:hover{text-decoration:underline}
+  .fde-mat-splitter:hover::after{background:var(--fde-accent);opacity:1}
   .fde-mth button:hover{border-color:var(--fde-border-2);background:var(--fde-surface-3)}
   .fde-drawer-close:hover{background:var(--fde-hover);color:var(--fde-text)}
   .fde-step:hover{border-color:var(--fde-border-2)}
-  .rw-btn:hover{border-color:var(--dsw-alias-border-l2,rgba(0,0,0,.16))}
-  .rw-mth button:hover{border-color:var(--dsw-alias-border-l2,rgba(0,0,0,.16))}
-  .rw-drop:hover{border-color:var(--dsw-alias-state-business-primary,#4d6bfe)}
 }
 
 `;
@@ -828,32 +886,22 @@ window.__ModuleLoader__.load({
      * ============================================================ */
     const DICT = {
       /* 品牌与页签 */
-      brand: '调研工作台',
       fdeBrand: 'FDE 工作站',
       fdeTagline: '客户经营 · 注意力 · 会话派发',
-      tagline: '立项 · 调研 · 会面材料 · 方案',
-      tabToday: '今日', tabCustomers: '客户', tabKnowledge: '资料', tabNavFiles: '文件',
-      tabBoard: '看板', tabArtifacts: '工件', tabMethods: '方法', tabSettings: '设置',
+      tabToday: '今日', tabCustomers: '客户', tabKnowledge: '情报', tabNavFiles: '资料',
       /* Phase 2 IA（layout.md §7）：5 页签 + 页内子页签 */
       customersViewBoardCustomer: '看板 · 客户', customersViewBoardTask: '看板 · 任务', customersViewList: '客户清单',
       customersViews: '客户视图', knowledgeTabs: '资料子页签', settingsBack: '返回主视图',
       processTabFlow: '8 阶段流程', processTabMethods: '方法库', processTabSkills: '技能与模板', processTabs: '流程子页签',
-      tabNew: '新建调研', tabProjects: '项目', tabFiles: '产物 / 导出',
-      tabMaterials: '素材',
-      classicMode: '经典模式',
-      backToFde: '返回 FDE 工作台',
-      classicBar: '调研工作台 · 经典模式（旧五页签完整保留）',
       compatTitle: '宿主需要重启 DSH 后启用 FDE 看板',
-      compatBody: '当前 DSH 宿主还没有提供 FDE 路由（GET /research-workbench/api/fde/meta 不可用）。重启 DSH 后再打开此面板，即可使用九视图（含流程、资料库与招采）；重启前可以先进入经典模式继续工作.',
+      compatBody: '当前 DSH 宿主还没有提供 FDE 路由（GET /research-workbench/api/fde/meta 不可用）。重启 DSH 后再打开此面板即可使用。',
       compatRetry: '重试探测',
-      compatClassic: '进入经典模式',
       probing: '正在探测 FDE 宿主能力…',
       /* 通用 */
       loading: '加载中…', refresh: '刷新', refetch: '重新读取',
       empty: '暂无数据', retry: '重试', cancel: '取消', save: '保存', saving: '保存中…',
       confirm: '确认', close: '关闭', edit: '编辑', done: '完成', open: '打开',
       search: '搜索', all: '全部', unknown: '未知',
-      root: '工作区', noSession: '本部署未挂载会话服务，无法一键启动；任务文本会复制到剪贴板。',
       handoffFail: '会话创建失败，任务文本已复制到剪贴板，粘贴到对话框即可继续。',
       copied: '已复制任务文本 ✓', pathCopied: '路径已复制', noPath: '拿不到绝对路径，请先点「刷新」',
       revealFail: '系统打开失败', revealOk: '已在 Finder 中显示', openOk: '已在 Finder 中打开',
@@ -861,7 +909,6 @@ window.__ModuleLoader__.load({
       todayGreetingMorning: '早上好', todayGreetingNoon: '下午好', todayGreetingEvening: '晚上好',
       todayAttention: '待我处理', todayProposals: '建议', todayFocus: '今日焦点', todayActivity: '最近活动',
       todayEmptyTitle: '今天没有需要你处理的事', todayEmptyBody: '可以推进「今日焦点」里的客户，或看看最近活动。',
-      todayOnboardTitle: '还没有客户在看板上', todayOnboardBody: '点「新建客户」手动创建，或先扫描现有 research/ 项目、确认后再导入；不会自动写入。',
       /* Phase 3（v1.5.0）只读演示模式（ADR 0006 / spec §8.8） */
       demoBadge: '演示模式',
       demoBannerText: '演示模式：以下为示例数据，不会写入真实看板',
@@ -880,11 +927,8 @@ window.__ModuleLoader__.load({
       demoRestoreBlocked: '有真实数据时不显示示例',
       demoRestored: '已恢复示例数据（只读）',
       demoOnboardTitle: '开始使用 FDE 工作站',
-      demoOnboardBody: '三步上手：① 新建客户 ② 导入现有项目 ③ 想看示例？设置 → 演示数据 → 重新查看示例。',
       demoStepRestore: '重新查看示例',
       scanNow: '扫描现有项目',
-      attentionBlocked: '受阻', attentionDecision: '待决定', attentionReview: '待审阅', attentionAnswer: '待回答',
-      attentionOverdue: '逾期', attentionGate: '门禁待确认', attentionStall: '停滞', attentionProposal: '建议',
       actOpen: '打开', actResolve: '解决', actAnswer: '回答', actReview: '审阅', actPass: '通过',
       actReschedule: '改期', actFinish: '完成', actNudge: '跟进', actPause: '暂停',
       actAccept: '采纳', actDismiss: '忽略', actConfirmGate: '去确认',
@@ -899,8 +943,6 @@ window.__ModuleLoader__.load({
       bidFrom: '起始日期', bidTo: '结束日期', bidSource: '来源',
       bidNoResult: '没有命中记录', bidNoResultHint: '换个关键词或日期区间，或先刷新招采索引。',
       bidTotalPrefix: '共 ', bidTotalSuffix: ' 条', bidLoadMore: '加载更多',
-      bidRelBuyer: '采购', bidRelWinner: '中标', bidRelCandidate: '候选', bidRelMention: '提及',
-      bidRelTender: '招标', bidRelNotice: '公告',
       bidBuyer: '采购单位', bidWinner: '中标人', bidAmount: '金额',
       bidAmountTip: '金额为公告原文，不做换算/求和',
       bidCandidatesNote: '候选人 ≠ 中标人：名次只代表评标排序。',
@@ -974,9 +1016,6 @@ window.__ModuleLoader__.load({
       libGroupAll: '全部', libGroupIntl: '国外官方', libGroupCn: '国内官方',
       libGroupOpen: '开源工具', libGroupMethod: '方法与模板', libGroupCommunity: '社区动态',
       libKindLabel: '类型', libKindAll: '全部类型',
-      libKindDoc: '文档', libKindWhitepaper: '白皮书', libKindGuide: '指南', libKindPlaybook: '实战手册',
-      libKindBlog: '博客', libKindCourse: '课程', libKindReport: '报告', libKindCase: '案例',
-      libKindJob: '招聘', libKindRepo: '开源仓库', libKindTemplate: '模板', libKindPost: '帖子',
       libStageLabel: '适用阶段', libStageAll: '全部阶段', libStageAllChip: '全流程',
       libSearchPh: '搜索标题 / 摘要 / 发布方 / 主题…',
       libFeaturedOnly: '仅看重点推荐',
@@ -1004,50 +1043,58 @@ window.__ModuleLoader__.load({
       libRefreshFail: '刷新失败',
       libFootnote: '来源：人工策展目录 + GitHub 每日指标 + 生财社区摘要（只读）；A/B/C 为权威性分级，摘要非全文，以原文为准。',
       /* 看板 */
-      boardModeCustomer: '客户', boardModeTask: '任务', board: '看板',
       boardSearchPh: '搜索客户 / 任务…', boardPriority: '优先级', boardCustomer: '客户',
       boardNoResult: '没有匹配的卡片', boardEmpty: '看板还是空的。先到「客户」导入现有项目。',
       boardDragHint: '拖拽卡片换列；Tab 聚焦后 Enter 打开，Alt+←/→ 换列',
-      boardWip: 'WIP', boardGatePending: '门禁待确认', boardNoNext: '未设下一步',
-      boardDropGate: '要进入该阶段，需先通过门禁',
-      boardDropEvidence: '移入已完成需要证据',
       /* 客户 */
       customersTitle: '客户', customersSearchPh: '搜索客户名 / 公司 / 标签…',
       customersEmpty: '还没有客户。点「新建客户」手动创建，或从 research/ 目录导入现有项目。',
       customersAdopt: '导入现有项目', customersAdoptHint: '先扫描、再人工勾选确认；只写 research/.fde/board.json，不改目录。',
       customersScanning: '正在扫描 research/ 下的现有项目…',
       customersScanEmpty: '没有发现可导入的目录。', customersImport: '导入选中', customersImporting: '正在导入…',
-      customersImported: '已导入', customersStage: '阶段', customersPriority: '优先级',
       customersNext: '下一步', customersDue: '到期', customersStay: '停留', customersAttention: '注意力',
       customersDays: '天', customersCount: '个客户',
       customersAlready: '已在看板', customersConfidence: '置信度', customersEvidence: '依据',
       /* 工件 */
-      artifactsTitle: '文件', artifactsMaterials: '素材目录与散落文件',
       artifactsPick: '选择客户', artifactsNoCustomer: '还没有客户，先导入或新建客户。',
-      artifactsNoFiles: '该客户还没有工件。', artifactsExport: '导出 PDF', artifactsQa: '质检',
       artifactsUploadTitle: '上传文件到客户卷', artifactsUploadHint: '拖拽文件到此，或点击选择；文件保存到该客户的 raw/uploads/。',
-      artifactsUploadNote: '上传的原始资料落在 raw/uploads/，agent 可据此抽取事实（注意区分原始资料与已核实结论）。',
       artifactsUploading: '上传中…', artifactsUploaded: '已上传', artifactsPicker: '选择文件',
-      artifactsMaterialsHint: '这些是已抓取的原文目录，没有 md 产物，因此不出现在客户列表里。',
       artifactsLoose: '散落文件（research/ 顶层）', artifactsViewFiles: '查看文件', artifactsHideFiles: '收起',
-      artifactsNoMaterials: '没有素材目录。', artifactsNoLoose: '无散落文件。',
       artifactsExported: '已导出', artifactsNotExported: '未导出', artifactsFiles: '个文件',
       artifactsToProject: '转为项目', artifactsRefresh: '重扫工件',
+      /* 资料页（v1.7；ADR 0008） */
+      matTitle: '客户资料', matRecent: '最近资料', matByCustomer: '按客户',
+      matSearchPh: '搜索文件名 / 客户 / 路径…',
+      matAll: '全部', matDoc: '文档', matPdf: 'PDF', matOffice: 'Office', matImage: '图片', matWeb: '网页', matOther: '其他',
+      matRawToggle: '原始素材', matRawCount: '原始', matKeyCount: '关键', matRawBadge: '原始',
+      matSortRecent: '按最近更新', matSortName: '按名称',
+      matUpload: '上传', matReloadOne: '重新加载', matFull: '全屏', matExitFull: '退出全屏',
+      matEmpty: '还没有资料', matEmptyHint: '客户卷里出现文件后会自动列在这里；也可以点「上传」放进 raw/uploads/。',
+      matNoMatch: '没有匹配的资料', matNoMatchHint: '换个关键词、切换类型，或打开「原始素材」。',
+      matBackList: '返回列表',
+      matSplitHint: '拖动调整列表宽度（← / → 也可）',
+      matPick: '从左侧选择一份资料', matPickHint: '支持 md / txt / PDF / 图片 / 网页快照 / Word / Excel / PPT。',
+      matUnsupported: '该格式暂不支持内嵌预览', matUnsupportedHint: '可以用系统应用打开，或在 Finder 中定位。',
+      matTextTruncated: '内容较长，已截断显示；完整内容请用系统应用打开。',
+      matHtmlSnapshot: '网页快照', matHtmlSource: '源文本',
+      matLoadFail: '资料读取失败', matMore: '更多操作', matCopyPath: '复制路径', matSystemOpen: '用系统应用打开',
+      matOpenDir: '打开目录', matExport: '导出 PDF', matQa: '质检',
+      matOfficeLoading: '正在用 DSH 转换 Office 文档…（首次可能较慢）',
+      matOfficeNoSession: 'Office 预览需要本工作区至少有一个会话；请先用系统应用打开。',
+      matOfficeFail: 'Office 转换失败',
+      matMaterials: '未关联素材', matMaterialsHint: 'research/ 下尚未建客户卷的素材目录与散落文件（只读盘点）。',
       /* 方法 */
-      methodsTitle: '方法 / 参考 / 模板', methodsSkills: 'FDE 技能',
       methodsEmpty: '宿主未返回方法清单。', methodsReadFail: '读取失败',
       methodsSkillsHint: '技能由宿主在启动时注册（需重启 DSH 后生效）。',
       skillsEmpty: '宿主未返回技能清单（技能注册需重启 DSH 后生效）。',
       /* 设置 */
-      settingsTitle: '设置', settingsAutonomy: '自主性', settingsAutonomyDesc: '决定建议如何执行；红线动作永远需要人确认。',
       settingsStall: '停滞天数', settingsStallDesc: '活跃阶段停留超过该天数且无近期活动，判定为停滞。',
       settingsWip: 'WIP 上限（进行中）', settingsWipDesc: '进行中任务超过该数量时看板列头提示。',
       settingsSources: '数据源开关', settingsSave: '保存设置', settingsSaved: '设置已保存',
       settingsHealth: '健康检查', settingsHealthRun: '运行健康检查', settingsHealthRunning: '检查中…',
       settingsHealthEmpty: '尚未运行检查。', settingsHealthOk: '全部通过', settingsHealthFail: '存在失败项',
-      settingsRestart: '宿主重启提示', settingsRestartBody: 'FDE 宿主路由与技能注册需要重启 DSH 才生效；客户端面板刷新页面即可更新。重启前仍可用经典模式。',
+      settingsRestart: '宿主重启提示', settingsRestartBody: 'FDE 宿主路由与技能注册需要重启 DSH 才生效；客户端面板刷新页面即可更新。',
       settingsRules: '规则清单', settingsRedLines: '硬红线（任何模式都不会自动执行）',
-      settingsClassicEntry: '打开经典模式', settingsBackFde: '返回 FDE 工作台',
       /* 抽屉：客户 */
       drawerEngagement: '客户', drawerItem: '任务', drawerClose: '关闭抽屉',
       drawerStage: '阶段', drawerGate: '门禁清单', drawerGateFor: '进入阶段',
@@ -1066,7 +1113,6 @@ window.__ModuleLoader__.load({
       drawerNoArtifacts: '暂无工件（可到「工件」视图扫描）。', drawerNoTimeline: '暂无时间线记录。',
       drawerNoStakeholders: '还没有干系人。', drawerPaused: '已暂停', drawerStageMoved: '已推进',
       drawerMoveBackConfirm: '回退阶段', drawerMoveBackBody: '回退阶段会让已通过的门禁状态保留，请确认确实要回退。',
-      drawerPauseConfirm: '暂停客户', drawerPauseBody: '暂停后该客户不参与注意力与停滞统计，可随时恢复。',
       drawerHandoffPrompt: '已创建会话，正在跳转…',
       /* 抽屉：任务 */
       drawerItemTitle: '任务标题', drawerItemType: '类型', drawerItemLane: '泳道',
@@ -1082,39 +1128,10 @@ window.__ModuleLoader__.load({
       drawerAttention: '待处理问题', drawerAnswerPh: '回答内容（可留空）', drawerResolve: '标记已解决',
       /* 通用错误 / 降级 */
       loadFail: '读取失败', boardLoadFail: '看板读取失败', briefLoadFail: '今日简报读取失败',
-      actionFail: '操作失败', retryHint: '可以点「刷新」重试；若宿主尚未重启，请使用经典模式。',
-      destructive: '破坏性操作，请确认',
+      actionFail: '操作失败', retryHint: '可以点「刷新」重试；若持续失败，请重启 DSH 后刷新页面。',
       /* 兼容页/经典模式旧文案 */
-      newTitle: '新建一次调研',
-      company: '公司全称', companyPh: '如：某集团有限公司',
-      person: '见面对象', personPh: '如：张三',
-      role: '职务', rolePh: '如：董事长',
-      purpose: '见面性质与目标', purposePh: '如：初次拜访，谈某个具体场景合作',
-      when: '时间', where: '地点',
-      start: '立项并启动调研', starting: '正在立项…',
-      needCompany: '请填写公司全称',
-      madeAndHandoff: '已立项并新开会话，正在跳转…',
-      scaffoldOnly: '仅立项（不启动调研）', madeOnly: '已立项，未启动调研',
-      projects: '调研项目', adopt: '补建档案', adopted: '已补建',
-      pickProject: '选择项目', noFiles: '该项目还没有产物（md）。',
-      exported: '已导出', notExported: '未导出', export: '导出 PDF', qa: '质检',
       exporting: '已下发导出任务，正在跳转…', methods: '方法 / 参考', back: '返回列表',
-      hint: '立项后会自动创建会话并下发七步流程任务，面板会尝试跳转到该会话。',
-      fmtHint: 'md 是唯一工作格式；PDF 是快照，按需生成，改动 md 后会过期。',
-      uploadTitle: '上传文件到项目',
-      uploadHint: '拖拽文件到此，或点击选择。文件将保存到 raw/uploads/。支持 PDF / Word / Excel / 图片 / 文本等。',
-      picker: '选择文件', uploading: '上传中…', uploaded: '已上传',
-      uploadNote: '上传的原始资料会落在 raw/uploads/，可让 agent 据此抽取事实（注意区分原始资料与已核实结论）。',
-      materialsTitle: '素材目录（已抓取原文）',
-      materialsHint: '这些目录里是抓取下来的原始网页/文本，没有 md 产物，因此不出现在「项目」里。可点「转为项目」纳入七步流程。',
-      looseTitle: '散落文件（research/ 顶层）', toProject: '转为项目', toProjected: '已转为项目',
-      noMaterials: '没有素材目录。', filesCount: '个文件', viewFiles: '查看文件', hideFiles: '收起',
-      noLoose: '无散落文件。', converted: '已转为项目，切到「项目」页签查看。',
-      legacyTag: '（未建档）', materialTag: '（素材）',
       reveal: 'Finder 显示', revealDir: '在 Finder 中打开', openInApp: '打开', copyPath: '复制路径',
-      locLabel: '位置', revealHint: '文件都在工作区目录里，点「在 Finder 中打开」即可定位。',
-      stageSubject: '① 主体锁定', stageCrawl: '② 抓取', stageFact: '③ 事实核查',
-      stageKpi: '④ KPI假设', stageMeeting: '⑤ 会面材料', stageProposal: '⑥ 正式方案',
     };
     const t = (k) => DICT[k] || k;
 
@@ -3224,10 +3241,12 @@ window.__ModuleLoader__.load({
     }
 
     /* ============================================================
-     * 八、工件视图
-     * 聚合工件：按客户 → 阶段目录分组列 md/pdf/docx，带导出/质检/
-     * Finder/打开；顶部保留旧「素材」能力（素材目录、散落文件、转项目）；
-     * 客户卷内支持拖拽上传（写 raw/uploads/）。
+     * 八、资料视图（v1.7 重构；ADR 0008）
+     * 左列：可搜索/筛选的关键资料（默认「最近资料」，可切「按客户」）；
+     * 右列：内嵌预览（md/txt/PDF/图片/网页快照/Word/Excel/PPT）。
+     * 原始素材（raw/ 与 html/json/xml/tsv/log）默认折叠，带计数可开。
+     * 预览复用宿主能力：同源鉴权路由 /api/file + remote.officeToPdf；
+     * 不新增宿主路由、不引入依赖、不写任何状态。
      * ============================================================ */
     const FILE_GROUP_ORDER = ['00-项目档案.md', 'raw', 'research', 'meeting', 'proposal', 'pilot', 'delivery', 'adoption', 'internal', 'exports'];
 
@@ -3253,32 +3272,468 @@ window.__ModuleLoader__.load({
       return order.map((k) => ({ key: k, files: groups[k] }));
     }
 
+    /* ---- 分类与预览工具（ADR 0008） ---- */
+    const MAT_RAW_EXTS = ['html', 'htm', 'json', 'jsonl', 'xml', 'tsv', 'log', 'warc', 'eml', 'sitemap'];
+    const MAT_TEXT_EXTS = ['md', 'markdown', 'txt', 'text', 'csv', 'tsv', 'json', 'jsonl', 'xml', 'yaml', 'yml', 'html', 'htm', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'css', 'scss', 'less', 'py', 'sh', 'bash', 'zsh', 'rb', 'go', 'rs', 'java', 'kt', 'kts', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'php', 'sql', 'toml', 'ini', 'cfg', 'conf', 'env', 'gitignore', 'log', 'diff', 'patch', 'tex'];
+    const MAT_IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'];
+    const MAT_OFFICE_EXTS = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf'];
+    const MAT_RAW_PATH_RE = /(^|\/)raw\//i;
+    /* 资料页 UI 记忆：切去会话看 DSH 原生预览再返回时，恢复上次的筛选/分组；
+       只存内存（非事实源），刷新页面即重置。 */
+    const MAT_UI_MEM = { mode: 'recent', q: '', cat: 'all', showRaw: false, sort: 'recent', expanded: {}, listWidth: 380 };
+    /* 主视图记忆：切去会话看 DSH 原生预览再回来时，仍停在离开前的页签（如「资料」） */
+    const FDE_VIEW_MEM = { view: 'today' };
+
+    function matExt(rel) {
+      const name = str(rel).split('/').pop();
+      const i = name.lastIndexOf('.');
+      return i > 0 ? name.slice(i + 1).toLowerCase() : '';
+    }
+    function matName(rel) {
+      const parts = str(rel).split('/');
+      return parts[parts.length - 1] || str(rel);
+    }
+    function matDirLabel(rel) {
+      const parts = str(rel).split('/');
+      return parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+    }
+    function matIsRaw(rel) {
+      const low = str(rel).toLowerCase();
+      if (MAT_RAW_PATH_RE.test(low)) return true;
+      return MAT_RAW_EXTS.indexOf(matExt(low)) >= 0;
+    }
+    function matPreviewKind(rel) {
+      const ext = matExt(rel);
+      if (ext === 'md' || ext === 'markdown') return 'md';
+      if (ext === 'pdf') return 'pdf';
+      if (MAT_OFFICE_EXTS.indexOf(ext) >= 0) return 'office';
+      if (MAT_IMAGE_EXTS.indexOf(ext) >= 0) return 'image';
+      if (ext === 'html' || ext === 'htm') return 'html';
+      if (MAT_TEXT_EXTS.indexOf(ext) >= 0) return 'text';
+      return 'binary';
+    }
+    function matCat(rel) {
+      const k = matPreviewKind(rel);
+      if (k === 'md' || k === 'text') return 'doc';
+      if (k === 'pdf') return 'pdf';
+      if (k === 'office') return 'office';
+      if (k === 'image') return 'image';
+      if (k === 'html') return 'web';
+      return 'other';
+    }
+    function matBytes(n) {
+      const v = Number(n) || 0;
+      if (v <= 0) return '';
+      if (v < 1024) return v + ' B';
+      if (v < 1024 * 1024) return Math.max(1, Math.round(v / 1024)) + ' KB';
+      return (v / 1024 / 1024).toFixed(v < 10 * 1024 * 1024 ? 1 : 0) + ' MB';
+    }
+    function matAbsJoin(base, rel) {
+      const b = str(base).replace(/\/+$/, '');
+      const r = str(rel).replace(/^\/+/, '');
+      return b && r ? b + '/' + r : (b || r);
+    }
+    function matFileUrl(abs) {
+      return '/api/file?path=' + encodeURIComponent(str(abs));
+    }
+    /* md 内相对图片：按文档所在目录解析（/api/file 需要绝对路径） */
+    function matResolveAsset(docAbs, url) {
+      const u = str(url).trim();
+      if (!u || /^(?:https?:|data:|blob:|mailto:|#)/i.test(u)) return u;
+      const clean = u.split('#')[0].split('?')[0].replace(/^\.\//, '');
+      const dir = str(docAbs).replace(/\/+[^/]*$/, '');
+      const abs = dir ? dir + '/' + clean : clean;
+      return matFileUrl(abs);
+    }
+
+    /* ---- 轻量 Markdown → React 节点（无 HTML 注入，无依赖） ---- */
+    function mdInline(text, docAbs) {
+      const src = String(text == null ? '' : text);
+      if (!src) return null;
+      const out = [];
+      const re = /(!\[[^\]]*\]\(([^)\s]+)[^)]*\)|\[([^\]]+)\]\(([^)\s]+)[^)]*\)|`([^`]+)`|\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\s][^*]*?)\*)/g;
+      let last = 0;
+      let m;
+      let k = 0;
+      while ((m = re.exec(src)) !== null) {
+        if (m.index > last) out.push(src.slice(last, m.index));
+        if (m[2] != null && m[1].charAt(0) === '!') {
+          const alt = m[1].replace(/^!\[/, '').replace(/\]\(.*$/, '');
+          const url = matResolveAsset(docAbs, m[2]);
+          out.push(h('img', { key: 'mdi' + (k++), className: 'fde-md-img', src: url, alt, loading: 'lazy' }));
+        } else if (m[3] != null && m[4] != null) {
+          const href = /^(?:https?:|mailto:|#)/i.test(m[4]) ? m[4] : matResolveAsset(docAbs, m[4]);
+          out.push(h('a', { key: 'mda' + (k++), className: 'fde-md-link', href, target: '_blank', rel: 'noreferrer noopener' }, m[3]));
+        } else if (m[5] != null) {
+          out.push(h('code', { key: 'mdc' + (k++), className: 'fde-md-code' }, m[5]));
+        } else if (m[6] != null) {
+          out.push(h('strong', { key: 'mdb' + (k++) }, m[6]));
+        } else if (m[7] != null) {
+          out.push(h('strong', { key: 'mdb2' + (k++) }, m[7]));
+        } else if (m[8]) {
+          out.push(h('em', { key: 'mdi2' + (k++) }, m[8]));
+        }
+        last = re.lastIndex;
+      }
+      if (last < src.length) out.push(src.slice(last));
+      return out;
+    }
+
+    function renderMarkdown(text, docAbs) {
+      const lines = String(text == null ? '' : text).replace(/\r\n?/g, '\n').split('\n');
+      const blocks = [];
+      let i = 0;
+      let key = 0;
+      const push = (el) => { blocks.push(h('div', { key: 'mdb' + (key++), className: 'fde-md-block' }, el)); };
+      let buf = [];
+      const flush = () => {
+        if (!buf.length) return;
+        const para = buf.join(' ').trim();
+        buf = [];
+        if (para) push(h('p', { className: 'fde-md-p' }, mdInline(para, docAbs)));
+      };
+      /* YAML frontmatter → 键值表 */
+      if (lines[0] === '---') {
+        let j = 1;
+        while (j < lines.length && lines[j] !== '---' && lines[j] !== '...') j++;
+        if (j < lines.length) {
+          const kv = [];
+          for (let x = 1; x < j; x++) {
+            const mm = lines[x].match(/^([A-Za-z0-9_.-]+)\s*:\s*(.*)$/);
+            if (mm) kv.push([mm[1], mm[2]]);
+          }
+          if (kv.length) {
+            push(h('div', { className: 'fde-md-fm' }, kv.map(([k2, v2]) =>
+              h('div', { key: 'fm' + k2, className: 'fde-md-fm-row' },
+                h('span', { className: 'fde-md-fm-k' }, k2),
+                h('span', { className: 'fde-md-fm-v' }, v2)))));
+          }
+          i = j + 1;
+        }
+      }
+      while (i < lines.length) {
+        const line = lines[i];
+        if (!line.trim()) { flush(); i++; continue; }
+        const fence = line.match(/^\s*(`{3,}|~{3,})\s*([\w+#.-]*)\s*$/);
+        if (fence) {
+          flush();
+          const mark = fence[1][0];
+          const code = [];
+          i++;
+          while (i < lines.length && !new RegExp('^\\s*' + mark + '{' + fence[1].length + ',}\\s*$').test(lines[i])) { code.push(lines[i]); i++; }
+          i++;
+          push(h('pre', { className: 'fde-md-pre' }, h('code', null, code.join('\n'))));
+          continue;
+        }
+        const hm = line.match(/^(#{1,6})\s+(.*)$/);
+        if (hm) {
+          flush();
+          const lvl = Math.min(6, hm[1].length);
+          push(h('h' + Math.max(3, lvl), { className: 'fde-md-h fde-md-h' + lvl }, mdInline(hm[2], docAbs)));
+          i++;
+          continue;
+        }
+        if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(line)) { flush(); push(h('hr', { className: 'fde-md-hr' })); i++; continue; }
+        if (/^\s*>\s?/.test(line)) {
+          flush();
+          const quote = [];
+          while (i < lines.length && /^\s*>\s?/.test(lines[i])) { quote.push(lines[i].replace(/^\s*>\s?/, '')); i++; }
+          push(h('blockquote', { className: 'fde-md-quote' }, quote.map((t2, idx) => h('p', { key: 'q' + idx }, mdInline(t2, docAbs)))));
+          continue;
+        }
+        if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
+          flush();
+          const cellsOf = (row) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+          const head = cellsOf(line);
+          i += 2;
+          const rows = [];
+          while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(cellsOf(lines[i])); i++; }
+          push(h('div', { className: 'fde-md-table-wrap' }, h('table', { className: 'fde-md-table' },
+            h('thead', null, h('tr', null, head.map((c, idx) => h('th', { key: 'th' + idx }, mdInline(c, docAbs))))),
+            h('tbody', null, rows.map((r, ri) => h('tr', { key: 'tr' + ri }, r.map((c, ci) => h('td', { key: 'td' + ci }, mdInline(c, docAbs)))))))));
+          continue;
+        }
+        if (/^\s*([-*+])\s+/.test(line) || /^\s*\d+[.)]\s+/.test(line)) {
+          flush();
+          const ordered = /^\s*\d+[.)]\s+/.test(line);
+          const items = [];
+          while (i < lines.length && (/^\s*([-*+])\s+/.test(lines[i]) || /^\s*\d+[.)]\s+/.test(lines[i]))) {
+            items.push(lines[i].replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ''));
+            i++;
+          }
+          push(h(ordered ? 'ol' : 'ul', { className: 'fde-md-list' }, items.map((it, idx) => {
+            const task = it.match(/^\[([ xX])\]\s*(.*)$/);
+            if (task) {
+              return h('li', { key: 'li' + idx, className: 'fde-md-task' },
+                h('input', { type: 'checkbox', checked: task[1].toLowerCase() === 'x', readOnly: true, tabIndex: -1 }),
+                h('span', null, mdInline(task[2], docAbs)));
+            }
+            return h('li', { key: 'li' + idx }, mdInline(it, docAbs));
+          })));
+          continue;
+        }
+        buf.push(line.trim());
+        i++;
+      }
+      flush();
+      return blocks;
+    }
+
+    /* ---- 溢出菜单（行内次要操作） ---- */
+    function MatMenu(props) {
+      const p = props || {};
+      const [open, setOpen] = useState(false);
+      const rootRef = useRef(null);
+      useEffect(() => {
+        if (!open) return undefined;
+        const onDoc = (e) => { const el = rootRef.current; if (el && e && e.target && el.contains(e.target)) return; setOpen(false); };
+        document.addEventListener('mousedown', onDoc);
+        return () => document.removeEventListener('mousedown', onDoc);
+      }, [open]);
+      return h('span', { className: 'fde-mat-menu-wrap', ref: rootRef },
+        h('button', {
+          type: 'button', className: 'fde-iconbtn fde-mat-more', 'aria-label': t('matMore'), title: t('matMore'),
+          onClick: (e) => { if (e && e.stopPropagation) e.stopPropagation(); setOpen((v) => !v); },
+        }, '⋯'),
+        open ? h('div', { className: 'fde-mat-menu', role: 'menu' }, asList(p.items).map((it, idx) =>
+          h('button', {
+            key: 'mi' + idx, type: 'button', role: 'menuitem', className: 'fde-mat-menu-item',
+            onClick: (e) => { if (e && e.stopPropagation) e.stopPropagation(); setOpen(false); if (it.onSelect) it.onSelect(); },
+          }, it.label))) : null);
+    }
+
+    /* ---- 预览面板 ---- */
+    function FilePreview(props) {
+      const p = props || {};
+      const file = p.file || null;
+      const kind = file ? matPreviewKind(file.rel) : '';
+      const [state, setState] = useState({ status: 'empty' });
+      const [htmlMode, setHtmlMode] = useState('snapshot');
+      const [reload, setReload] = useState(0);
+      const alive = useRef(true);
+      const urlRef = useRef('');
+      const officeTried = useRef(0);
+      useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+      useEffect(() => () => {
+        try { if (urlRef.current) URL.revokeObjectURL(urlRef.current); } catch (e) { /* ignore */ }
+        urlRef.current = '';
+      }, []);
+
+      useEffect(() => {
+        const abs = file && file.abs ? String(file.abs) : '';
+        const cleanup = () => { try { if (urlRef.current) URL.revokeObjectURL(urlRef.current); } catch (e) { /* ignore */ } urlRef.current = ''; };
+        if (!abs) { setState({ status: 'empty' }); return cleanup; }
+        if (kind === 'binary') { setState({ status: 'binary' }); return cleanup; }
+        if (kind === 'image') { setState({ status: 'ready-image', src: matFileUrl(abs) }); return cleanup; }
+        let cancelled = false;
+        const fail = (e) => {
+          if (cancelled) return;
+          setState({ status: 'error', err: String((e && (e.message || e.reason)) || e || '未知原因') });
+        };
+        const makePdf = async (blob) => {
+          if (cancelled) return;
+          cleanup();
+          const url = URL.createObjectURL(blob);
+          urlRef.current = url;
+          setState({ status: 'ready-pdf', src: url });
+        };
+        setState({ status: 'loading' });
+        (async () => {
+          try {
+            if (kind === 'office') {
+              officeTried.current = 0;
+              if (!p.officeToPdf) throw new Error(t('matOfficeNoSession'));
+              setState({ status: 'loading', note: t('matOfficeLoading') });
+              let blob;
+              try { blob = await p.officeToPdf(abs); }
+              catch (e1) {
+                /* 冷启动/并发排队时第一次可能失败：等一拍再重试一次，仍失败才报错 */
+                officeTried.current = 1;
+                await new Promise((r2) => setTimeout(r2, 900));
+                blob = await p.officeToPdf(abs);
+              }
+              await makePdf(blob);
+              return;
+            }
+            const r = await readFileAbs(abs, kind === 'pdf' ? 'blob' : 'text');
+            if (!r || r.ok === false) throw new Error((r && r.reason) || 'HTTP ?');
+            if (kind === 'pdf') { await makePdf(r.blob); return; }
+            const text = String(r.text || '');
+            if (cancelled) return;
+            const truncated = text.length > 400000;
+            setState({ status: 'ready-text', text: truncated ? text.slice(0, 400000) : text, note: truncated ? t('matTextTruncated') : '' });
+          } catch (e) { fail(e); }
+        })();
+        return () => { cancelled = true; cleanup(); };
+      }, [file && file.abs, reload, kind]);
+
+      useEffect(() => {
+        if (!p.full) return undefined;
+        const onKey = (e) => { if (e && e.key === 'Escape') { if (e.preventDefault) e.preventDefault(); if (p.onToggleFull) p.onToggleFull(false); } };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+      }, [p.full]);
+
+      const abs = file && file.abs ? String(file.abs) : '';
+      const head = h('div', { className: 'fde-pv-head' },
+        p.onBack ? h('button', {
+          type: 'button', className: 'fde-iconbtn fde-pv-back', title: t('matBackList'), 'aria-label': t('matBackList'),
+          onClick: p.onBack,
+        }, '‹') : null,
+        h('div', { className: 'fde-pv-head-main' },
+          h('div', { className: 'fde-pv-title', title: file ? file.rel : '' }, file ? matName(file.rel) : t('matPick')),
+          file ? h('div', { className: 'fde-pv-meta' },
+            h('span', { className: 'fde-pv-path', title: abs }, file.rel),
+            file.engName ? Chip({ tone: 'muted', children: file.engName }) : null,
+            file.raw ? Chip({ tone: 'muted', children: t('matRawBadge') }) : null,
+            h('span', { className: 'fde-hint' }, [matBytes(file.size), file.mtime ? relTime(file.mtime) : ''].filter(Boolean).join(' · '))) : null),
+        h('div', { className: 'fde-pv-actions' },
+          file && kind === 'md' && p.onExport ? h(Btn, { small: true, onClick: () => p.onExport(file) }, t('matExport')) : null,
+          file && p.onQa && (file.pdfRel || /\.pdf$/i.test(file.rel)) ? h(Btn, { small: true, onClick: () => p.onQa(file) }, t('matQa')) : null,
+          file ? h(Btn, { small: true, onClick: () => p.onOpenPath(abs, 'open', file.rel, 'file') }, t('matSystemOpen')) : null,
+          file ? h(Btn, { small: true, onClick: () => setReload((v) => v + 1) }, t('matReloadOne')) : null,
+          h(Btn, { small: true, onClick: () => { if (p.onToggleFull) p.onToggleFull(!p.full); } }, p.full ? t('matExitFull') : t('matFull')),
+          p.onClose ? h('button', { type: 'button', className: 'fde-iconbtn', title: t('close'), 'aria-label': t('close'), onClick: p.onClose }, '×') : null));
+
+      let body = null;
+      if (!file) {
+        body = h(Empty, { mark: '▤', title: t('matPick'), body: h('div', { className: 'fde-hint' }, t('matPickHint')) });
+      } else if (state.status === 'loading') {
+        body = h(Loading, { text: state.note || t('loading') });
+      } else if (state.status === 'error') {
+        body = h(ErrorLine, {
+          title: t('matLoadFail'), text: state.err,
+          onRetry: () => setReload((v) => v + 1),
+        });
+      } else if (state.status === 'binary') {
+        body = h(Empty, {
+          mark: '▦', title: t('matUnsupported'), body: h('div', { className: 'fde-hint' }, t('matUnsupportedHint')),
+          actions: h('div', { className: 'fde-row', style: { justifyContent: 'center', marginTop: 8 } },
+            h(Btn, { small: true, kind: 'primary', onClick: () => p.onOpenPath(abs, 'open', file.rel, 'file') }, t('matSystemOpen')),
+            p.onReveal ? h(Btn, { small: true, onClick: () => p.onReveal(abs, file.rel) }, t('reveal')) : null),
+        });
+      } else if (state.status === 'ready-image') {
+        body = h('div', { className: 'fde-pv-center' },
+          h('img', {
+            className: 'fde-pv-img', src: state.src, alt: file.rel,
+            onError: () => setState({ status: 'error', err: '图片加载失败' }),
+          }));
+      } else if (state.status === 'ready-pdf') {
+        body = h('iframe', { className: 'fde-pv-frame', src: state.src, title: file.rel });
+      } else if (state.status === 'ready-text') {
+        if (kind === 'md') {
+          body = h('div', { className: 'fde-pv-md' }, renderMarkdown(state.text, abs));
+        } else if (kind === 'html') {
+          body = h('div', { className: 'fde-pv-html' },
+            h('div', { className: 'fde-pv-subbar' },
+              h('div', { className: 'fde-seg' },
+                h('button', { type: 'button', className: htmlMode === 'snapshot' ? 'on' : '', onClick: () => setHtmlMode('snapshot') }, t('matHtmlSnapshot')),
+                h('button', { type: 'button', className: htmlMode === 'source' ? 'on' : '', onClick: () => setHtmlMode('source') }, t('matHtmlSource'))),
+              h('div', { className: 'fde-spacer' }),
+              h('span', { className: 'fde-hint' }, 'sandbox · 不执行脚本')),
+            htmlMode === 'source'
+              ? h('pre', { className: 'fde-pv-pre' }, state.text)
+              : h('iframe', { className: 'fde-pv-frame', sandbox: '', srcDoc: state.text, title: file.rel, referrerPolicy: 'no-referrer' }));
+        } else {
+          body = h('pre', { className: 'fde-pv-pre' }, state.text);
+        }
+        if (state.note) body = h(React.Fragment, null, body, h('div', { className: 'fde-pv-note' }, state.note));
+      } else {
+        body = h(Empty, { mark: '▤', title: t('matPick'), body: h('div', { className: 'fde-hint' }, t('matPickHint')) });
+      }
+
+      return h('div', { className: 'fde-mat-preview' + (p.full ? ' full' : '') },
+        head,
+        h('div', { className: 'fde-pv-body' }, body));
+    }
+
+    /* ---- 资料页 ---- */
     function ArtifactsView(props) {
       const p = props || {};
       const meta = p.meta;
       const board = p.board || {};
       const engs = asList(board.engagements);
-      const [expanded, setExpanded] = useState({});
+      const root = str(p.root || board.root || '');
+      const services = p.services || {};
+      const [mode, setMode] = useState(MAT_UI_MEM.mode);
       const [filesByDir, setFilesByDir] = useState({});
-      const [filesBaseByDir, setFilesBaseByDir] = useState({});
-      const [loadingDir, setLoadingDir] = useState('');
+      const [bases, setBases] = useState({});
+      const [loading, setLoading] = useState(false);
+      const [loadErr, setLoadErr] = useState('');
+      const [q, setQ] = useState(MAT_UI_MEM.q);
+      const [cat, setCat] = useState(MAT_UI_MEM.cat);
+      const [showRaw, setShowRaw] = useState(MAT_UI_MEM.showRaw);
+      const [sort, setSort] = useState(MAT_UI_MEM.sort);
+      const [active, setActive] = useState(null);
+      const [expanded, setExpanded] = useState(MAT_UI_MEM.expanded || {});
+      const [full, setFull] = useState(false);
+      const [uploadOpen, setUploadOpen] = useState(false);
+      const [uploadDir, setUploadDir] = useState('');
+      const [drag, setDrag] = useState(false);
+      const [uploadMsg, setUploadMsg] = useState('');
+      const [uploading, setUploading] = useState(false);
       const [showMaterials, setShowMaterials] = useState(false);
       const [materials, setMaterials] = useState(null);
       const [loose, setLoose] = useState([]);
       const [matRoot, setMatRoot] = useState('');
       const [matFiles, setMatFiles] = useState({});
-      const [uploadDir, setUploadDir] = useState('');
-      const [drag, setDrag] = useState(false);
-      const [uploadMsg, setUploadMsg] = useState('');
-      const [uploading, setUploading] = useState(false);
       const [syncMsg, setSyncMsg] = useState('');
       const [syncing, setSyncing] = useState(false);
       const fileInput = useRef(null);
       const alive = useRef(true);
-
+      const autoRef = useRef(false);
+      const rootRef = useRef(null);
+      const bodyRef = useRef(null);
+      const dragRef = useRef(null);
+      const [narrow, setNarrow] = useState(false);
+      const [listW, setListW] = useState(Number(MAT_UI_MEM.listWidth) || 380);
       useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
       const notify = (kind, text) => { if (p.onNotify) p.onNotify(kind, text); };
+      const engKey = engs.map((e) => str(e.dir)).join('|');
+
+      const loadAllFiles = useCallback(async () => {
+        const targets = engs.filter((e) => e && e.dir);
+        if (!targets.length) { setFilesByDir({}); setLoading(false); return; }
+        setLoading(true);
+        setLoadErr('');
+        const nextFiles = {};
+        const nextBases = {};
+        try {
+          const results = await Promise.all(targets.map(async (e) => {
+            const r = await getJSON(API + '/files?dir=' + encodeURIComponent(e.dir));
+            return { e, r };
+          }));
+          if (!alive.current) return;
+          results.forEach(({ e, r }) => {
+            if (r && r.ok !== false && Array.isArray(r.files)) {
+              nextFiles[e.dir] = r.files;
+              if (r.path) nextBases[e.dir] = str(r.path);
+            } else {
+              nextFiles[e.dir] = [];
+            }
+          });
+          setFilesByDir(nextFiles);
+          setBases(nextBases);
+        } catch (err) {
+          if (alive.current) setLoadErr(String((err && err.message) || err || t('loadFail')));
+        }
+        if (alive.current) setLoading(false);
+      }, [engKey]);
+
+      useEffect(() => { loadAllFiles(); }, [loadAllFiles]);
+      /* 面板宽度用容器实测（窗口宽 ≠ 面板宽；1280 逻辑宽窗口下面板约 1000px，应保持左右而不是上下） */
+      useEffect(() => {
+        const el = rootRef.current;
+        if (!el || typeof ResizeObserver === 'undefined') return undefined;
+        const ro = new ResizeObserver((entries) => {
+          const w = entries && entries[0] && entries[0].contentRect ? entries[0].contentRect.width : 0;
+          setNarrow(w > 0 && w < 860);
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+      }, []);
+      useEffect(() => { if (engs.length && !uploadDir) setUploadDir(str(engs[0].dir)); }, [engKey]);
 
       const loadMaterials = useCallback(async () => {
         const r = await getJSON(API + '/materials');
@@ -3289,93 +3744,133 @@ window.__ModuleLoader__.load({
           setMatRoot(str(r.root));
         } else {
           setMaterials([]);
-          notify('warn', '素材读取失败：' + ((r && r.reason) || '未知原因'));
         }
       }, []);
 
-      const loadFiles = useCallback(async (dir) => {
-        if (!dir) return;
-        setLoadingDir(dir);
-        const r = await getJSON(API + '/files?dir=' + encodeURIComponent(dir));
-        if (!alive.current) return;
-        setLoadingDir('');
-        if (r && r.ok !== false && Array.isArray(r.files)) {
-          setFilesByDir((cur) => Object.assign({}, cur, { [dir]: r.files }));
-          if (r.path) setFilesBaseByDir((cur) => Object.assign({}, cur, { [dir]: str(r.path) }));
-        } else {
-          setFilesByDir((cur) => Object.assign({}, cur, { [dir]: [] }));
-          notify('warn', '工件读取失败：' + ((r && r.reason) || '未知原因'));
-        }
-      }, []);
+      /* 统一文件对象：附客户、绝对路径、分类、原始素材标记 */
+      const allFiles = React.useMemo(() => {
+        const out = [];
+        engs.forEach((e) => {
+          const dir = str(e.dir);
+          const files = filesByDir[dir];
+          if (!files) return;
+          const base = str(bases[dir]) || (root ? matAbsJoin(matAbsJoin(root, 'research'), dir) : '');
+          asList(files).forEach((f) => {
+            const rel = str(f && f.rel);
+            if (!rel) return;
+            out.push({
+              key: str(e.id) + '::' + rel,
+              engId: str(e.id), engName: str(e.shortName || e.name || e.company || dir), engDir: dir, engPath: str(e.path) || base,
+              rel, dirLabel: matDirLabel(rel), abs: base ? matAbsJoin(base, rel) : '',
+              size: Number(f && f.size) || 0, mtime: Number(f && f.mtime) || 0,
+              pdfRel: str(f && f.pdfRel), exported: !!(f && f.exported),
+              raw: matIsRaw(rel), cat: matCat(rel), preview: matPreviewKind(rel),
+            });
+          });
+        });
+        return out;
+      }, [engs, filesByDir, bases, root, engKey]);
 
-      const toggleCustomer = (eng) => {
-        const dir = eng.dir;
-        const open = !expanded[eng.id];
-        setExpanded((cur) => Object.assign({}, cur, { [eng.id]: open }));
-        if (open && dir && !filesByDir[dir]) loadFiles(dir);
-      };
+      const counts = React.useMemo(() => {
+        const byEng = {};
+        let key = 0;
+        let raw = 0;
+        allFiles.forEach((f) => {
+          const c = byEng[f.engId] || (byEng[f.engId] = { key: 0, raw: 0, total: 0 });
+          c.total++;
+          if (f.raw) { c.raw++; raw++; } else { c.key++; key++; }
+        });
+        return { byEng, key, raw, total: allFiles.length };
+      }, [allFiles]);
+
+      const visible = React.useMemo(() => {
+        let arr = allFiles.filter((f) => showRaw || !f.raw);
+        if (cat !== 'all') arr = arr.filter((f) => f.cat === cat);
+        const kw = q.trim().toLowerCase();
+        if (kw) arr = arr.filter((f) => (f.rel + ' ' + f.engName + ' ' + f.dirLabel).toLowerCase().indexOf(kw) >= 0);
+        arr = arr.slice();
+        if (sort === 'name') arr.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+        else arr.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
+        return arr;
+      }, [allFiles, showRaw, cat, q, sort]);
+
+      /* 记住列表 UI 状态，回到面板时恢复 */
+      useEffect(() => {
+        MAT_UI_MEM.mode = mode; MAT_UI_MEM.q = q; MAT_UI_MEM.cat = cat;
+        MAT_UI_MEM.showRaw = showRaw; MAT_UI_MEM.sort = sort; MAT_UI_MEM.expanded = expanded; MAT_UI_MEM.listWidth = listW;
+      }, [mode, q, cat, showRaw, sort, expanded, listW]);
 
       useEffect(() => {
-        if (engs.length && !uploadDir) setUploadDir(engs[0].dir || '');
-      }, [engs.length]);
+        if (autoRef.current) return;
+        if (!visible.length) return;
+        autoRef.current = true;
+        /* 窄面板单列时不要自动选中，否则一进页面列表就被预览顶掉 */
+        if (narrow) return;
+        /* 首屏默认选一份「能预览」的资料，避免一进来就停在无法预览的二进制上 */
+        const first = visible.find((f) => f.preview !== 'binary' && f.preview !== 'office') || visible.find((f) => f.preview !== 'binary') || visible[0];
+        setActive(first);
+      }, [visible.length, narrow]);
 
+      /* 从宽变窄时，若当前只是首屏自动选中的，就退回列表，避免「一进来就是预览」 */
+      useEffect(() => {
+        if (narrow && autoRef.current && active) setActive(null);
+      }, [narrow]);
+
+      /* Office → PDF：用宿主 officeToPdf Remote（需要本工作区的一个会话作授权作用域） */
+      const loadOfficePdf = useCallback(async (abs) => {
+        const of = services.officeToPdf;
+        if (!of || typeof of.render !== 'function') throw new Error(t('matOfficeNoSession'));
+        const sid = pickSessionIdForRoot(root, services.sessions);
+        if (!sid) throw new Error(t('matOfficeNoSession'));
+        const ac = new AbortController();
+        let r = await of.render(sid, abs, 'foreground', ac.signal);
+        if (r && r.ok === false) r = await of.render(sid, abs, 'foreground', ac.signal);
+        if (!r || r.ok === false) {
+          const err = r && r.error;
+          throw new Error((err && (err.message || err.code)) || t('matOfficeFail'));
+        }
+        const data = r.value && r.value.data;
+        if (!data || !data.length) throw new Error(t('matOfficeFail'));
+        return new Blob([data], { type: 'application/pdf' });
+      }, [services.officeToPdf, services.sessions, root]);
+
+      const doOpen = async (abs, mode2, label, kind) => {
+        if (!abs) { notify('warn', t('noPath')); return; }
+        if (p.openPath) {
+          const r = await p.openPath(abs, mode2, kind || 'file');
+          if (r && r.ok) { notify('ok', (mode2 === 'reveal' ? t('revealOk') : t('openOk')) + '：' + (label || abs)); return; }
+          notify('warn', t('revealFail') + '：' + ((r && r.reason) || '未知原因'));
+        }
+      };
+      const doExport = async (file) => {
+        const r = await postJSON(API + '/handoff', { action: 'export', dir: file.engDir, md: file.rel }, 60000);
+        if (r && r.ok && r.sessionId) { notify('ok', t('exporting')); if (p.openSession) p.openSession(r.sessionId); }
+        else if (r && r.promptText) { if (p.copyText) await p.copyText(r.promptText); notify('warn', (r.reason || t('handoffFail'))); }
+        else notify('warn', (r && r.reason) || t('actionFail'));
+      };
+      const doQa = async (file) => {
+        const target = file.pdfRel || file.rel;
+        const r = await postJSON(API + '/handoff', { action: 'qa', dir: file.engDir, pdf: target }, 60000);
+        if (r && r.ok && r.sessionId) { notify('ok', '已下发质检任务，正在跳转…'); if (p.openSession) p.openSession(r.sessionId); }
+        else if (r && r.promptText) { if (p.copyText) await p.copyText(r.promptText); notify('warn', (r.reason || t('handoffFail'))); }
+        else notify('warn', (r && r.reason) || t('actionFail'));
+      };
       const doSync = async () => {
         setSyncing(true); setSyncMsg('');
         const r = await fdePost('/sync', {});
         if (!alive.current) return;
         setSyncing(false);
         if (!r || r.ok === false) { notify('err', '重扫失败：' + ((r && r.reason) || '未知原因')); return; }
-        const refreshed = r.refreshed && typeof r.refreshed === 'object' ? r.refreshed : null;
-        setSyncMsg('已重扫工件'
-          + (refreshed && Array.isArray(refreshed.engagements) ? '（' + refreshed.engagements.length + ' 个客户）' : '')
-          + (refreshed && refreshed.proposalsAdded ? '，新增建议 ' + refreshed.proposalsAdded + ' 条' : ''));
-        setFilesByDir({});
-        setFilesBaseByDir({});
+        setSyncMsg('已重扫工件');
+        await loadAllFiles();
         if (p.onRefresh) await p.onRefresh();
-        Object.keys(expanded).forEach((id) => {
-          const eng = engs.find((e) => e.id === id);
-          if (eng && eng.dir && expanded[id]) loadFiles(eng.dir);
-        });
-      };
-
-      const doOpen = async (abs, mode, label, kind) => {
-        if (!abs) { notify('warn', t('noPath')); return; }
-        if (p.openPath) {
-          const r = await p.openPath(abs, mode, kind || 'file');
-          if (r && r.ok) { notify('ok', (mode === 'reveal' ? t('revealOk') : t('openOk')) + '：' + (label || abs)); return; }
-          notify('warn', t('revealFail') + '：' + ((r && r.reason) || '未知原因'));
-        }
-      };
-      const doExport = async (dir, rel) => {
-        const r = await postJSON(API + '/handoff', { action: 'export', dir, md: rel }, 60000);
-        if (r && r.ok && r.sessionId) {
-          notify('ok', t('exporting'));
-          if (p.openSession) p.openSession(r.sessionId);
-        } else if (r && r.promptText) {
-          if (p.copyText) await p.copyText(r.promptText);
-          notify('warn', (r.reason || t('handoffFail')));
-        } else {
-          notify('warn', (r && r.reason) || t('actionFail'));
-        }
-      };
-      const doQa = async (dir, rel) => {
-        const r = await postJSON(API + '/handoff', { action: 'qa', dir, pdf: rel }, 60000);
-        if (r && r.ok && r.sessionId) {
-          notify('ok', '已下发质检任务，正在跳转…');
-          if (p.openSession) p.openSession(r.sessionId);
-        } else if (r && r.promptText) {
-          if (p.copyText) await p.copyText(r.promptText);
-          notify('warn', (r.reason || t('handoffFail')));
-        } else {
-          notify('warn', (r && r.reason) || t('actionFail'));
-        }
       };
       const doUpload = async (fileList) => {
         const arr = Array.from(fileList || []);
         if (!arr.length) return;
         if (!uploadDir) { setUploadMsg('请先选择客户'); return; }
         setUploading(true);
-        setUploadMsg(t('uploading') + '（' + arr.length + ' 个文件）');
+        setUploadMsg(t('artifactsUploading') + '（' + arr.length + ' 个文件）');
         const payload = [];
         for (const f of arr) {
           try {
@@ -3386,209 +3881,323 @@ window.__ModuleLoader__.load({
               rd.readAsDataURL(f);
             });
             payload.push({ name: f.name, data: dataUrl });
-          } catch (e) { /* 跳过该文件 */ }
+          } catch (e) { /* 跳过 */ }
         }
         const r = await postJSON(API + '/upload', { dir: uploadDir, files: payload }, 180000);
         if (!alive.current) return;
         setUploading(false);
         if (r && r.ok) {
-          const names = asList(r.saved).map((x) => x.name).join('、');
-          setUploadMsg(t('uploaded') + ' ' + asList(r.saved).length + ' 个：' + names
-            + (asList(r.failed).length ? '（失败 ' + asList(r.failed).length + '）' : ''));
-          const eng = engs.find((e) => e.dir === uploadDir);
-          if (eng) { setFilesByDir((cur) => Object.assign({}, cur, { [eng.dir]: null })); if (expanded[eng.id]) loadFiles(eng.dir); }
+          setUploadMsg(t('artifactsUploaded') + ' ' + asList(r.saved).length + ' 个文件');
+          await loadAllFiles();
           if (p.onRefresh) await p.onRefresh();
-        } else {
-          setUploadMsg((r && r.reason) || '上传失败');
-        }
+        } else setUploadMsg((r && r.reason) || '上传失败');
       };
       const doToProject = async (dir) => {
         const r = await postJSON(API + '/toproject', { dir, company: dir }, 60000);
-        if (r && r.ok) {
-          notify('ok', t('converted') + '：' + dir);
-          if (p.onRefresh) await p.onRefresh();
-          loadMaterials();
-          if (p.onScanNow) p.onScanNow();
-        } else {
-          notify('warn', (r && r.reason) || '转换失败');
-        }
+        if (r && r.ok) { notify('ok', t('converted') + '：' + dir); if (p.onRefresh) await p.onRefresh(); loadMaterials(); if (p.onScanNow) p.onScanNow(); }
+        else notify('warn', (r && r.reason) || '转换失败');
       };
       const loadMatFiles = async (dir) => {
-        if (matFiles[dir]) {
-          const nx = Object.assign({}, matFiles); delete nx[dir]; setMatFiles(nx); return;
-        }
+        if (matFiles[dir]) { const nx = Object.assign({}, matFiles); delete nx[dir]; setMatFiles(nx); return; }
         const r = await getJSON(API + '/material-files?dir=' + encodeURIComponent(dir));
         setMatFiles(Object.assign({}, matFiles, { [dir]: asList(r.files) }));
       };
 
-      const fileRow = (eng, f) => {
-        const absPath = str(f.absPath || '');
-        const isMd = f.kind === 'md';
-        const isPdf = f.kind === 'pdf';
-        const exported = !!f.exported;
-        return h('div', { key: f.rel, className: 'fde-file' },
-          h('span', { className: 'fde-file-rel', title: absPath || f.rel }, f.rel),
-          h('span', { className: 'fde-file-meta' },
-            f.size ? Math.max(1, Math.round(f.size / 1024)) + ' KB' : '',
-            f.mtime ? ' · ' + relTime(f.mtime) : ''),
-          exported ? Chip({ tone: 'ok', children: t('artifactsExported') }) : null,
-          h('div', { className: 'fde-file-actions' },
-            isMd
-              ? h(Btn, { small: true, kind: 'primary', onClick: () => doExport(eng.dir, f.rel) }, t('artifactsExport'))
-              : null,
-            (f.pdfRel || (exported && isMd))
-              ? h(Btn, { small: true, onClick: () => doQa(eng.dir, f.pdfRel || f.rel) }, t('artifactsQa'))
-              : null,
-            absPath
-              ? h(Btn, { small: true, onClick: () => doOpen(absPath, 'reveal', f.rel, 'file') }, t('reveal'))
-              : null,
-            absPath
-              ? h(Btn, { small: true, onClick: () => doOpen(absPath, 'open', f.rel, 'file') }, t('openInApp'))
-              : null));
-      };
+      const selectFile = (f) => { setActive(f); setFull(false); };
 
-      const filesAbsPath = (eng, rel) => {
-        const cached = filesBaseByDir[eng.dir] || '';
-        const base = eng.path || cached || (eng.dir && p.root ? str(p.root).replace(/\/+$/, '') + '/research/' + eng.dir : '');
-        return base ? String(base).replace(/\/+$/, '') + '/' + (rel || '') : '';
-      };
-
-      const customerBlock = (eng) => {
-        const open = !!expanded[eng.id];
-        const files = filesByDir[eng.dir];
-        const loading = loadingDir === eng.dir;
-        const groups = groupFiles(files);
-        const total = asList(files).length;
-        return h('div', { key: eng.id, className: 'fde-acc-item' },
-          /* 头改成 div[role=button]：内层不能再嵌 <button>（§2.4 手风琴 button 嵌套 bug）。
-             Finder 按钮移出头外，用键盘 Enter/Space 也能展开。 */
-          h('div', { className: 'fde-acc-row' },
-            h('div', {
-              className: 'fde-acc-head',
-              role: 'button',
-              tabIndex: 0,
-              'aria-expanded': open ? 'true' : 'false',
-              onClick: () => toggleCustomer(eng),
-              onKeyDown: (e) => {
-                if (e && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleCustomer(eng); }
-              },
-            },
-              h('span', { className: 'fde-caret' + (open ? ' open' : ''), 'aria-hidden': 'true' }, '›'),
-              h('span', { style: { fontWeight: 600 } }, eng.name || eng.company || eng.dir || '—'),
-              Chip({ tone: 'muted', children: stageLabel(meta, eng.stage) }),
-              eng.dir ? h('span', { className: 'fde-code' }, eng.dir) : null,
-              h('span', { className: 'fde-spacer', style: { flex: '1 1 auto' } }),
-              files ? h('span', { className: 'fde-hint' }, total + ' 个文件') : null),
-            eng.path || eng.dir
-              ? h('div', { className: 'fde-acc-tools' },
-                h(Btn, {
-                  small: true,
-                  onClick: () => doOpen(eng.path || filesAbsPath(eng, ''), 'open', eng.dir, 'dir'),
-                }, t('revealDir')))
-              : null),
-          open
-            ? h('div', { className: 'fde-acc-body' },
-              loading
-                ? h(Loading, { text: '正在列出工件…' })
-                : groups.length === 0
-                  ? h(Empty, { mark: '·', title: t('artifactsNoFiles') })
-                  : h('div', null, groups.map((g) => h('div', { key: g.key, className: 'fde-group' },
-                    h('div', { className: 'fde-group-title' }, g.key, h('span', { className: 'fde-hint' }, '（' + g.files.length + '）')),
-                    h('div', { className: 'fde-files' }, g.files.slice(0, 40).map((f) => fileRow(eng, Object.assign({}, f, {
-                      absPath: filesAbsPath(eng, f.rel),
-                    })))),
-                    g.files.length > 40 ? h('div', { className: 'fde-hint' }, '仅显示前 40 个（共 ' + g.files.length + ' 个）。') : null))))
-            : null);
-      };
-
-      const materialsPanel = () => {
-        const mats = materials || [];
-        const matRow = (m) => {
-          const fileList = matFiles[m.dir];
-          return h('div', { key: m.dir, className: 'fde-li' },
-            h('div', { className: 'fde-li-main' },
-              h('div', { className: 'fde-li-title' }, m.dir + ' · ' + m.fileCount + ' ' + t('artifactsFiles')),
-              h('div', { className: 'fde-li-meta' }, '最近更新 ' + relTime(m.mtime))),
-            h('div', { className: 'fde-li-actions' },
-              h(Btn, { small: true, onClick: () => loadMatFiles(m.dir) }, fileList ? t('artifactsHideFiles') : t('artifactsViewFiles')),
-              h(Btn, { small: true, onClick: () => doOpen(m.path, 'open', m.dir, 'dir') }, t('revealDir')),
-              h(Btn, { small: true, kind: 'primary', onClick: () => doToProject(m.dir) }, t('artifactsToProject'))),
-            fileList
-              ? h('div', { className: 'fde-files', style: { flexBasis: '100%' } }, fileList.slice(0, 30).map((f) => h('div', { key: f.rel, className: 'fde-file' },
-                h('span', { className: 'fde-file-rel' }, f.rel),
-                h('span', { className: 'fde-file-meta' }, f.kind),
-                h(Btn, {
-                  small: true,
-                  onClick: () => doOpen((m.path || '') + '/' + f.rel, 'reveal', f.rel, 'file'),
-                }, t('reveal')))))
-              : null);
-        };
-        const looseBlock = h('div', { style: { marginTop: 12 } },
-          h('div', { className: 'fde-section-title' }, t('artifactsLoose')),
-          loose.length === 0
-            ? h('div', { className: 'fde-hint' }, t('artifactsNoLoose'))
-            : h('div', { className: 'fde-files', style: { marginTop: 6 } }, loose.slice(0, 40).map((f) => h('div', { key: f.name, className: 'fde-file' },
-              h('span', { className: 'fde-file-rel' }, f.name),
-              h('span', { className: 'fde-file-meta' }, Math.max(1, Math.round((f.size || 0) / 1024)) + ' KB'),
-              h(Btn, { small: true, onClick: () => doOpen(matRoot + '/' + f.name, 'reveal', f.name, 'file') }, t('reveal'))))));
-        const body = materials === null
-          ? h(Loading, {})
-          : h('div', null,
-            h('div', { className: 'fde-hint', style: { marginBottom: 8 } }, t('artifactsMaterialsHint')),
-            mats.length === 0 ? h(Empty, { mark: '·', title: t('artifactsNoMaterials') }) : mats.map(matRow),
-            looseBlock);
-        return h('div', { className: 'fde-card' },
-          Section({
-            title: t('artifactsMaterials'),
-            actions: h(Btn, { small: true, onClick: () => { if (materials === null) loadMaterials(); else setShowMaterials((v) => !v); } }, showMaterials ? t('close') : t('open')),
-            children: showMaterials ? body : h('div', { className: 'fde-hint' }, t('artifactsMaterialsHint')),
+      const fileRow = (f, opts) => {
+        const o = opts || {};
+        const on = active && active.key === f.key;
+        return h('div', {
+          key: f.key,
+          className: 'fde-mat-file' + (on ? ' on' : ''),
+          role: 'button', tabIndex: 0, 'aria-current': on ? 'true' : undefined,
+          onClick: () => selectFile(f),
+          onKeyDown: (e) => { if (e && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); selectFile(f); } },
+        },
+          h('span', { className: 'fde-mat-file-main' },
+            h('span', { className: 'fde-mat-file-name', title: f.rel }, matName(f.rel)),
+            o.showCustomer ? h('span', { className: 'fde-mat-file-cust' }, f.engName) : null,
+            h('span', { className: 'fde-mat-file-meta' }, [f.dirLabel, matBytes(f.size), f.mtime ? relTime(f.mtime) : ''].filter(Boolean).join(' · '))),
+          f.raw ? h('span', { className: 'fde-mat-raw' }, t('matRawBadge')) : null,
+          h(MatMenu, {
+            items: [
+              { label: t('matSystemOpen'), onSelect: () => doOpen(f.abs, 'open', f.rel, 'file') },
+              { label: t('reveal'), onSelect: () => doOpen(f.abs, 'reveal', f.rel, 'file') },
+              { label: t('matCopyPath'), onSelect: () => { if (p.copyText) p.copyText(f.abs); } },
+            ],
           }));
       };
 
-      const uploadPanel = () => h('div', { className: 'fde-card' },
-        h('div', { className: 'fde-card-title' }, t('artifactsUploadTitle')),
-        h('div', { className: 'fde-row', style: { marginBottom: 8 } },
+      const hasFilter = q.trim() !== '' || cat !== 'all';
+      const customerBlock = (eng) => {
+        const dir = str(eng.dir);
+        const c = counts.byEng[eng.id] || { key: 0, raw: 0, total: 0 };
+        const files = visible.filter((f) => f.engId === eng.id);
+        /* 搜索/类型筛选时只展开有命中的客户组，避免把空组全部撑开 */
+        const open = !!expanded[eng.id] || (hasFilter && files.length > 0);
+        const shown = files.slice(0, 80);
+        return h('div', { key: eng.id, className: 'fde-mat-cust-item' },
+          h('div', {
+            className: 'fde-mat-cust', role: 'button', tabIndex: 0, 'aria-expanded': open ? 'true' : 'false',
+            onClick: () => setExpanded((cur) => Object.assign({}, cur, { [eng.id]: !expanded[eng.id] })),
+            onKeyDown: (e) => { if (e && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setExpanded((cur) => Object.assign({}, cur, { [eng.id]: !expanded[eng.id] })); } },
+          },
+            h('span', { className: 'fde-caret' + (open ? ' open' : ''), 'aria-hidden': 'true' }, '›'),
+            h('span', { className: 'fde-mat-cust-name' }, str(eng.shortName || eng.name || eng.company || dir)),
+            eng.stage ? Chip({ tone: 'muted', children: stageLabel(meta, eng.stage) }) : null,
+            h('div', { className: 'fde-spacer' }),
+            h('span', { className: 'fde-hint' }, t('matKeyCount') + ' ' + c.key + (c.raw ? ' · ' + t('matRawCount') + ' ' + c.raw : ''))),
+          open
+            ? h('div', { className: 'fde-mat-cust-files' },
+              files.length === 0
+                ? h('div', { className: 'fde-hint', style: { padding: '6px 10px' } }, showRaw ? t('matNoMatch') : t('matEmpty') + '（' + t('matRawCount') + ' ' + c.raw + '）')
+                : shown.map((f) => fileRow(f)),
+              files.length > shown.length ? h('div', { className: 'fde-hint', style: { padding: '6px 10px' } }, '仅显示前 ' + shown.length + ' 个（共 ' + files.length + ' 个）。') : null)
+            : null);
+      };
+
+      const recentList = () => {
+        const shown = visible.slice(0, 120);
+        return h('div', { className: 'fde-mat-recent' },
+          shown.length === 0
+            ? h(Empty, {
+              mark: '▤', title: q || cat !== 'all' ? t('matNoMatch') : t('matEmpty'),
+              body: h('div', { className: 'fde-hint' }, q || cat !== 'all' ? t('matNoMatchHint') : t('matEmptyHint')),
+              actions: !showRaw && counts.raw > 0
+                ? h('div', { style: { marginTop: 8 } }, h(Btn, { small: true, onClick: () => setShowRaw(true) }, t('matRawToggle') + '（' + counts.raw + '）'))
+                : null,
+            })
+            : shown.map((f) => fileRow(f, { showCustomer: true })),
+          visible.length > shown.length ? h('div', { className: 'fde-hint', style: { padding: '8px 10px' } }, '仅显示最近 ' + shown.length + ' 份（共 ' + visible.length + ' 份）。') : null);
+      };
+
+      const uploadPanel = () => h('div', { className: 'fde-mat-upload' },
+        h('div', { className: 'fde-row', style: { marginBottom: 6 } },
           h(Select, {
             value: uploadDir, ariaLabel: t('artifactsPick'),
-            options: [{ value: '', label: '（选择客户）' }].concat(engs.filter((e) => e.dir).map((e) => ({ value: e.dir, label: e.shortName || e.name || e.dir }))),
+            options: [{ value: '', label: '（选择客户）' }].concat(engs.filter((e) => e.dir).map((e) => ({ value: str(e.dir), label: str(e.shortName || e.name || e.dir) }))),
             onChange: (e) => setUploadDir(e.target.value),
           }),
-          h('span', { className: 'fde-hint' }, '文件保存到该客户的 raw/uploads/')),
+          h('span', { className: 'fde-hint' }, '→ raw/uploads/'),
+          h('div', { className: 'fde-spacer' }),
+          h(Btn, { small: true, onClick: () => setUploadOpen(false) }, t('close'))),
         h('div', {
-          className: 'fde-drop' + (drag ? ' on' : ''),
-          role: 'button',
-          tabIndex: 0,
-          'aria-label': t('artifactsUploadTitle'),
+          className: 'fde-drop fde-mat-drop' + (drag ? ' on' : ''),
+          role: 'button', tabIndex: 0, 'aria-label': t('artifactsUploadTitle'),
           onDragOver: (e) => { if (e && e.preventDefault) e.preventDefault(); setDrag(true); },
           onDragLeave: () => setDrag(false),
           onDrop: (e) => { if (e && e.preventDefault) e.preventDefault(); setDrag(false); doUpload(e && e.dataTransfer && e.dataTransfer.files); },
           onClick: () => { if (fileInput.current) fileInput.current.click(); },
           onKeyDown: (e) => { if (e && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); if (fileInput.current) fileInput.current.click(); } },
         },
-          h('div', { style: { fontWeight: 600 } }, uploading ? uploadMsg || t('artifactsUploading') : t('artifactsUploadTitle')),
-          h('div', { className: 'fde-hint', style: { marginTop: 4 } }, t('artifactsUploadHint')),
-          h('input', {
-            ref: fileInput, type: 'file', multiple: true, style: { display: 'none' },
-            onChange: (e) => { doUpload(e.target.files); if (e && e.target) e.target.value = ''; },
-          })),
-        uploadMsg && !uploading ? h('div', { className: 'fde-hint', style: { marginTop: 8 } }, uploadMsg) : null,
-        h('div', { className: 'fde-hint', style: { marginTop: 8 } }, t('artifactsUploadNote')));
+          h('div', { style: { fontWeight: 600 } }, uploading ? t('artifactsUploading') : t('artifactsUploadTitle')),
+          h('div', { className: 'fde-hint' }, t('artifactsUploadHint')),
+          h('input', { ref: fileInput, type: 'file', multiple: true, style: { display: 'none' }, onChange: (e) => { doUpload(e.target.files); if (e && e.target) e.target.value = ''; } })),
+        uploadMsg ? h('div', { className: 'fde-hint', style: { marginTop: 6 } }, uploadMsg) : null);
 
-      return h('div', { className: 'fde-view' },
-        h('div', { className: 'fde-toolbar' },
-          h('div', { className: 'fde-section-title' }, t('artifactsTitle')),
+      const renderMatFiles = (m) => {
+        const list = matFiles[m.dir];
+        if (!list) return null;
+        return h('div', { className: 'fde-mat-subfiles' }, list.slice(0, 20).map((f) =>
+          h('div', { key: f.rel, className: 'fde-mat-subfile' },
+            h('span', { className: 'fde-mat-file-name' }, f.rel),
+            h(MatMenu, {
+              items: [
+                { label: t('matSystemOpen'), onSelect: () => doOpen(matAbsJoin(m.path, f.rel), 'open', f.rel, 'file') },
+                { label: t('reveal'), onSelect: () => doOpen(matAbsJoin(m.path, f.rel), 'reveal', f.rel, 'file') },
+              ],
+            }))));
+      };
+      const materialsPanel = () => {
+        const mats = materials || [];
+        const count = mats.length + loose.length;
+        const rows = mats.map((m) => h('div', { key: m.dir, className: 'fde-mat-file' },
+          h('span', { className: 'fde-mat-file-main' },
+            h('span', { className: 'fde-mat-file-name' }, m.dir),
+            h('span', { className: 'fde-mat-file-meta' }, m.fileCount + ' ' + t('artifactsFiles') + ' · ' + relTime(m.mtime))),
+          h(MatMenu, {
+            items: [
+              { label: t('matOpenDir'), onSelect: () => doOpen(m.path, 'open', m.dir, 'dir') },
+              { label: t('artifactsViewFiles'), onSelect: () => loadMatFiles(m.dir) },
+              { label: t('artifactsToProject'), onSelect: () => doToProject(m.dir) },
+            ],
+          }),
+          renderMatFiles(m)));
+        const looseRows = loose.slice(0, 40).map((f) => h('div', { key: 'loose-' + f.name, className: 'fde-mat-file' },
+          h('span', { className: 'fde-mat-file-main' },
+            h('span', { className: 'fde-mat-file-name' }, f.name),
+            h('span', { className: 'fde-mat-file-meta' }, matBytes(f.size))),
+          h(MatMenu, {
+            items: [
+              { label: t('matSystemOpen'), onSelect: () => doOpen(matAbsJoin(matRoot, f.name), 'open', f.name, 'file') },
+              { label: t('reveal'), onSelect: () => doOpen(matAbsJoin(matRoot, f.name), 'reveal', f.name, 'file') },
+            ],
+          })));
+        return h('div', { className: 'fde-mat-materials' },
+          h('div', {
+            className: 'fde-mat-cust', role: 'button', tabIndex: 0, 'aria-expanded': showMaterials ? 'true' : 'false',
+            onClick: () => { if (materials === null) loadMaterials(); setShowMaterials((v) => !v); },
+            onKeyDown: (e) => { if (e && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); if (materials === null) loadMaterials(); setShowMaterials((v) => !v); } },
+          },
+            h('span', { className: 'fde-caret' + (showMaterials ? ' open' : ''), 'aria-hidden': 'true' }, '›'),
+            h('span', { className: 'fde-mat-cust-name' }, t('matMaterials')),
+            h('div', { className: 'fde-spacer' }),
+            h('span', { className: 'fde-hint' }, count ? String(count) + ' ' + t('artifactsFiles') : '')),
+          showMaterials
+            ? h('div', { className: 'fde-mat-cust-files' },
+              h('div', { className: 'fde-hint', style: { padding: '6px 10px' } }, t('matMaterialsHint')),
+              materials === null ? h(Loading, { text: t('loading') }) : null,
+              rows,
+              loose.length ? h('div', { className: 'fde-hint', style: { padding: '8px 10px 2px' } }, t('artifactsLoose') + '（' + loose.length + '）') : null,
+              looseRows,
+              loose.length > 40 ? h('div', { className: 'fde-hint', style: { padding: '2px 10px 6px' } }, '仅显示前 40 个（共 ' + loose.length + ' 个）。') : null)
+            : null);
+      };
+
+      const countsText = loading ? '…' : (counts.key + ' ' + t('matKeyCount') + (counts.raw ? ' · ' + counts.raw + ' ' + t('matRawCount') : ''));
+      const cats = [
+        { key: 'all', label: t('matAll') },
+        { key: 'doc', label: t('matDoc') },
+        { key: 'pdf', label: t('matPdf') },
+        { key: 'office', label: t('matOffice') },
+        { key: 'image', label: t('matImage') },
+        { key: 'web', label: t('matWeb') },
+        { key: 'other', label: t('matOther') },
+      ];
+
+      const toolbar = h('div', { className: 'fde-mat-head' },
+        h('div', { className: 'fde-mat-title-row' },
+          h('div', { className: 'fde-mat-title' }, t('matTitle')),
+          h('span', { className: 'fde-hint' }, countsText),
           h('div', { className: 'fde-spacer' }),
+          h('input', {
+            className: 'fde-input fde-mat-search', type: 'search', value: q,
+            placeholder: t('matSearchPh'), 'aria-label': t('matSearchPh'),
+            onChange: (e) => setQ(e.target.value),
+          }),
+          h(Btn, { small: true, onClick: () => setUploadOpen((v) => !v), kind: uploadOpen ? 'primary' : undefined }, t('matUpload')),
           h(Btn, { small: true, onClick: doSync, busy: syncing }, syncing ? '重扫中…' : t('artifactsRefresh'))),
-        syncMsg ? h(MsgLine, { kind: 'ok', text: syncMsg, onClose: () => setSyncMsg('') }) : null,
-        engs.length === 0
-          ? h(Empty, {
-            mark: '▤', title: t('artifactsNoCustomer'),
-            actions: h('div', { className: 'fde-row', style: { justifyContent: 'center', marginTop: 8 } },
-              h(Btn, { small: true, kind: 'primary', onClick: p.onOpenCustomers }, t('customersTitle'))),
-          })
-          : h('div', { className: 'fde-acc' }, engs.map(customerBlock)),
-        uploadPanel(),
+        h('div', { className: 'fde-mat-filters' },
+          h('div', { className: 'fde-seg' },
+            h('button', { type: 'button', className: mode === 'recent' ? 'on' : '', onClick: () => setMode('recent') }, t('matRecent')),
+            h('button', { type: 'button', className: mode === 'customer' ? 'on' : '', onClick: () => setMode('customer') }, t('matByCustomer'))),
+          h('div', { className: 'fde-mat-pills' }, cats.map((c) => h('button', {
+            key: c.key, type: 'button', className: 'fde-pill' + (cat === c.key ? ' on' : ''),
+            onClick: () => setCat(c.key),
+          }, c.label))),
+          h('div', { className: 'fde-spacer' }),
+          h('button', {
+            type: 'button', className: 'fde-pill' + (showRaw ? ' on' : ''),
+            onClick: () => setShowRaw((v) => !v), title: t('matRawToggle'),
+          }, t('matRawToggle') + (counts.raw ? '（' + counts.raw + '）' : '')),
+          h('button', {
+            type: 'button', className: 'fde-pill' + (sort === 'name' ? ' on' : ''),
+            onClick: () => setSort((v) => (v === 'name' ? 'recent' : 'name')),
+          }, sort === 'name' ? t('matSortName') : t('matSortRecent'))));
+
+      /* 左右拖动分隔条调整列表宽度：默认 380，限制 280 ～ (容器宽 - 320)；
+         鼠标拖动 + 键盘 ←/→（Shift 加速）+ Home/End，宽度存模块内存，切面板回来仍保留。 */
+      const splitMax = () => {
+        const el = bodyRef.current;
+        const w = el ? el.getBoundingClientRect().width : 0;
+        return Math.max(300, Math.round(w - 320));
+      };
+      const onSplitterDown = (e) => {
+        if (!e) return;
+        if (e.preventDefault) e.preventDefault();
+        dragRef.current = { startX: Number(e.clientX) || 0, startW: listW, maxW: splitMax() };
+        const move = (ev) => {
+          const d = dragRef.current;
+          if (!d) return;
+          const next = Math.min(d.maxW, Math.max(300, d.startW + (Number(ev.clientX) || 0) - d.startX));
+          setListW(Math.round(next));
+        };
+        const up = () => {
+          dragRef.current = null;
+          document.removeEventListener('mousemove', move);
+          document.removeEventListener('mouseup', up);
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+      };
+      const onSplitterKey = (e) => {
+        if (!e || !e.key) return;
+        const step = (e.shiftKey ? 48 : 16);
+        if (e.key === 'ArrowLeft') { if (e.preventDefault) e.preventDefault(); setListW((w) => Math.max(300, w - step)); }
+        else if (e.key === 'ArrowRight') { if (e.preventDefault) e.preventDefault(); setListW((w) => Math.min(splitMax(), w + step)); }
+        else if (e.key === 'Home') { if (e.preventDefault) e.preventDefault(); setListW(300); }
+        else if (e.key === 'End') { if (e.preventDefault) e.preventDefault(); setListW(splitMax()); }
+      };
+      const splitter = h('div', {
+        className: 'fde-mat-splitter',
+        role: 'separator',
+        'aria-orientation': 'vertical',
+        'aria-label': t('matSplitHint'),
+        title: t('matSplitHint'),
+        tabIndex: 0,
+        onMouseDown: onSplitterDown,
+        onKeyDown: onSplitterKey,
+      });
+
+      const listPane = h('div', { className: 'fde-mat-list', style: narrow ? undefined : { flex: '0 0 ' + listW + 'px' } },
+        uploadOpen ? uploadPanel() : null,
+        loading && !allFiles.length ? h(Loading, { text: '正在读取客户资料…' }) : null,
+        !loading && mode === 'recent' ? recentList() : null,
+        !loading && mode === 'customer' ? h('div', { className: 'fde-mat-custs' }, engs.map(customerBlock)) : null,
         materialsPanel());
+      const previewPane = h(FilePreview, {
+        file: active,
+        full,
+        onBack: narrow ? () => setActive(null) : null,
+        onToggleFull: (v) => setFull(!!v),
+        onClose: narrow ? null : (active ? () => setActive(null) : null),
+        officeToPdf: loadOfficePdf,
+        onOpenPath: p.openPath,
+        onReveal: p.openPath ? (abs, rel) => p.openPath(abs, 'reveal', rel, 'file') : null,
+        onExport: doExport,
+        onQa: doQa,
+      });
+      const body = engs.length === 0
+        ? h(Empty, {
+          mark: '▤', title: t('artifactsNoCustomer'),
+          actions: h('div', { style: { marginTop: 8 } }, h(Btn, { small: true, kind: 'primary', onClick: p.onOpenCustomers }, t('customersTitle'))),
+        })
+        : h('div', { className: 'fde-mat-body' + (narrow ? ' narrow' : ''), ref: bodyRef },
+          narrow ? (active ? previewPane : listPane) : h(React.Fragment, null, listPane, splitter, previewPane));
+
+      return h('div', { className: 'fde-materials', ref: rootRef },
+        toolbar,
+        syncMsg ? h(MsgLine, { kind: 'ok', text: syncMsg, onClose: () => setSyncMsg('') }) : null,
+        loadErr ? h(ErrorLine, { title: t('matLoadFail'), text: loadErr, onRetry: loadAllFiles }) : null,
+        body);
+    }
+
+    /* 从 sessions 快照里挑一个当前工作区的会话，作为 workspaceFiles/officeToPdf 的授权作用域。
+       预览是本工作区只读操作，复用任一该工作区会话，不创建会话、不切换会话。 */
+    function pickSessionIdForRoot(root, sessions) {
+      try {
+        const snap = sessions && sessions.list && sessions.list.getSnapshot ? sessions.list.getSnapshot() : null;
+        const ids = asList(snap && snap.ids);
+        if (!ids.length) return '';
+        const base = str(root).replace(/\/+$/, '');
+        const cwdOf = (id) => str(snap && snap.byId ? (snap.byId[id] || {}).cwd : '').replace(/\/+$/, '');
+        const updatedOf = (id) => Number((snap && snap.byId ? (snap.byId[id] || {}).updatedAt : 0)) || 0;
+        /* 优先本工作区、且最近更新过的会话：切过去看原生预览时落在用户刚才的上下文里 */
+        const inRoot = ids.filter((id) => {
+          const cwd = cwdOf(id);
+          return !base || (cwd && (cwd === base || cwd.indexOf(base + '/') === 0));
+        });
+        const pool = inRoot.length ? inRoot : ids;
+        pool.sort((a, b) => updatedOf(b) - updatedOf(a));
+        return str(pool[0]);
+      } catch (e) {
+        return '';
+      }
     }
 
     /* ============================================================
@@ -5061,9 +5670,8 @@ window.__ModuleLoader__.load({
             children: [
               h('div', { className: 'fde-note' }, t('settingsRestartBody')),
               h('div', { className: 'fde-tip', style: { marginTop: 8 } },
-                '重启方式：退出并重新打开 DSH（宿主半路由与技能注册在启动时加载）；随后刷新此页面。回滚：删除 research/.fde/ 即回到旧工作台。'),
+                '重启方式：退出并重新打开 DSH（宿主半路由与技能注册在启动时加载），随后刷新此页面。'),
               h('div', { className: 'fde-row', style: { marginTop: 10 } },
-                p.onClassic ? h(Btn, { small: true, onClick: p.onClassic }, t('settingsClassicEntry')) : null,
                 p.onReprobe ? h(Btn, { small: true, onClick: p.onReprobe }, '重新探测 FDE 路由') : null),
             ],
           })));
@@ -5785,7 +6393,7 @@ window.__ModuleLoader__.load({
           h('div', { className: 'fde-section-title' }, t('tabSettings'))),
         h(SettingsView, {
           meta: p.meta, board: p.board, busy: p.busy, bidStats: p.bidStats,
-          onRefresh: p.onRefresh, onClassic: p.onClassic, onReprobe: p.onReprobe,
+          onRefresh: p.onRefresh, onReprobe: p.onReprobe,
           demo: p.demo, demoBusy: p.demoBusy, onDemoRestore: p.onDemoRestore,
         }));
     }
@@ -5801,7 +6409,8 @@ window.__ModuleLoader__.load({
       const [meta, setMeta] = useState(p.meta);
       const [board, setBoard] = useState(null);
       const [stats, setStats] = useState(null);
-      const [view, setView] = useState('today');
+      const [view, setView] = useState(FDE_VIEW_MEM.view);
+      useEffect(() => { FDE_VIEW_MEM.view = view; }, [view]);
       /* Phase 2：页内子页签状态（layout.md §7） */
       const [customersTab, setCustomersTab] = useState('board-customer'); /* board-customer | board-item | list */
       const [knowledgeTab, setKnowledgeTab] = useState('library'); /* library | bids */
@@ -6570,9 +7179,9 @@ window.__ModuleLoader__.load({
       const navItems = [
         { key: 'today', label: t('tabToday'), count: attentionCount || null },
         { key: 'customers', label: t('tabCustomers'), count: null },
-        { key: 'knowledge', label: t('tabKnowledge'), count: null },
-        { key: 'process', label: t('tabProcess'), count: null },
         { key: 'files', label: t('tabNavFiles'), count: null },
+        { key: 'process', label: t('tabProcess'), count: null },
+        { key: 'knowledge', label: t('tabKnowledge'), count: null },
       ];
 
       const viewNode = () => {
@@ -6626,6 +7235,7 @@ window.__ModuleLoader__.load({
             onOpenPath: actions.openPath,
             openPath: actions.openPath,
             openSession: actions.openSession,
+            services: actions.services || {},
             copyText,
             onScanNow: startScan,
             onRefresh: () => refreshAll(false),
@@ -6636,7 +7246,6 @@ window.__ModuleLoader__.load({
             meta, board, busy,
             bidStats: normalizeBoardBidStats(board),
             onRefresh: () => refreshAll(false),
-            onClassic: p.onClassic,
             onReprobe: p.onReprobe,
             onBack: closeSettings,
             demo: { active: demoActive, dismissed: demoDismissed, empty: isBoardEmpty(board) },
@@ -6680,8 +7289,7 @@ window.__ModuleLoader__.load({
               'aria-label': t('tabSettings'),
               'aria-pressed': activeView === 'settings' ? 'true' : 'false',
               onClick: activeView === 'settings' ? closeSettings : openSettings,
-            }, '⚙'),
-            p.onClassic ? h(Btn, { small: true, onClick: p.onClassic }, t('classicMode')) : null)),
+            }, '⚙'))),
         h('div', { className: 'fde-nav-wrap' },
           h('div', { className: 'fde-nav', role: 'tablist', 'aria-label': 'FDE 视图' },
             navItems.map((n) => h('button', {
@@ -6770,423 +7378,9 @@ window.__ModuleLoader__.load({
     }
 
     /* ============================================================
-     * 十五、经典模式（旧五页签，完整保留）
-     * 宿主未提供 FDE 路由时仍可继续原有工作流：新建调研 / 项目 /
-     * 产物导出 / 素材 / 方法；旧 API 前缀与 Finder 三通道全部沿用。
-     * ============================================================ */
-    const STAGES = [
-      ['subject', DICT.stageSubject], ['crawl', DICT.stageCrawl], ['factcheck', DICT.stageFact],
-      ['kpi', DICT.stageKpi], ['meeting', DICT.stageMeeting], ['proposal', DICT.stageProposal],
-    ];
-    function ClassicApp(props) {
-      const actions = (props && props.actions) || {};
-      const [tab, setTab] = useState('new');
-      const [status, setStatus] = useState(null);
-      const [projects, setProjects] = useState([]);
-      const [methods, setMethods] = useState([]);
-      const [msg, setMsg] = useState(null);
-      const [busy, setBusy] = useState('');
-      const [form, setForm] = useState({ company: '', person: '', role: '', purpose: '', when: '', where: '' });
-      const [pickDir, setPickDir] = useState('');
-      const [files, setFiles] = useState([]);
-      const [filesPath, setFilesPath] = useState('');
-      const [methodBody, setMethodBody] = useState(null);
-      const [materials, setMaterials] = useState([]);
-      const [loose, setLoose] = useState([]);
-      const [matRoot, setMatRoot] = useState('');
-      const [matFiles, setMatFiles] = useState({});
-      const [drag, setDrag] = useState(false);
-      const [uploadMsg, setUploadMsg] = useState('');
-      const fileInput = useRef(null);
-
-      const load = useCallback(async () => {
-        const s = await getJSON(API + '/status');
-        if (s && s.ok === false) { setStatus(null); setMsg({ kind: 'warn', text: s.reason || '状态读取失败' }); }
-        else setStatus(s);
-        const p = await getJSON(API + '/projects');
-        const list = Array.isArray(p.projects) ? p.projects : [];
-        setProjects(list);
-        const work = list.filter((x) => x.kind !== 'material');
-        setPickDir((cur) => cur || (work[0] && work[0].dir) || '');
-        const m = await getJSON(API + '/methods');
-        setMethods(Array.isArray(m.items) ? m.items : []);
-        const mat = await getJSON(API + '/materials');
-        setMaterials(Array.isArray(mat.materials) ? mat.materials : []);
-        setLoose(Array.isArray(mat.loose) ? mat.loose : []);
-        setMatRoot(typeof mat.root === 'string' ? mat.root : '');
-      }, []);
-
-      useEffect(() => { load(); }, [load]);
-
-      useEffect(() => {
-        if (!pickDir) { setFiles([]); setFilesPath(''); return undefined; }
-        let alive = true;
-        getJSON(API + '/files?dir=' + encodeURIComponent(pickDir)).then((r) => {
-          if (!alive) return;
-          setFiles(Array.isArray(r.files) ? r.files : []);
-          setFilesPath(typeof r.path === 'string' ? r.path : '');
-        });
-        return () => { alive = false; };
-      }, [pickDir, busy]);
-
-      const gotoSession = useCallback((sessionId) => {
-        if (!sessionId || typeof actions.openSession !== 'function') return;
-        /* openSession 宿主契约是 void，不按返回值重试（§2.5）。 */
-        try { actions.openSession(sessionId); } catch (e) { /* ignore */ }
-      }, [actions]);
-
-      const copyText = useCallback(async (s) => {
-        try { await navigator.clipboard.writeText(s); return true; } catch (e) { return false; }
-      }, []);
-
-      /* 在 Finder 中定位 / 打开：优先走客户端 Remote（无需重启 DSH），失败再退到宿主路由 */
-      const doOpen = useCallback(async (abs, mode, label, kind) => {
-        if (!abs) { setMsg({ kind: 'warn', text: t('noPath') }); return; }
-        setBusy('open:' + abs); setMsg(null);
-        let r = { ok: false, reason: '面板未接线' };
-        try {
-          if (actions && typeof actions.openPath === 'function') r = await actions.openPath(abs, mode, kind || 'file');
-        } catch (e) { r = { ok: false, reason: String((e && e.message) || e) }; }
-        setBusy('');
-        if (r && r.ok) {
-          setMsg({ kind: 'ok', text: (mode === 'reveal' ? t('revealOk') : t('openOk')) + '：' + (label || abs) });
-          return;
-        }
-        const copied = await copyText(abs);
-        setMsg({
-          kind: 'warn',
-          text: t('revealFail') + '（' + ((r && r.reason) || '未知原因') + '）'
-            + (copied ? '，' + t('pathCopied') : '') + '：' + abs,
-        });
-      }, [actions, copyText]);
-
-      const doCopy = useCallback(async (abs) => {
-        if (!abs) { setMsg({ kind: 'warn', text: t('noPath') }); return; }
-        const okc = await copyText(abs);
-        setMsg(okc ? { kind: 'ok', text: t('pathCopied') + '：' + abs } : { kind: 'warn', text: '复制失败：' + abs });
-      }, [copyText]);
-
-      const rootAbs = (status && status.root) || '';
-      const pickAbs = filesPath || (rootAbs && pickDir ? rootAbs.replace(/\/+$/, '') + '/research/' + pickDir : '');
-      const absOf = (rel) => (filesPath && rel ? filesPath.replace(/\/+$/, '') + '/' + rel : '');
-
-      const setF = (k) => (e) => setForm((f) => Object.assign({}, f, { [k]: e.target.value }));
-
-      const doScaffold = async (alsoStart) => {
-        if (!form.company.trim()) { setMsg({ kind: 'warn', text: t('needCompany') }); return; }
-        setBusy('scaffold'); setMsg(null);
-        const r = await postJSON(API + '/scaffold', form, 60000);
-        if (!r.ok) { setBusy(''); setMsg({ kind: 'warn', text: r.reason || '立项失败' }); return; }
-        await load();
-        if (!alsoStart) {
-          setBusy(''); setTab('projects');
-          setMsg({ kind: 'ok', text: t('madeOnly') + '：' + r.dir });
-          return;
-        }
-        setBusy('handoff');
-        const ho = await postJSON(API + '/handoff', Object.assign({ action: 'start' }, form), 60000);
-        setBusy('');
-        if (ho.ok && ho.sessionId) {
-          setTab('projects');
-          setMsg({ kind: 'ok', text: t('madeAndHandoff') });
-          gotoSession(ho.sessionId);
-        } else {
-          if (ho.promptText) await copyText(ho.promptText);
-          setTab('projects');
-          setMsg({ kind: 'warn', text: (ho.reason || t('noSession')) + (ho.promptText ? ' ' + t('copied') : '') });
-        }
-      };
-
-      const doStage = async (dir, stage) => {
-        setBusy('stage:' + dir + ':' + stage); setMsg(null);
-        const r = await postJSON(API + '/handoff', { action: 'stage', dir, stage }, 60000);
-        setBusy('');
-        if (r.ok && r.sessionId) { setMsg({ kind: 'ok', text: '已下发任务，正在跳转…' }); gotoSession(r.sessionId); }
-        else { if (r.promptText) await copyText(r.promptText); setMsg({ kind: 'warn', text: r.reason || t('handoffFail') }); }
-      };
-
-      const doAdopt = async (dir) => {
-        setBusy('adopt:' + dir);
-        const r = await postJSON(API + '/adopt', { dir });
-        setBusy(''); await load();
-        setMsg(r.ok ? { kind: 'ok', text: r.existed ? '该项目已建档' : t('adopted') + '：' + dir } : { kind: 'warn', text: r.reason || '补建失败' });
-      };
-
-      const doExport = async (dir, md) => {
-        setBusy('export:' + md); setMsg(null);
-        const r = await postJSON(API + '/handoff', { action: 'export', dir, md }, 60000);
-        setBusy('');
-        if (r.ok && r.sessionId) { setMsg({ kind: 'ok', text: t('exporting') }); gotoSession(r.sessionId); }
-        else { if (r.promptText) await copyText(r.promptText); setMsg({ kind: 'warn', text: r.reason || t('handoffFail') }); }
-      };
-
-      const doQa = async (dir, pdf) => {
-        setBusy('qa:' + pdf); setMsg(null);
-        const r = await postJSON(API + '/handoff', { action: 'qa', dir, pdf }, 60000);
-        setBusy('');
-        if (r.ok && r.sessionId) { setMsg({ kind: 'ok', text: '已下发质检任务，正在跳转…' }); gotoSession(r.sessionId); }
-        else { if (r.promptText) await copyText(r.promptText); setMsg({ kind: 'warn', text: r.reason || t('handoffFail') }); }
-      };
-
-      const doUpload = async (fileList) => {
-        const arr = Array.from(fileList || []);
-        if (!arr.length) return;
-        if (!pickDir) { setUploadMsg('请先选择项目'); return; }
-        setBusy('upload'); setUploadMsg(t('uploading') + '（' + arr.length + ' 个文件）');
-        const filesPayload = [];
-        for (const f of arr) {
-          try {
-            const dataUrl = await new Promise((res, rej) => {
-              const rd = new FileReader();
-              rd.onload = () => res(String(rd.result || ''));
-              rd.onerror = () => rej(new Error('读取失败'));
-              rd.readAsDataURL(f);
-            });
-            filesPayload.push({ name: f.name, data: dataUrl });
-          } catch (e) { /* 跳过该文件 */ }
-        }
-        const r = await postJSON(API + '/upload', { dir: pickDir, files: filesPayload }, 180000);
-        setBusy('');
-        if (r.ok) {
-          const names = (r.saved || []).map((x) => x.name).join('、');
-          setUploadMsg(t('uploaded') + ' ' + (r.saved || []).length + ' 个：' + names + (r.failed && r.failed.length ? '（失败 ' + r.failed.length + '）' : ''));
-          setBusy('refresh');
-          await load();
-          setBusy('');
-        } else {
-          setUploadMsg((r.reason || '上传失败') + (r.failed && r.failed.length ? '：' + r.failed.map((x) => x.name).join('、') : ''));
-        }
-      };
-
-      const doToProject = async (dir) => {
-        setBusy('toproj:' + dir);
-        const r = await postJSON(API + '/toproject', { dir, company: dir });
-        setBusy(''); await load();
-        setMsg(r.ok ? { kind: 'ok', text: t('converted') + '：' + dir } : { kind: 'warn', text: r.reason || '转换失败' });
-        if (r.ok) setTab('projects');
-      };
-
-      const loadMatFiles = async (dir) => {
-        if (matFiles[dir]) { const nx = Object.assign({}, matFiles); delete nx[dir]; setMatFiles(nx); return; }
-        const r = await getJSON(API + '/material-files?dir=' + encodeURIComponent(dir));
-        setMatFiles(Object.assign({}, matFiles, { [dir]: Array.isArray(r.files) ? r.files : [] }));
-      };
-
-      const readMethod = async (nm) => {
-        const r = await getJSON(API + '/methods?name=' + encodeURIComponent(nm.replace(/\.md$/, '')));
-        setMethodBody(r.ok ? { name: r.file, body: r.body } : { name: nm, body: r.reason || '读取失败' });
-      };
-
-      const stageOf = (p) => [
-        ['立项', !!p.stages.archive], ['调研', p.stages.research > 0],
-        ['会面', p.stages.meeting > 0], ['方案', p.stages.proposal > 0], ['导出', p.stages.exports > 0],
-      ];
-
-      const mdFiles = files.filter((f) => f.kind === 'md');
-      const pdfFiles = files.filter((f) => f.kind === 'pdf');
-      const workProjects = projects.filter((x) => x.kind !== 'material');
-      const matDirs = projects.filter((x) => x.kind === 'material');
-
-      return h('div', { className: 'rw-root' },
-        h('div', { className: 'fde-classic-bar' },
-          h('span', { className: 'fde-classic-title' }, t('classicBar')),
-          h('div', { className: 'fde-spacer' }),
-          props.onFde ? h('button', { className: 'rw-btn small primary', onClick: props.onFde }, t('backToFde')) : null,
-          props.onRetryProbe ? h('button', { className: 'rw-btn small', onClick: props.onRetryProbe }, '重试探测 FDE') : null),
-        h('div', { className: 'rw-head' },
-          h('div', { className: 'rw-title' }, t('brand')),
-          h('div', { className: 'rw-sub' }, t('tagline'))),
-        h('div', { className: 'rw-bar' },
-          status ? h('span', { className: 'rw-sub' }, t('root') + '：' + (status.root || '-')) : h('span', { className: 'rw-sub' }, t('loading')),
-          status ? h('span', { className: 'rw-sub' }, t('projects') + ' ' + (status.projects || 0)) : null,
-          status && status.materials ? h('span', { className: 'rw-sub' }, t('tabMaterials') + ' ' + status.materials + (status.loose ? ' + 散落 ' + status.loose : '')) : null,
-          status ? h('span', { className: 'rw-sub' }, t('methods') + ' ' + ((status.methods || 0) + (status.reference || 0))) : null,
-          status && status.hasSession === false ? h('span', { className: 'rw-warn' }, t('noSession')) : null,
-          status ? h('button', {
-            className: 'rw-btn small', disabled: !!busy,
-            onClick: () => doOpen(rootAbs, 'open', rootAbs, 'dir'),
-          }, t('revealDir')) : null,
-          status ? h('button', { className: 'rw-btn small', onClick: () => doCopy(rootAbs) }, t('copyPath')) : null,
-          h('button', { className: 'rw-btn small', onClick: load }, t('refresh'))),
-        msg ? h('div', { className: msg.kind === 'ok' ? 'rw-ok' : 'rw-warn' }, msg.text) : null,
-        h('div', { className: 'rw-tabs' },
-          [['new', t('tabNew')], ['projects', t('tabProjects')], ['files', t('tabFiles')], ['materials', t('tabMaterials')], ['methods', t('tabMethods')]]
-            .map(([k, label]) => h('button', {
-              key: k, className: tab === k ? 'on' : '',
-              onClick: () => { setTab(k); setMethodBody(null); },
-            }, label))),
-
-        tab === 'new' ? h('div', { className: 'rw-card' },
-          h('div', { style: { fontWeight: 600, marginBottom: 10 } }, t('newTitle')),
-          h('div', { className: 'rw-form' },
-            h('div', { className: 'rw-field' }, h('label', null, t('company') + ' *'),
-              h('input', { className: 'rw-input', value: form.company, placeholder: t('companyPh'), onChange: setF('company') })),
-            h('div', { className: 'rw-field' }, h('label', null, t('person')),
-              h('input', { className: 'rw-input', value: form.person, placeholder: t('personPh'), onChange: setF('person') })),
-            h('div', { className: 'rw-field' }, h('label', null, t('role')),
-              h('input', { className: 'rw-input', value: form.role, placeholder: t('rolePh'), onChange: setF('role') })),
-            h('div', { className: 'rw-field' }, h('label', null, t('when')),
-              h('input', { className: 'rw-input', value: form.when, placeholder: '2026-10-13 下午', onChange: setF('when') })),
-            h('div', { className: 'rw-field' }, h('label', null, t('where')),
-              h('input', { className: 'rw-input', value: form.where, placeholder: '某园区 · 某大厦', onChange: setF('where') })),
-            h('div', { className: 'rw-field rw-full' }, h('label', null, t('purpose')),
-              h('input', { className: 'rw-input', value: form.purpose, placeholder: t('purposePh'), onChange: setF('purpose') }))),
-          h('div', { className: 'rw-actions' },
-            h('button', { className: 'rw-btn primary', disabled: !!busy, onClick: () => doScaffold(true) },
-              busy ? t('starting') : t('start')),
-            h('button', { className: 'rw-btn', disabled: !!busy, onClick: () => doScaffold(false) }, t('scaffoldOnly'))),
-          h('div', { className: 'rw-empty', style: { marginTop: 10 } }, t('hint'))) : null,
-
-        tab === 'projects' ? h('div', { className: 'rw-card' },
-          workProjects.length === 0 ? h('div', { className: 'rw-empty' }, t('empty') + (matDirs.length ? '（另有 ' + matDirs.length + ' 个素材目录在「素材」页签）' : ''))
-            : workProjects.map((p) => h('div', { key: p.dir, className: 'rw-proj' },
-              h('div', { className: 'rw-pname' }, (p.title || p.dir) + (p.kind === 'material' ? t('materialTag') : p.adopted ? '' : t('legacyTag'))),
-              h('div', { className: 'rw-sub' }, p.dir + ' ｜ ' + p.fileCount + ' ' + t('filesCount') + ' ｜ research ' + p.stages.research + ' · meeting ' + p.stages.meeting + ' · proposal ' + p.stages.proposal + ' · PDF ' + p.stages.exports),
-              h('div', { className: 'rw-prow' },
-                stageOf(p).map(([label, on]) => h('span', { key: label, className: 'rw-chip' + (on ? ' on' : '') }, label)),
-                h('button', {
-                  className: 'rw-btn small', disabled: !!busy, title: p.path || p.dir,
-                  onClick: () => doOpen(p.path, 'open', p.dir, 'dir'),
-                }, t('revealDir')),
-                h('button', { className: 'rw-btn small', onClick: () => doCopy(p.path) }, t('copyPath')),
-                !p.adopted ? h('button', { className: 'rw-btn small', disabled: busy === 'adopt:' + p.dir, onClick: () => doAdopt(p.dir) }, t('adopt')) : null),
-              h('div', { className: 'rw-prow' },
-                STAGES.map(([k, label]) => h('button', {
-                  key: k, className: 'rw-btn small', disabled: !!busy, onClick: () => doStage(p.dir, k),
-                }, label)))))) : null,
-
-        tab === 'files' ? h('div', { className: 'rw-card' },
-          h('div', { className: 'rw-field', style: { maxWidth: 360, marginBottom: 10 } },
-            h('label', null, t('pickProject')),
-            h('select', { className: 'rw-select', value: pickDir, onChange: (e) => setPickDir(e.target.value) },
-              workProjects.length === 0 ? h('option', { value: '' }, '（无项目）')
-                : workProjects.map((p) => h('option', { key: p.dir, value: p.dir }, (p.title || p.dir) + (p.adopted ? '' : t('legacyTag')))))),
-          /* 文件到底在哪儿：显示绝对路径 + 一键在 Finder 中打开 */
-          pickDir ? h('div', { className: 'rw-loc' },
-            h('span', { className: 'rw-sub' }, t('locLabel') + '：'),
-            h('code', null, pickAbs || '（未知，点「刷新」）'),
-            h('button', { className: 'rw-btn small', disabled: !!busy, onClick: () => doOpen(pickAbs, 'open', pickDir, 'dir') }, t('revealDir')),
-            h('button', { className: 'rw-btn small', onClick: () => doCopy(pickAbs) }, t('copyPath'))) : null,
-          /* 上传区 */
-          pickDir ? h('div', {
-            className: 'rw-drop' + (drag ? ' on' : ''),
-            onDragOver: (e) => { e.preventDefault(); setDrag(true); },
-            onDragLeave: () => setDrag(false),
-            onDrop: (e) => { e.preventDefault(); setDrag(false); doUpload(e.dataTransfer && e.dataTransfer.files); },
-            onClick: () => { if (fileInput.current) fileInput.current.click(); },
-          },
-            h('div', { style: { fontWeight: 600 } }, uploadMsg || t('uploadTitle')),
-            h('div', { className: 'rw-sub' }, t('uploadHint')),
-            h('input', {
-              ref: fileInput, type: 'file', multiple: true, style: { display: 'none' },
-              onChange: (e) => { doUpload(e.target.files); e.target.value = ''; },
-            })) : null,
-          pickDir ? h('div', { className: 'rw-empty', style: { marginTop: 6 } }, t('uploadNote')) : null,
-
-          mdFiles.length === 0 ? h('div', { className: 'rw-empty' }, t('noFiles'))
-            : h('div', { className: 'rw-files' }, mdFiles.map((f) => h('div', { key: f.rel, className: 'rw-file' },
-              h('code', null, f.rel),
-              h('span', { className: 'rw-chip' + (f.exported ? ' on' : '') }, f.exported ? t('exported') : t('notExported')),
-              h('button', {
-                className: 'rw-btn small primary', disabled: !!busy, onClick: () => doExport(pickDir, f.rel),
-              }, t('export')),
-              f.exported ? h('button', {
-                className: 'rw-btn small', disabled: !!busy, onClick: () => doQa(pickDir, f.pdfRel),
-              }, t('qa')) : null,
-              h('button', {
-                className: 'rw-btn small', disabled: !!busy, title: absOf(f.rel),
-                onClick: () => doOpen(absOf(f.rel), 'reveal', f.rel, 'file'),
-              }, t('reveal')),
-              h('button', {
-                className: 'rw-btn small', disabled: !!busy, title: absOf(f.rel),
-                onClick: () => doOpen(absOf(f.rel), 'open', f.rel, 'file'),
-              }, t('openInApp'))))),
-          (function () {
-            const assets = files.filter((f) => f.kind === 'asset');
-            if (!assets.length) return null;
-            return h('div', { style: { marginTop: 12 } },
-              h('div', { className: 'rw-sub' }, '原始素材 / 上传文件（' + assets.length + '）'),
-              h('div', { className: 'rw-files' }, assets.slice(0, 60).map((f) => h('div', { key: f.rel, className: 'rw-file' },
-                h('code', null, f.rel),
-                h('span', { className: 'rw-chip' }, (f.size / 1024).toFixed(0) + ' KB'),
-                h('button', {
-                  className: 'rw-btn small', disabled: !!busy, title: absOf(f.rel),
-                  onClick: () => doOpen(absOf(f.rel), 'reveal', f.rel, 'file'),
-                }, t('reveal')),
-                f.upload ? h('span', { className: 'rw-chip on' }, '上传') : null))));
-          })(),
-          pdfFiles.length ? h('div', { style: { marginTop: 12 } },
-            h('div', { className: 'rw-sub' }, '已有 PDF（' + pdfFiles.length + '）'),
-            h('div', { className: 'rw-files' }, pdfFiles.map((f) => h('div', { key: f.rel, className: 'rw-file' },
-              h('code', null, f.rel),
-              h('button', { className: 'rw-btn small', disabled: !!busy, onClick: () => doQa(pickDir, f.rel) }, t('qa')),
-              h('button', {
-                className: 'rw-btn small', disabled: !!busy, title: absOf(f.rel),
-                onClick: () => doOpen(absOf(f.rel), 'reveal', f.rel, 'file'),
-              }, t('reveal')),
-              h('button', {
-                className: 'rw-btn small', disabled: !!busy, title: absOf(f.rel),
-                onClick: () => doOpen(absOf(f.rel), 'open', f.rel, 'file'),
-              }, t('openInApp')))))) : null,
-          h('div', { className: 'rw-empty', style: { marginTop: 10 } }, t('fmtHint') + ' ' + t('revealHint'))) : null,
-
-        tab === 'materials' ? h('div', { className: 'rw-card' },
-          h('div', { style: { fontWeight: 600, marginBottom: 6 } }, t('materialsTitle')),
-          h('div', { className: 'rw-empty' }, t('materialsHint')),
-          materials.length === 0 ? h('div', { className: 'rw-empty' }, t('noMaterials'))
-            : materials.map((p) => h('div', { key: p.dir, className: 'rw-proj' },
-              h('div', { className: 'rw-pname' }, p.dir + ' ｜ ' + p.fileCount + ' ' + t('filesCount')),
-              h('div', { className: 'rw-sub' }, '最近更新 ' + new Date(p.mtime).toISOString().slice(0, 16).replace('T', ' ')),
-              h('div', { className: 'rw-prow' },
-                h('button', { className: 'rw-btn small', onClick: () => loadMatFiles(p.dir) },
-                  matFiles[p.dir] ? t('hideFiles') : t('viewFiles')),
-                h('button', {
-                  className: 'rw-btn small', disabled: !!busy, title: p.path || p.dir,
-                  onClick: () => doOpen(p.path, 'open', p.dir, 'dir'),
-                }, t('revealDir')),
-                h('button', {
-                  className: 'rw-btn small primary', disabled: busy === 'toproj:' + p.dir, onClick: () => doToProject(p.dir),
-                }, t('toProject'))),
-              matFiles[p.dir] ? h('div', { className: 'rw-files' }, matFiles[p.dir].slice(0, 40).map((f) => h('div', { key: f.rel, className: 'rw-file' },
-                h('code', null, f.rel),
-                h('span', { className: 'rw-chip' }, f.kind),
-                h('button', {
-                  className: 'rw-btn small', disabled: !!busy, title: (p.path || '') + '/' + f.rel,
-                  onClick: () => doOpen((p.path || '') + '/' + f.rel, 'reveal', f.rel, 'file'),
-                }, t('reveal'))))) : null)),
-          loose.length ? h('div', { style: { marginTop: 14 } },
-            h('div', { style: { fontWeight: 600 } }, t('looseTitle')),
-            loose.length === 0 ? h('div', { className: 'rw-empty' }, t('noLoose'))
-              : h('div', { className: 'rw-files' }, loose.slice(0, 60).map((f) => h('div', { key: f.name, className: 'rw-file' },
-                h('code', null, f.name),
-                h('span', { className: 'rw-chip' }, (f.size / 1024).toFixed(0) + ' KB'),
-                h('button', {
-                  className: 'rw-btn small', disabled: !!busy, title: matRoot ? matRoot + '/' + f.name : f.name,
-                  onClick: () => doOpen(matRoot ? matRoot + '/' + f.name : '', 'reveal', f.name, 'file'),
-                }, t('reveal')),
-                h('button', {
-                  className: 'rw-btn small', disabled: !!busy, title: matRoot ? matRoot + '/' + f.name : f.name,
-                  onClick: () => doOpen(matRoot ? matRoot + '/' + f.name : '', 'open', f.name, 'file'),
-                }, t('openInApp')))))) : null,
-        ) : null,
-
-        tab === 'methods' ? h('div', { className: 'rw-card' },
-          methodBody ? h('div', null,
-            h('div', { className: 'rw-prow' },
-              h('button', { className: 'rw-btn small', onClick: () => setMethodBody(null) }, t('back')),
-              h('span', { className: 'rw-sub' }, methodBody.name)),
-            h('pre', { className: 'rw-pre' }, methodBody.body))
-            : h('div', { className: 'rw-mth' },
-              methods.map((m) => h('button', { key: m.kind + m.name, onClick: () => readMethod(m.name) },
-                '[' + m.kind + '] ' + m.name.replace(/\.md$/, ''))))) : null,
-      );
-    }
-
-
-    /* ============================================================
-     * 十六、兼容页 / 根组件 / 注册
-     * 启动先探测 GET /fde/meta：成功进九视图；404 或失败显示兼容页并
-     * 保留「经典模式」入口。任何分支都渲染 UI，不白屏。
+     * 十五、宿主未就绪页 / 根组件 / 注册
+     * 启动先探测 GET /fde/meta：成功进主面板；失败显示精简的
+     * 「宿主未就绪」页（只给重试与重启说明），任何分支都不白屏。
      * ============================================================ */
     function CompatPage(props) {
       const p = props || {};
@@ -7196,8 +7390,7 @@ window.__ModuleLoader__.load({
             h('div', { className: 'fde-title' }, t('fdeBrand')),
             h('div', { className: 'fde-subtitle' }, t('fdeTagline'))),
           h('div', { className: 'fde-top-right' },
-            h(Btn, { small: true, onClick: p.onRetry }, t('compatRetry')),
-            h(Btn, { small: true, onClick: p.onClassic }, t('classicMode')))),
+            h(Btn, { small: true, onClick: p.onRetry }, t('compatRetry')))),
         h('div', { className: 'fde-compat' },
           h('div', { className: 'fde-compat-card', role: 'alert' },
             h('div', { className: 'fde-compat-title' },
@@ -7208,10 +7401,9 @@ window.__ModuleLoader__.load({
               h('div', { style: { marginTop: 10 } },
                 '探测结果：', h('code', null, str(p.reason) || '未知原因')),
               h('div', { className: 'fde-tip', style: { marginTop: 10 } },
-                '重启后刷新页面即可；若仍不可用，检查宿主版本是否包含 FDE 路由。经典模式保留旧五页签（新建调研 / 项目 / 产物导出 / 素材 / 方法），旧 API 全部可用。回滚：删除 research/.fde/ 即回到旧工作台。')),
+                '重启方式：退出并重新打开 DSH（宿主半路由与技能注册在启动时加载），随后刷新此页面。')),
             h('div', { className: 'fde-compat-actions' },
-              h(Btn, { kind: 'primary', onClick: p.onRetry }, t('compatRetry')),
-              h(Btn, { onClick: p.onClassic }, t('compatClassic'))))));
+              h(Btn, { kind: 'primary', onClick: p.onRetry }, t('compatRetry'))))));
     }
 
     function ProbingScreen() {
@@ -7235,7 +7427,7 @@ window.__ModuleLoader__.load({
       const probe = useCallback(async () => {
         seqRef.current += 1;
         const seq = seqRef.current;
-        setMode((cur) => (cur === 'classic' ? cur : 'probing'));
+        setMode('probing');
         const r = await getJSON(FDE + '/meta');
         if (seq !== seqRef.current) return;
         if (r && r.ok !== false && r.meta) {
@@ -7250,27 +7442,15 @@ window.__ModuleLoader__.load({
 
       useEffect(() => { probe(); }, [probe]);
 
-      if (mode === 'classic') {
-        return h(ClassicApp, {
-          actions,
-          onFde: metaRaw ? () => setMode('fde') : null,
-          onRetryProbe: probe,
-        });
-      }
       if (mode === 'fde') {
         return h(FdeApp, {
           actions,
           meta: normalizeMeta(metaRaw),
-          onClassic: () => setMode('classic'),
           onReprobe: probe,
         });
       }
       if (mode === 'probing') return h(ProbingScreen, null);
-      return h(CompatPage, {
-        reason,
-        onRetry: probe,
-        onClassic: () => setMode('classic'),
-      });
+      return h(CompatPage, { reason, onRetry: probe });
     }
 
     const Icon = function () {
@@ -7295,6 +7475,9 @@ window.__ModuleLoader__.load({
         };
         const slots = svc('slots');
         const uiWorkspace = svc('uiWorkspace');
+        /* v1.7 资料预览：宿主已有 Remote 能力（只读；服务缺失时降级，不影响其它视图） */
+        const sessionsService = svc('sessions');
+        const officeToPdfRemote = svc('remote.officeToPdf');
         /* 宿主 uiWorkspace.openSession 的契约是 void（可能返回 undefined）：
            不能把返回值当成功标志；调用未抛错即视为已提交打开请求（§2.5）。 */
         const openSession = (id) => {
@@ -7370,7 +7553,7 @@ window.__ModuleLoader__.load({
               return slots.register({ name: 'sidebar.panellist', id: 'researchworkbench', order: 32, label: function () { return t('fdeBrand'); } }, Icon);
             });
             slots.inject('main', function () {
-              return slots.register({ name: 'main', key: 'researchworkbench' }, function () { return h(PanelApp, { actions: { openSession, openPath } }); });
+              return slots.register({ name: 'main', key: 'researchworkbench' }, function () { return h(PanelApp, { actions: { openSession, openPath, services: { sessions: sessionsService, officeToPdf: officeToPdfRemote } } }); });
             });
           }
         } catch (e) {

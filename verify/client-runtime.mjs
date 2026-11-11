@@ -9,7 +9,7 @@
  *  - v1.5.0 只读演示模式：空板横幅 / DEMO 渲染 / 写操作拦截 / 一键清除 / 设置卡恢复
  *  - 客户/任务抽屉、门禁人工勾选与证据、启动会话、归档/删除确认
  *  - 客户导入（adopt scan/apply）、工件（Finder/导出）、方法、设置
- *  - 兼容页 + 经典模式五页签 + Finder 三通道降级
+ *  - 宿主未就绪页 + Finder 三通道降级
  *  - 轮询间隔与「切页签立即刷新」
  * 断言的是 client.js 里的真实逻辑，不是复制品。注意：迷你 React 不是
  * 真实 React，行为等价性以「用户操作 → 网络请求/渲染文案」为准。
@@ -87,6 +87,15 @@ const React = {
     const i = inst.cursor++;
     if (!(i in inst.refs)) inst.refs[i] = { current: v };
     return inst.refs[i];
+  },
+  useMemo(fn, deps) {
+    const inst = currentInst();
+    const i = inst.cursor++;
+    if (!sameDeps(inst.deps[i], deps)) {
+      inst.deps[i] = Array.isArray(deps) ? deps.slice() : undefined;
+      inst.memos[i] = fn();
+    }
+    return inst.memos[i];
   },
 };
 
@@ -203,7 +212,13 @@ globalThis.fetch = async (url, init) => {
   const call = { method, url: String(url), body };
   fetchCalls.push(call);
   const payload = route(method, call.url, body);
-  return { ok: true, status: 200, text: async () => JSON.stringify(payload) };
+  const textBody = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  return {
+    ok: true,
+    status: 200,
+    text: async () => textBody,
+    blob: async () => new Blob([textBody], { type: 'text/plain' }),
+  };
 };
 
 /* ================= 加载 client.js ================= */
@@ -878,6 +893,7 @@ function installFdeStubs() {
   stub('GET', '/research-workbench/api/methods?name=%E5%9C%BA%E6%99%AF%E8%AF%84%E4%BC%B0%E8%A1%A8', { ok: true, file: '场景评估表.md', body: '# 场景评估表\n模板：场景 / 发起人 / 数据 / 评分' });
   stub('GET', '/research-workbench/api/materials', MATERIALS);
   stub('GET', '/research-workbench/api/files?dir=' + encodeURIComponent('某环境-20261013'), FILES);
+  stub('GET', '/api/file', '# 00-项目档案\n\n预览正文\n\n- 事实核查通过');
   stub('POST', '/research-workbench/api/handoff', { ok: true, sessionId: 'sess_export_1', promptText: '导出 md' });
 }
 installFdeStubs();
@@ -920,14 +936,14 @@ if (process.env.DBG) {
 }
 check('面板标题为 FDE 工作站', textOf(tree).includes('FDE 工作站'));
 check('今日页渲染问候与战况', textOf(tree).includes('活跃客户'));
-check('5 页签齐全（今日/客户/资料/流程/文件，无生财）',
-  ['今日', '客户', '资料', '流程', '文件'].every((x) => textOf(tree).includes(x))
+check('5 页签齐全（今日/客户/资料/流程/情报，无生财）',
+  ['今日', '客户', '资料', '流程', '情报'].every((x) => textOf(tree).includes(x))
   && !textOf(tree).includes('生财'));
-check('导航顺序：今日 → 客户 → 资料 → 流程 → 文件', (() => {
+check('导航顺序：今日 → 客户 → 资料 → 流程 → 情报', (() => {
   const nav = byClass(tree, 'fde-nav')[0];
   if (!nav) return false;
   const labels = buttons({ children: [nav] }).map((b) => textOf(b).trim().replace(/\d+/g, ''));
-  return labels.join('|') === '今日|客户|资料|流程|文件';
+  return labels.join('|') === '今日|客户|资料|流程|情报';
 })());
 check('设置走页头齿轮入口（不占页签）', !!gearBtn(tree) && !textOf(byClass(tree, 'fde-nav')[0] || {}).includes('设置'));
 check('今日四宫格：4 块 panel + 固定标题条（待我处理→建议→焦点→活动）',
@@ -1244,16 +1260,18 @@ if (adoptBtn) {
   }
 }
 
-/* ================= 场景五：工件 / 方法 / 设置 ================= */
-const artTab = navBtn(tree, '文件');
-check('点击「文件」页签可导航', !!artTab);
-tree = await act(PanelApp, makeProps(), () => artTab.props.onClick());
-check('工件页按客户聚合（可展开）', textOf(tree).includes('某环境集团'));
-const accHead = collect(tree, (n) => n.props && String(n.props.className || '').indexOf('fde-acc-head') !== -1)[0];
-if (accHead) tree = await act(PanelApp, makeProps(), () => accHead.props.onClick());
-check('展开客户工件 → GET /files?dir= 并渲染 md 行',
-  callsOf('GET', '/files?dir=').length >= 1 && textOf(tree).includes('research/事实核查清单.md'));
-check('工件行有导出 PDF / Finder 显示', btnByText(tree, '导出 PDF').length >= 1 && btnByText(tree, 'Finder 显示').length >= 1);
+/* ================= 场景五：资料 / 方法 / 设置 ================= */
+const matTab = navBtn(tree, '资料');
+check('点击「资料」页签可导航', !!matTab);
+tree = await act(PanelApp, makeProps(), () => matTab.props.onClick());
+check('资料页加载客户文件并渲染「最近资料」列表',
+  callsOf('GET', '/files?dir=').length >= 1 && textOf(tree).includes('最近资料') && textOf(tree).includes('00-项目档案.md'));
+check('资料页默认隐藏原始素材（展示原始素材开关与计数）', textOf(tree).includes('原始素材'));
+const firstFile = byClass(tree, 'fde-mat-file')[0];
+if (firstFile) tree = await act(PanelApp, makeProps(), () => firstFile.props.onClick());
+check('点文件 → 右侧内嵌预览（/api/file 读取 + 渲染正文）',
+  callsOf('GET', '/api/file').length >= 1 && textOf(tree).includes('预览正文'));
+check('预览头部有导出 PDF / 用系统应用打开', btnByText(tree, '导出 PDF').length >= 1 && btnByText(tree, '用系统应用打开').length >= 1);
 const exportBtn = btnByText(tree, '导出 PDF')[0];
 if (exportBtn) {
   tree = await act(PanelApp, makeProps(), () => exportBtn.props.onClick());
@@ -1324,11 +1342,11 @@ if (saveSettingsBtn) {
     bidBadge && bidBadge.props.title);
 
   /* 招采页签：概况 + 结果列表 */
-  const bidsNav = navBtn(tree, '资料');
-  check('「资料」页签在导航中（资料库/招采同页）', !!bidsNav);
+  const bidsNav = navBtn(tree, '情报');
+  check('「情报」页签在导航中（资料库/招采同页）', !!bidsNav);
   tree = await act(PanelApp, makeProps(), () => bidsNav.props.onClick());
   const bidsTab = pageTab(tree, '招采');
-  check('资料页可切换到「招采」子页签', !!bidsTab);
+  check('情报页可切换到「招采」子页签', !!bidsTab);
   if (bidsTab) tree = await act(PanelApp, makeProps(), () => bidsTab.props.onClick());
   check('招采概况渲染（条数/区间/来源）',
     textOf(tree).includes('24156') && textOf(tree).includes('2018-05-03') && textOf(tree).includes('aecc-ebidding'));
@@ -1435,7 +1453,7 @@ if (saveSettingsBtn) {
   bidsAvailableFlag = false;
   const settingsNav2 = gearBtn(tree);
   tree = await act(PanelApp, makeProps(), () => settingsNav2.props.onClick());
-  const bidsNav2 = navBtn(tree, '资料');
+  const bidsNav2 = navBtn(tree, '情报');
   tree = await act(PanelApp, makeProps(), () => bidsNav2.props.onClick());
   const bidsTab2 = pageTab(tree, '招采');
   if (bidsTab2) tree = await act(PanelApp, makeProps(), () => bidsTab2.props.onClick());
@@ -1554,11 +1572,11 @@ if (saveSettingsBtn) {
 {
   libMode = 'ok';
   windowOpens.length = 0;
-  const libNav = navBtn(tree, '资料');
+  const libNav = navBtn(tree, '情报');
   check('「资料」页签在导航中（资料库 / 招采同页）', !!libNav);
   if (libNav) tree = await act(PanelApp, makeProps(), () => libNav.props.onClick());
   const libTab = pageTab(tree, '资料库');
-  check('资料页带子页签（资料库 / 招采）', !!libTab && !!pageTab(tree, '招采'));
+  check('情报页带子页签（资料库 / 招采）', !!libTab && !!pageTab(tree, '招采'));
   if (libTab) tree = await act(PanelApp, makeProps(), () => libTab.props.onClick());
 
   check('资料库首屏 GET /fde/library/feed', callsOf('GET', '/fde/library/feed').length >= 1);
@@ -1786,7 +1804,7 @@ if (saveSettingsBtn) {
     JSON.stringify(restoreCall && restoreCall.body));
   check('演示模式：恢复后横幅重新出现（示例只读覆盖层）', !!byClass(tree, 'fde-demo-banner')[0]);
 
-  /* 复位：用真实数据重新挂载 FdeApp，让 demoRuntime 复位（否则经典模式写请求会被误拦） */
+  /* 复位：用真实数据重新挂载 FdeApp，让 demoRuntime 复位 */
   currentBoard = makeBoard();
   CURRENT_BRIEF = makeBrief(currentBoard);
   installFdeStubs();
@@ -1794,41 +1812,16 @@ if (saveSettingsBtn) {
   tree = await renderStable(PanelApp, makeProps());
 }
 
-/* ================= 场景六：兼容页 + 经典模式 + Finder 三通道 ================= */
+/* ================= 场景六：宿主未就绪页 + Finder 三通道 ================= */
 {
   routeTable = {}; routeSeq = {}; fetchCalls.length = 0;
   stub('GET', '/research-workbench/api/fde/meta', { ok: false, reason: 'HTTP 404（路由不存在，可能宿主未重启）' });
-  stub('GET', '/research-workbench/api/status', STATUS);
-  stub('GET', '/research-workbench/api/projects', PROJECTS);
-  stub('GET', '/research-workbench/api/methods', { ok: true, items: [{ kind: 'method', name: '00-调研执行流程.md' }] });
-  stub('GET', '/research-workbench/api/materials', MATERIALS);
-  stub('GET', '/research-workbench/api/files?dir=' + encodeURIComponent('某环境-20261013'), FILES);
   instances.clear();
   let compatTree = await renderStable(PanelApp, makeProps());
-  check('兼容页：明确提示需重启 DSH', textOf(compatTree).includes('宿主需要重启 DSH 后启用 FDE 看板'));
-  check('兼容页：提供重试与经典模式入口',
-    btnByText(compatTree, '重试探测').length >= 1 && btnByText(compatTree, '进入经典模式').length >= 1);
-  const classicBtn = btnByText(compatTree, '进入经典模式')[0];
-  let classicTree = await act(PanelApp, makeProps(), () => classicBtn.props.onClick());
-  check('经典模式：旧五页签可见',
-    ['新建调研', '项目', '产物 / 导出', '素材', '方法'].every((x) => textOf(classicTree).includes(x)));
-  check('经典模式：顶部有返回 FDE 的入口（404 时提示重试探测）',
-    btnByText(classicTree, '重试探测 FDE').length >= 1 || textOf(classicTree).includes('经典模式'));
-
-  const projTab = btnExact(classicTree, '项目')[0];
-  if (projTab) classicTree = await act(PanelApp, makeProps(), () => projTab.props.onClick());
-  check('经典模式项目页渲染项目名', textOf(classicTree).includes('某环境'));
-  const finderBtn = btnByText(classicTree, '在 Finder 中打开').find((b) => b.props.title === ABS);
-  check('经典模式保留 Finder 按钮并带绝对路径', !!finderBtn);
-  openPathCalls.length = 0;
-  fetchCalls.length = 0;
-  stub('POST', '/open-in-app/open', { ok: true });
-  if (finderBtn) classicTree = await act(PanelApp, makeProps(), () => finderBtn.props.onClick());
-  /* 面板注册的 actions 是真实 openPath：无 remote 时目录走 open-in-app 通道（AST 路径） */
-  const dirOpen = lastCall('POST', '/open-in-app/open');
-  check('经典模式 Finder → 真实 openPath 打开项目目录（open-in-app 通道）',
-    !!dirOpen && dirOpen.body.path === ABS && dirOpen.body.app === 'finder',
-    JSON.stringify(dirOpen && dirOpen.body));
+  check('宿主未就绪页：明确提示需重启 DSH', textOf(compatTree).includes('宿主需要重启 DSH 后启用 FDE 看板'));
+  check('宿主未就绪页：只提供重试（经典模式已移除）',
+    btnByText(compatTree, '重试探测').length >= 1 && !textOf(compatTree).includes('经典模式'));
+  check('宿主未就绪页：探测失败原因可见', textOf(compatTree).includes('HTTP 404'));
 
   /* 真实 apply 的 Finder 三通道（等价旧测试） */
   const remoteCalls = [];

@@ -238,3 +238,25 @@
 | 9.5 | `verify/**`（除 fde-host/client-runtime fixture）/ `.github/**` / `.gitignore` / `examples/**` | 干净检出可验证、CI、演示数据、发布包检查 | `impl-release` |
 
 验收：`node build.mjs` 字节一致；`node verify/all.mjs` 全绿；干净副本（无 `../research`）`verify/all.mjs` 全绿；`health-check` 0 FAIL；`npm pack --dry-run` 包内容 ≤1.2 MiB 且无 samples/双份源码；全仓脱敏复扫 0 命中；harness 截图复跑确认 UI 改动；真实宿主重启后人工验收（未做，如实标注）。
+
+---
+
+## 10. v1.7 资料页重构与内嵌预览（2026-11-11，ADR 0008）
+
+> 触发：用户反馈「资料管理还是很麻烦、文件列表信息太多、调研类信息混入、希望预览并复用 DSH 已有能力」。
+> 决策与边界见 `docs/adr/0008-资料页重构与内嵌预览.md`；契约见 `docs/01-spec.md` §8.3 / §8.5。
+
+| # | 范围 | 改动 | 验证 |
+|---|---|---|---|
+| 10.1 | `src/ui/ui-panel.js` / `client.js` | 导航更名（文件→资料、资料→情报）与调序；资料页 master-detail（最近/按客户、搜索、类型筛选、原始素材开关、排序）；行内操作收敛；md 预览渲染器；PDF/图片/HTML 快照/Office 预览；上传与未关联素材折叠 | `node build.mjs` 字节一致；`node verify/all.mjs` 全绿 |
+| 10.2 | `verify/client-static.mjs`、`verify/fde-client.mjs`、`verify/client-runtime.mjs`、`verify/acceptance-audit.mjs` | 断言同步 v1.7 IA 与预览能力；括号平衡检查改为 `new Function` 编译；运行时 React shim 补 `useMemo`；招采/资料库场景改走「情报」页 | `node verify/all.mjs` 全绿（含独立审计 677 项） |
+| 10.3 | `docs/01-spec.md`、`docs/adr/0008-*.md`、`CHANGELOG.md`、`README.md`、`AGENTS.md`、`package.json` | 契约/决策/版本（1.7.0）同步 | `node scripts/check-readme-version.mjs`；`node scripts/health-check.mjs` 0 FAIL |
+| 10.4 | dev 实例（DSH_HOME=.dsh-dev，port 65110） | 真机逐类型预览（md/pdf/图片/html/office）、筛选/搜索/按客户、全屏/Esc、上传面板、素材折叠 |
+| 10.5 | 客户端（追加） | 试用 DSH 原生右侧预览后按用户取舍回退：点资料不跳会话，预览留在面板内；保留切换面板的页签/筛选记忆 | 真机验证（点行不切主面板、md/PDF 面板内预览、返回状态保留）；`verify/all.mjs` 全绿 |
+ 截图 `.ux-audit/shots/v17-*.png`；独立 agent 验收报告 `.ux-audit/reports/v17-acceptance.md` |
+
+**已知限制（如实标注）**：Office 预览依赖「当前工作区至少一个会话」作为宿主授权作用域，无会话时降级为系统应用打开；HTML 快照为静态 sandbox 渲染（不执行脚本、相对资源可能缺失）；文本 >40 万字符截断提示；桌面端安装副本需用户替换/更新插件并刷新页面（本仓库只产生产物，不改 profile）。
+
+**回滚**：`git checkout -- client.js src/ui/ui-panel.js` 后重跑 `node build.mjs`；无宿主路由/数据迁移，回滚不影响 board 与客户卷。
+
+| 10.6 | 客户端（追加） | 按用户指示移除经典模式：删 `ClassicApp`/旧五页签与 `.rw-*` 视觉、页头/设置页/未就绪页三个入口、62 个失去引用的 DICT key；未就绪页精简为「重试 + 重启说明」；宿主旧路由暂留 | `node build.mjs`；`node verify/all.mjs` 全绿（断言改为「经典模式已移除」）；真机无经典入口 |

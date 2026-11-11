@@ -4,7 +4,7 @@
 
 > 把「客户经营」从线索到采用做成**一屏可看、可推进、可验证、可复盘**的作战台：客户看板 + 今日注意力 + 8 阶段门禁 + 任务泳道 + FDE 方法库 + 资料库 + 招采关联。
 > 跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里，中文界面，纯 JS，零运行时依赖。
-> **版本：v1.6.0** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
+> **版本：v1.7.0** ｜ 宿主：DSH `0.2.0-rc.2` ｜ 许可：代码 MIT / 内容 CC BY 4.0
 
 ![今日视图](https://raw.githubusercontent.com/NeoJubao/dsh-fde/main/assets/screenshot-today.png)
 

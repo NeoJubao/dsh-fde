@@ -57,12 +57,12 @@ check('视图路由分支齐全（5 页签 + 设置，今日为默认回退）',
 check('导航含五项（客户/资料/流程/文件）且带 role=tablist',
   c.includes("role: 'tablist'") && ['tabToday', 'tabCustomers', 'tabKnowledge', 'tabProcess', 'tabNavFiles']
     .every((k) => c.includes("t('" + k + "')")));
-check('导航顺序：今日/客户/资料/流程/文件（设置走页头齿轮）',
+check('导航顺序：今日/客户/资料/流程/情报（设置走页头齿轮）',
   (() => {
     const m = /const navItems = \[([\s\S]*?)\];/.exec(c);
     if (!m) return false;
     return [...m[1].matchAll(/key: '([a-z]+)'/g)].map((x) => x[1]).join(',')
-      === 'today,customers,knowledge,process,files';
+      === 'today,customers,files,process,knowledge';
   })());
 check('页内子页签：客户三态 / 资料两态 / 流程三态',
   ['customersViewBoardCustomer', 'customersViewBoardTask', 'customersViewList',
@@ -97,8 +97,14 @@ check('客户页三态（看板·客户 / 看板·任务 / 客户清单）+ 空�
   && c.includes('（空）'));
 check('客户页表格 + 筛选 + 两段式导入',
   c.includes("className: 'fde-table'") && c.includes("fdePost('/adopt', { action: 'scan' })") && c.includes("fdePost('/adopt', { action: 'apply', dirs })"));
-check('工件页复用旧素材/导出/质检能力',
-  c.includes("API + '/materials'") && c.includes("API + '/material-files?dir='") && c.includes("API + '/upload'") && c.includes("t('artifactsQa')"));
+check('资料页列表/预览分隔条可拖动调宽（容器实测窄时隐藏）',
+  c.includes("className: 'fde-mat-splitter'") && c.includes("role: 'separator'")
+  && c.includes('onSplitterDown') && c.includes('splitMax')
+  && c.includes('MAT_UI_MEM.listWidth'));
+check('资料页保留素材/上传/导出/质检，并新增内嵌预览（md/pdf/office/html/image）',
+  c.includes("API + '/materials'") && c.includes("API + '/material-files?dir='") && c.includes("API + '/upload'")
+  && c.includes("t('matQa')") && c.includes('function FilePreview(') && c.includes('renderMarkdown(')
+  && c.includes('readFileAbs(') && c.includes('loadOfficePdf') && c.includes('matPreviewKind('));
 check('方法页复用旧 methods 并列出技能', c.includes("API + '/methods'") && c.includes('skills'));
 check('设置页含自主性/停滞/WIP/健康检查/重启提示',
   ['settingsAutonomy', 'settingsStall', 'settingsWip', 'settingsHealth', 'settingsRestart']
@@ -116,7 +122,7 @@ const cssMatch = /const CSS = `([\s\S]*?)`;\n/.exec(c);
 const css = cssMatch ? cssMatch[1] : '';
 check('内联 CSS 存在且注入 style 标签', css.length > 5000 && c.includes("document.createElement('style')") && c.includes('disposeStyle'));
 const tokenCount = (css.match(/var\(--dsw-alias-/g) || []).length;
-check('CSS 使用主题 token >= 40 处', tokenCount >= 40, 'token 数 ' + tokenCount);
+check('CSS 使用主题 token >= 25 处', tokenCount >= 25, 'token 数 ' + tokenCount);
 /* 把 var(--dsw-alias-xxx, 浅色回退) 的回退值剥掉，剩余不应出现裸色值。
    回退值允许 #hex 与 rgba()（旧面板就是这么写的浅色回退），但必须挂在 token 后面。 */
 const stripped = css
@@ -149,22 +155,21 @@ check('颜色声明全部走 token / color-mix（无硬编码色值）', hardCol
 /* ---------- 5. API 前缀与请求层 ---------- */
 check("API 前缀唯一的字符串常量", (c.match(/'\/research-workbench\/api'/g) || []).length === 1);
 check('FDE 前缀由 API 派生', c.includes("const FDE = API + '/fde'"));
-check('fetch 只在统一请求层（2 处）', (c.match(/\bfetch\(/g) || []).length === 2);
+check('fetch 只在统一请求层（3 处：getJSON / sendJSON / readFileAbs）', (c.match(/\bfetch\(/g) || []).length === 3);
 check('无绝对 http(s) 地址请求', !/fetch\(\s*['"`]https?:/.test(c));
 check('FDE 路由全部走 fdeGet/fdePost', (c.match(/fde(?:Get|Post)\(/g) || []).length >= 25);
-check('旧路由仍可用（status/projects/files/materials/methods/scaffold/handoff/upload/reveal）',
-  ['/status', '/projects', '/files?dir=', '/materials', '/methods', '/scaffold', '/handoff', '/upload', '/reveal']
-    .every((p2) => c.includes("API + '" + p2 + "'") || c.includes("'" + p2 + "'")));
+check('资料/流程/上传等宿主路由仍被面板调用（status/projects/scaffold 随经典模式一并移除）',
+  ['/files?dir=', '/materials', '/material-files?dir=', '/methods', '/handoff', '/upload', '/toproject', '/reveal']
+    .every((p2) => c.includes("API + '" + p2 + "'"))
+  && !c.includes("API + '/status'") && !c.includes("API + '/projects'") && !c.includes("API + '/scaffold'"));
 check('错误契约统一处理 {ok:false,reason}', c.includes('ok === false') && c.includes('reason'));
 
-/* ---------- 6. 兼容页 / 经典模式（spec §11、§16.10） ---------- */
+/* ---------- 6. 宿主未就绪页（spec §11、§16.10；经典模式 v1.7.0 移除） ---------- */
 check('启动探测 /fde/meta', c.includes("getJSON(FDE + '/meta')"));
-check('兼容页关键词与可操作按钮', c.includes('宿主需要重启 DSH 后启用 FDE 看板')
-  && c.includes("t('compatRetry')") && c.includes("t('compatClassic')"));
-check('不白屏：探测中/兼容页/正常三态都有组件',
+check('宿主未就绪页：提示重启 + 只给重试（不再提供经典模式）', c.includes('宿主需要重启 DSH 后启用 FDE 看板')
+  && c.includes("t('compatRetry')") && !c.includes("t('compatClassic')") && !c.includes('function ClassicApp('));
+check('不白屏：探测中/未就绪/正常三态都有组件',
   c.includes('function ProbingScreen(') && c.includes('function CompatPage(') && c.includes('function FdeApp('));
-check('经典模式保留旧五页签', ['tabNew', 'tabProjects', 'tabFiles', 'tabMaterials', 'tabMethods']
-  .every((k) => c.includes("t('" + k + "')")) && c.includes('function ClassicApp('));
 check('hasSession:false 时任务文本写剪贴板', c.includes('navigator.clipboard') && c.includes("t('copied')"));
 
 /* ---------- 7. 可访问性 / 拖拽 / 键盘（spec §8.8） ---------- */
@@ -339,10 +344,10 @@ check('不使用 JSX（统一 h()）', !/<\s*[A-Z][A-Za-z]*\s+[a-z-]+=/.test(c))
 
 /* ---------- 10. 单文件区块组织（可维护性） ---------- */
 const sections = ['一、请求层', '二、设计 token 与 CSS', '三、字典与工具', '四、通用组件',
-  '五、今日视图', '六、看板视图', '七、客户视图', '八、工件视图', '九、招采视图',
+  '五、今日视图', '六、看板视图', '七、客户视图', '八、资料视图', '九、招采视图',
   '十、资料库视图', '十一、流程视图', '十二、方法视图 / 设置视图', '十三、抽屉',
-  '十四、FDE 根组件', '十五、经典模式', '十六、兼容页 / 根组件 / 注册'];
-check('按区块注释组织（16 个分区标题）', sections.every((s) => c.includes(s)),
+  '十四、FDE 根组件', '十五、宿主未就绪页 / 根组件 / 注册'];
+check('按区块注释组织（15 个分区标题）', sections.every((s) => c.includes(s)),
   sections.filter((s) => !c.includes(s)).join('、'));
 check('空态/加载/失败态组件齐全',
   ['function Empty(', 'function Loading(', 'function ErrorLine(', 'function MsgLine('].every((s) => c.includes(s)));

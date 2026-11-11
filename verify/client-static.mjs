@@ -4,7 +4,7 @@
  *
  * 覆盖三类：
  *  1) 包/模块/注册契约（必须保留，破坏即安装不上或面板不出现）
- *  2) 旧能力兼容（Finder 三通道、旧五页签、经典模式）
+ *  2) 旧能力兼容（Finder 三通道；经典模式 v1.7.0 已移除）
  *  3) FDE 新能力（Phase 2 IA：5 页签 + 页内子页签、看板拖拽/键盘、抽屉、兼容页、轮询、
  *     主题 token、招采雷达、流程 v2（8 阶段 playbook）、资料库（v1.3））
  *  注：Phase 2 起导航为「今日 / 客户 / 资料 / 流程 / 文件」+ 页头设置齿轮；
@@ -38,7 +38,14 @@ const checks = [
   ['面板 id 与 key 一致', c.includes("id: 'researchworkbench'") && c.includes("key: 'researchworkbench'")],
   ['侧边栏标题为 FDE 工作站', c.includes("t('fdeBrand')")],
   ['调用宿主 API 前缀正确', c.includes("'/research-workbench/api'")],
-  ['面板 actions 传入 openPath', /actions:\s*\{\s*openSession,\s*openPath\s*\}/.test(c)],
+  ['面板 actions 传入 openPath 与资料预览服务', /actions:\s*\{\s*openSession,\s*openPath,\s*services:/.test(c)],
+  ['资料页左右分隔条可拖动调宽（鼠标 + 键盘 + 宽度记忆）',
+    c.includes("className: 'fde-mat-splitter'") && c.includes("role: 'separator'")
+    && c.includes('onSplitterDown') && c.includes('onSplitterKey')
+    && c.includes("'ArrowLeft'") && c.includes("'ArrowRight'") && c.includes('MAT_UI_MEM.listWidth')],
+  ['资料预览留在面板内（点行不切换主面板 / 不调用原生预览）',
+    c.includes('onClick: () => selectFile(f)') && !c.includes('openNativePreview')
+    && c.includes('function FilePreview(') && c.includes("t('matPickHint')")],
 
   /* ---- 2. 旧能力兼容 ---- */
   ['懒解析 remote.session 服务', c.includes("svc('remote.session')")],
@@ -47,13 +54,11 @@ const checks = [
   ['目录兜底走 open-in-app 路由', c.includes("'/open-in-app/open'")],
   ['兜底走本插件宿主路由 /reveal', c.includes("API + '/reveal'")],
   ['文件行有 Finder 显示按钮', c.includes("t('reveal')")],
-  ['有「在 Finder 中打开」按钮', c.includes("t('revealDir')")],
-  ['有复制路径按钮', c.includes("t('copyPath')")],
-  ['显示项目绝对路径（位置）', c.includes("t('locLabel')")],
+  ['资料行菜单含 Finder 显示 / 复制路径', c.includes("t('reveal')") && c.includes("t('matCopyPath')")],
+  ['资料预览头部有系统打开', c.includes("t('matSystemOpen')")],
   ['有样式注入与回收', c.includes('data-plugin') && c.includes('disposeStyle')],
-  ['旧五页签仍在（经典模式）',
-    ["t('tabNew')", "t('tabProjects')", "t('tabFiles')", "t('tabMaterials')", "t('tabMethods')"].every((s) => c.includes(s))],
-  ['经典模式组件存在', c.includes('function ClassicApp(')],
+  ['经典模式已移除（无 ClassicApp / 旧五页签文案）',
+    !c.includes('function ClassicApp(') && !c.includes("t('tabNew')") && !c.includes("t('classicMode')")],
 
   /* ---- 3. FDE 页型组件（Phase 2：5 页签 + 页内子页签） ---- */
   ['视图组件存在（今日/看板/客户/流程/资料库/招采/工件/方法/设置）',
@@ -63,12 +68,12 @@ const checks = [
   ['5 页签导航文案齐全（今日 / 客户 / 资料 / 流程 / 文件 + 设置入口）',
     ["t('tabToday')", "t('tabCustomers')", "t('tabKnowledge')", "t('tabProcess')",
       "t('tabNavFiles')", "t('tabSettings')"].every((s) => c.includes(s))],
-  ['导航 5 项顺序正确（今日 / 客户 / 资料 / 流程 / 文件）',
+  ['导航 5 项顺序正确（今日 / 客户 / 资料 / 流程 / 情报）',
     (() => {
       const m = /const navItems = \[([\s\S]*?)\];/.exec(c);
       if (!m) return false;
       const order = [...m[1].matchAll(/key: '([a-z]+)'/g)].map((x) => x[1]);
-      return order.join(',') === 'today,customers,knowledge,process,files';
+      return order.join(',') === 'today,customers,files,process,knowledge';
     })()],
   ['设置不再占页签：靠页头齿轮入口打开（layout.md §7）',
     (() => {
@@ -138,7 +143,7 @@ const checks = [
 
   /* ---- 5. 兼容 / 降级 / 轮询 ---- */
   ['启动探测 GET /fde/meta', c.includes("getJSON(FDE + '/meta')")],
-  ['兼容页文案与经典模式入口', c.includes("t('compatTitle')") && c.includes('宿主需要重启 DSH 后启用 FDE 看板') && c.includes("t('classicMode')")],
+  ['宿主未就绪页文案 + 只给重试', c.includes("t('compatTitle')") && c.includes('宿主需要重启 DSH 后启用 FDE 看板') && c.includes("t('compatRetry')") && !c.includes('function ClassicApp(')],
   ['任何分支都渲染（不白屏）', c.includes('function ProbingScreen(') && c.includes('function CompatPage(')],
   ['轮询 10–15s', /const POLL_MS = (1[0-5]\d{3})/.test(c) && c.includes('setInterval(')],
   ['切页签立即刷新（轮询 effect 依赖 view）', /useEffect\(\(\) => \{[\s\S]*?\[view, loadBoard, loadBrief\]/.test(c)],
@@ -230,10 +235,10 @@ const checks = [
     /\.fde-flow-/.test(c) && /var\(--fde-/.test(c)],
 
   /* ---- 6d. A7 去重（Phase 2 IA：全局刷新/自主性只在壳层一处） ---- */
-  ['A7：页内刷新只允许块级（t(\'refresh\') 全文件 = 壳层 1 + 经典模式 1）',
+  ['A7：页内刷新只允许块级（t(\'refresh\') 全文件仅壳层 1 处）',
     (() => {
       const n = (c.match(/t\('refresh'\)/g) || []).length;
-      return n === 2;
+      return n === 1;
     })()],
   ['A7：自主性徽章只在壳层渲染（视图内无 AutonomyBadge 调用）',
     (() => {
@@ -279,8 +284,8 @@ const checks = [
   ['不写 localStorage 作为事实源', !c.includes('localStorage') && !c.includes('sessionStorage')],
   ['不使用原生 alert/confirm 弹窗', !/\balert\(/.test(c) && !/window\.confirm\(/.test(c)],
   ['只用主题 token 定义配色', /var\(--dsw-alias-/.test(c) && !/(?:^|[;{\s])(?:color|background|border-color)\s*:\s*#/.test(c)],
-  ['无语法错误征兆（括号平衡）',
-    (c.match(/\(/g) || []).length === (c.match(/\)/g) || []).length],
+  ['无语法错误征兆（用 Function 编译整份 bundle）',
+    (() => { try { new Function(c); return true; } catch (e) { return false; } })()],
 ];
 
 for (const [name, pass] of checks) {
