@@ -629,8 +629,14 @@ console.log('\n── 12. 生财三路授权：链接 / 环境变量 / 兼容文
   const saved = scys.saveAuthFromInput(ws, { url: 'https://auth.example/cb?access_token=' + TOKEN });
   const authFile = scys.authFilePath(ws);
   const mode = (statSync(authFile).mode & 0o777).toString(8);
-  // NTFS 不承载 POSIX 权限位（Windows stat 恒 0o666），平台差异跳过而非判失败
-  check('保存链接授权：ok + 文件存在 + 0600', saved.ok === true && existsSync(authFile) && (process.platform === 'win32' || mode === '600'), process.platform === 'win32' ? 'win32 跳过（NTFS 无 POSIX 权限位）' : mode);
+  /* NTFS 不承载 POSIX 权限位（stat 恒 0o666）：win32 显式 SKIP 并记录，不伪装成「已验证」；
+   * 0600 断言由 Linux/macOS 覆盖，Windows 侧依赖用户目录 ACL。 */
+  if (process.platform === 'win32') {
+    console.log('  ⚠ SKIP 保存链接授权 0600 → win32 无 POSIX 权限位（Linux/macOS 断言；Windows 依赖用户目录 ACL）');
+    check('保存链接授权：ok + 文件存在', saved.ok === true && existsSync(authFile));
+  } else {
+    check('保存链接授权：ok + 文件存在 + 0600', saved.ok === true && existsSync(authFile) && mode === '600', mode);
+  }
   const sum = scys.authSummary(ws);
   check('授权摘要：available + source=link + 不含 token',
     sum.available === true && sum.source === 'link' && !JSON.stringify(sum).includes(TOKEN), JSON.stringify(sum));
