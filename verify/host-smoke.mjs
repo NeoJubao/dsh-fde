@@ -423,9 +423,12 @@ const callRoute = async (pathWithQuery, method, body) => {
     for (const [k, v] of Object.entries(probeEnv)) { savedEnv[k] = process.env[k]; process.env[k] = v; }
     try {
       const env = subproc.scrubbedEnv();
+      /* Windows 环境变量不区分大小写：runner 上是 `Path`，Git Bash 里可能是 `PATH`，
+       * 这里按不区分大小写检查，否则 Windows CI 会误判「误删 PATH」。 */
+      const envHas = (name) => Object.keys(env).some((k) => k.toUpperCase() === name);
       const leak = ['DSH_PW_TEST', 'MY_TEST_TOKEN', 'MY_TEST_API_KEY', 'MY_TEST_PASSWORD', 'MY_TEST_SECRET', 'MY_TEST_CREDENTIAL', 'MY_TEST_AUTH_HEADER'].filter((k) => Object.prototype.hasOwnProperty.call(env, k));
       if (leak.length) fail.push('scrubbedEnv 未剔除 DSH_/凭据变量：' + leak.join(','));
-      else if (!env.PATH || !env.HTTP_PROXY) fail.push('scrubbedEnv 误删 PATH/proxy（应保留）');
+      else if (!envHas('PATH') || !envHas('HTTP_PROXY')) fail.push('scrubbedEnv 误删 PATH/proxy（应保留）');
       else ok.push('scrubbedEnv 剔除 DSH_/凭据形状变量、保留 PATH/proxy');
 
       const noSubCtx = { get: () => undefined };
