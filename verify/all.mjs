@@ -61,9 +61,13 @@ await step('README 版本一致性（README 顶部/声明版本 ⇄ package.json
 await step('开源发布检查（ADR 0004：身份/许可/白名单/隐私/构建一致）', 'node', [join(HERE, 'open-source.mjs')]);
 await step('打包内容检查（A5）', 'node', [join(HERE, 'pack.mjs')]);
 await step('插件自检（skills/board/docs/绝对路径/产物一致）', 'node', [join(ROOT, 'scripts', 'health-check.mjs')]);
-// 导出脚本自检：无参应打印用法并以非零码退出（期望行为），故单独判定
+// 导出脚本自检：无参应打印用法并以非零码退出（期望行为），故单独判定。
+// Windows 默认用 PowerShell/cmd，PATH 里通常没有 bash（Git Bash 需额外装/或 WSL 语义不同），
+// 跳过并 WARN；该自检由 Linux/macOS 覆盖，不计失败。
 process.stdout.write('\n── 导出脚本自检 ──\n');
-{
+if (process.platform === 'win32') {
+  process.stdout.write('  ⚠ 跳过：Windows 无 POSIX bash（Git Bash 非默认），导出脚本自检由 Linux/macOS 覆盖\n');
+} else {
   const r = await run('bash', [join(ROOT, 'scripts', 'make-pdf.sh')]);
   const printed = (r.err + r.out).includes('用法');
   if (printed && !r.ok) process.stdout.write('  ✓ 无参时打印用法并退出（符合预期）\n');
