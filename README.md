@@ -4,7 +4,7 @@
 
 > 一屏看清每个客户到哪一步、今天要处理什么、还差什么才能往下走，并把活交给 AI 去做。
 > 跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里，中文界面，纯 JS，零运行时依赖。
-> **版本：v2.0.0** ｜ DSH：`0.2.0-rc.2` 起，已在 `0.2.1-rc.5` 上核对 ｜ 许可：代码 MIT / 内容 CC BY 4.0
+> **版本：v2.0.0** ｜ DSH：`0.2.0-rc.2` 起，已在 `0.2.1-rc.5` 上核对，桌面端 `0.2.2-rc.5` 实测通过 ｜ 许可：代码 MIT / 内容 CC BY 4.0
 
 ![今日](https://raw.githubusercontent.com/NeoJubao/dsh-fde/main/assets/screenshot-today.png)
 
@@ -112,7 +112,7 @@ python3 tools/install_profiles.py --run    # 检查后执行安装
 
 | 项 | 要求 |
 |---|---|
-| DSH | `engines.dsh: >=0.2.0-rc.2 <0.3.0-0`；已在 `0.2.1-rc.5` 上核对技能加载、工具返回值与界面地址解析 |
+| DSH | `engines.dsh: >=0.2.0-rc.2 <0.3.0-0`；已在 `0.2.1-rc.5` 上核对技能加载、工具返回值与界面地址解析；桌面端 `0.2.2-rc.5` 的官方实现实测 16 个工具可注册可执行、16 个技能可加载 |
 | Node | 20 或更新 |
 | 运行时依赖 | 无（不引入 `@deepseek-ai/*`；只硬性依赖 DSH 的工具与系统提示词两项服务，其余服务没有时对应功能降级） |
 | 可选：招采雷达 | 独立插件，提供只读的招采数据 |

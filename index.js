@@ -860,7 +860,7 @@ export function apply(ctx) {
           lines.push('');
           lines.push(`素材目录 ${mats.length} 个（已抓取原文，无 md 产物）：${mats.slice(0, 12).map((p) => p.dir).join('、')}${mats.length > 12 ? ' …' : ''}`);
         }
-        if (!projects.length) lines.push('（尚无项目；用 rw_scaffold 建新项目，或在左侧「调研工作台」面板立项）');
+        if (!projects.length) lines.push('（尚无项目；用 rw_scaffold 建新项目，或在左侧「FDE 工作站」面板的「客户」里新建客户）');
         if (legacy.length) {
           lines.push('');
           lines.push(`提示：${legacy.length} 个历史目录未建 00-项目档案.md（${legacy.map((p) => p.dir).join('、')}），内容正常统计；可在面板点「补建档案」纳入七步流程。`);

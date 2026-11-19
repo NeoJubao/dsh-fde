@@ -13,7 +13,7 @@
 
 ## 技术栈
 
-- 运行环境：DeepSeek Harness 0.2.0-rc.2 起（`engines.dsh: >=0.2.0-rc.2 <0.3.0-0`），已在 0.2.1-rc.5 上核对；插件为纯 JS（ESM），**无编译、零新 npm 依赖**。
+- 运行环境：DeepSeek Harness 0.2.0-rc.2 起（`engines.dsh: >=0.2.0-rc.2 <0.3.0-0`），已在 0.2.1-rc.5 上核对、桌面端 0.2.2-rc.5 上实测；插件为纯 JS（ESM），**无编译、零新 npm 依赖**。
 - 安装：官方机制 `dsh plugin --profile <name> add <spec>`（本地路径会以 link 方式挂载，也可用 npm/git/tarball）；`tools/install_profiles.py` 只做 preflight 与打印命令，**不直接改 profile 文件**。
 - 许可：代码 MIT、方法/文档 CC BY 4.0（`LICENSE` / `LICENSE-docs`）；包名 `dsh-fde`，当前版本 `2.0.0`。
 - 禁止 `import '@deepseek-ai/*'`；`inject` 只硬依赖 `tools` 与 `systemPrompt`，其余服务一律懒取 + 容错，缺失时静默降级、不影响插件启动。
