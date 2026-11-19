@@ -3,8 +3,8 @@
  * 用法: node verify/fde-client.mjs
  *
  * 与 client-static.mjs 的分工：client-static 守「模块/注册/旧能力」，
- * 本脚本守「Phase 2 IA：5 页签 + 页内子页签（含流程 v2 与资料库）、主题 token 纪律、API 前缀、兼容页、
- * 可访问性、拖拽/键盘、破坏性确认、轮询、不白屏」。
+ * 本脚本守「5 页签 + 页内子页签（含阶段指南与资料库）、主题 token 纪律、API 前缀、未就绪页、
+ * 可访问性、拖拽/键盘、破坏性确认、轮询、不白屏」；v2.0 的用词与结构断言在 client-static 6f / 6g。
  * v1.3：生财页签与 ScysView 已移除（宿主 scys 能力保留），由资料库接替。
  * 全部是对 client.js 的静态断言；运行时行为见 verify/client-runtime.mjs。
  */
@@ -41,8 +41,8 @@ check("inject 含 slots 与 uiWorkspace", /inject:\s*\[\s*'slots'\s*,\s*'uiWorks
 check('slots 不可用时显式报错（不静默吞）', c.includes('slots 服务不可用'));
 check('sidebar.panellist id=researchworkbench', /id: 'researchworkbench'/.test(c));
 check('main key=researchworkbench', /key: 'researchworkbench'/.test(c));
-check('Finder 三通道保留（remote.session → /open-in-app → /reveal）',
-  c.includes("svc('remote.session')") && c.includes("'/open-in-app/open'") && c.includes("API + '/reveal'"));
+check('文件定位三通道保留（remote.session → /open-in-app → /reveal）',
+  c.includes("svc('remote.session')") && c.includes("appUrl('open-in-app/open')") && c.includes("API + '/reveal'"));
 
 /* ---------- 2. Phase 2 IA：5 页签 + 页内子页签（spec §8 / §17.7 / §19.6 / §20.5） ---------- */
 const views = ['Today', 'Board', 'Customers', 'Process', 'Library', 'Bids', 'Artifacts', 'Methods', 'Settings'];
@@ -80,21 +80,22 @@ check('今日一屏四宫格：头部 KPI + 四块同级卡片（inbox-grid）',
   && c.includes("className: 'fde-today-head'") && c.includes("className: 'fde-today-grid'")
   && c.includes("className: 'fde-card fde-today-panel'")
   && c.includes('fde-today-panel-title') && c.includes('fde-today-panel-body'));
-check('今日：4 个内联 KPI + 响应式三档（容器查询）',
+check('今日：4 个数字 + 响应式三档（容器查询；宽档 4 列且待我处理最宽）',
   c.includes("className: 'fde-today-kpis'") && c.includes("className: 'fde-kpi-num'")
   && c.includes('@container (max-width:1199px)') && c.includes('@container (max-width:899px)')
-  && c.includes('grid-template-columns:repeat(4,minmax(0,1fr))'));
+  && c.includes('grid-template-columns:minmax(0,1.45fr) minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr)'));
 check('今日：宽档页面级不滚动（四宫格 flex:1/min-height:0 + 块内 body overflow:auto）',
   c.includes('.fde-today-grid{flex:1 1 auto;min-height:0;display:grid')
   && c.includes('.fde-today-panel-body{flex:1 1 auto;min-height:0;overflow:auto'));
 check('今日：旧两栏结构已移除（fde-grid-two 不再出现在今日标记）',
   !c.includes("className: 'fde-grid-two'"));
-check('注意力 8 类 kind 齐全（spec §5）',
+check('待我处理 7 类 + 提醒 1 类的 kind 齐全（spec §5 / §22.3）',
   ['blocked', 'decision', 'review', 'answer', 'overdue', 'gate', 'stall', 'proposal']
     .every((k) => c.includes("'" + k + "'")));
-check('客户页三态（看板·客户 / 看板·任务 / 客户清单）+ 空列占位',
+check('客户页三个视图（看板 / 列表 / 任务）；空列只留一个虚线框，不放文字',
   ['customersViewBoardCustomer', 'customersViewBoardTask', 'customersViewList'].every((k) => c.includes("t('" + k + "')"))
-  && c.includes('（空）'));
+  && c.includes("customersViewBoardCustomer: '看板'") && c.includes("customersViewList: '列表'") && c.includes("customersViewBoardTask: '任务'")
+  && c.includes("className: 'fde-col-empty', 'aria-hidden': 'true'") && !c.includes('（空）'));
 check('客户页表格 + 筛选 + 两段式导入',
   c.includes("className: 'fde-table'") && c.includes("fdePost('/adopt', { action: 'scan' })") && c.includes("fdePost('/adopt', { action: 'apply', dirs })"));
 check('资料页列表/预览分隔条可拖动调宽（容器实测窄时隐藏）',
@@ -106,8 +107,8 @@ check('资料页保留素材/上传/导出/质检，并新增内嵌预览（md/p
   && c.includes("t('matQa')") && c.includes('function FilePreview(') && c.includes('renderMarkdown(')
   && c.includes('readFileAbs(') && c.includes('loadOfficePdf') && c.includes('matPreviewKind('));
 check('方法页复用旧 methods 并列出技能', c.includes("API + '/methods'") && c.includes('skills'));
-check('设置页含自主性/停滞/WIP/健康检查/重启提示',
-  ['settingsAutonomy', 'settingsStall', 'settingsWip', 'settingsHealth', 'settingsRestart']
+check('设置页含 AI 权限 / 没有进展的天数 / 同时进行上限 / 运行状态 / 重启说明',
+  ['settingsAutonomy', 'settingsStall', 'settingsWip', 'settingsHealth', 'settingsRestartBody']
     .every((k) => c.includes("t('" + k + "')")));
 
 /* ---------- 3. 阶段/泳道定义从 /fde/meta 读，不硬编码顺序 ---------- */
@@ -153,7 +154,8 @@ check('颜色声明全部走 token / color-mix（无硬编码色值）', hardCol
   JSON.stringify(hardColors.slice(0, 3)));
 
 /* ---------- 5. API 前缀与请求层 ---------- */
-check("API 前缀唯一的字符串常量", (c.match(/'\/research-workbench\/api'/g) || []).length === 1);
+check('API 前缀只在一处定义（按文档 base 解析）', (c.match(/'research-workbench\/api'/g) || []).length === 1
+  && c.includes("const API = appUrl('research-workbench/api')") && !/'\/research-workbench\/api/.test(c));
 check('FDE 前缀由 API 派生', c.includes("const FDE = API + '/fde'"));
 check('fetch 只在统一请求层（3 处：getJSON / sendJSON / readFileAbs）', (c.match(/\bfetch\(/g) || []).length === 3);
 check('无绝对 http(s) 地址请求', !/fetch\(\s*['"`]https?:/.test(c));
@@ -166,11 +168,15 @@ check('错误契约统一处理 {ok:false,reason}', c.includes('ok === false') &
 
 /* ---------- 6. 宿主未就绪页（spec §11、§16.10；经典模式 v1.7.0 移除） ---------- */
 check('启动探测 /fde/meta', c.includes("getJSON(FDE + '/meta')"));
-check('宿主未就绪页：提示重启 + 只给重试（不再提供经典模式）', c.includes('宿主需要重启 DSH 后启用 FDE 看板')
+check('未就绪页：提示重启 DSH + 只给重试（不再提供经典模式）', c.includes("compatTitle: '需要重启 DSH'")
   && c.includes("t('compatRetry')") && !c.includes("t('compatClassic')") && !c.includes('function ClassicApp('));
 check('不白屏：探测中/未就绪/正常三态都有组件',
   c.includes('function ProbingScreen(') && c.includes('function CompatPage(') && c.includes('function FdeApp('));
-check('hasSession:false 时任务文本写剪贴板', c.includes('navigator.clipboard') && c.includes("t('copied')"));
+/* 没能自动新开会话：能复制就复制并提示；复制不了就把那段话摆出来（不能只说「请粘贴」却不给内容） */
+check('hasSession:false 时任务文本写剪贴板，写不了就展示出来', c.includes('navigator.clipboard')
+  && c.includes('const offerPrompt = useCallback(') && c.includes("notify('warn', t('handoffFail'))")
+  && c.includes('initialValue: text') && c.includes('if (await offerPrompt(r.prompt)) return;'));
+check('提醒的「交给 AI 准备」没开成会话时同样把那段话交给人', c.includes('if (!r.ok) { await offerPrompt(r.prompt); return; }'));
 
 /* ---------- 7. 可访问性 / 拖拽 / 键盘（spec §8.8） ---------- */
 check('抽屉 role=dialog + aria-modal', c.includes("role: 'dialog'") && c.includes("'aria-modal': 'true'"));
@@ -184,15 +190,17 @@ check('错误/提示有无障碍播报（role=alert / aria-live）', c.includes(
 check('导航用 role=tablist/tab + aria-selected', c.includes("role: 'tablist'") && c.includes("'aria-selected'"));
 
 /* ---------- 8. 抽屉与破坏性确认（spec §8.7、§16.4） ---------- */
-check('客户抽屉含阶段步进/门禁清单/下一步/干系人/时间线',
-  ['drawerStage', 'drawerGate', 'drawerNext', 'drawerStakeholders', 'drawerTimeline']
-    .every((k) => c.includes("t('" + k + "')")));
-check('门禁人工项可勾选 + 证据输入', c.includes('checksPayload') && c.includes('drawerGateEvidencePh'));
-check('抽屉操作：启动会话/暂停/归档',
+check('客户抽屉含下一步 / 阶段 / 推进条件清单 / 关键人 / 资料 / 记录',
+  ['drawerNext', 'drawerStage', 'drawerStakeholders', 'drawerArtifacts', 'drawerTimeline']
+    .every((k) => c.includes("t('" + k + "')")) && c.includes("className: 'fde-gate-list'"));
+check('推进条件的确认项可勾选，备注选填（点「加备注」才出现输入框）',
+  c.includes('checksPayload') && c.includes('drawerGateEvidencePh') && c.includes("'加备注'") && c.includes('noteOpen'));
+check('抽屉操作：交给 AI / 暂停跟进 / 归档',
   ['drawerStartSession', 'drawerPause', 'drawerArchive'].every((k) => c.includes("t('" + k + "')")));
-check('任务抽屉含回报历史/关联会话/删除',
-  ['drawerReports', 'drawerSession', 'drawerDelete'].every((k) => c.includes("t('" + k + "')")));
-check('门禁未过显示缺项并二次确认强制', c.includes("t('drawerGateMissingTitle')") && c.includes("t('drawerForceReason')"));
+check('任务抽屉含进展 / 打开会话 / 删除',
+  ['drawerReports', 'drawerReportNow', 'drawerDelete'].every((k) => c.includes("t('" + k + "')"))
+  && c.includes("p.onOpenSession(it.sessionId) }, '打开会话')"));
+check('推进条件没满足时列出还差什么，破例推进要写原因', c.includes("t('drawerGateMissingTitle')") && c.includes("t('drawerForceReason')"));
 check('任务移入 done 需证据文本', c.includes("t('drawerEvidenceTitle')") && c.includes('evidence, force: true'));
 check('归档/删除都二次确认（无原生 confirm）',
   c.includes("t('drawerArchiveBody')") && c.includes("t('drawerDeleteBody')") && !/window\.confirm\(/.test(c));
@@ -204,9 +212,10 @@ check('招采 API 全部走 fdeGet/fdePost',
   ["fdeGet('/bids/stats')", "FDE + '/bids/search?", "fdeGet('/bids/match?", "fdePost('/bids/link'", "fdePost('/bids/unlink'", "fdePost('/bids/promote'", "fdePost('/bids/refresh'"]
     .every((x) => c.includes(x)));
 check('招采不可用降级文案（不白屏不报错）',
-  c.includes('招采雷达未就绪（bid-intel 未装载或未升级）') && c.includes('function BidUnavailable('));
-check('客户抽屉招采区：统计徽章 + Top5 + 已关联 + 开关',
-  c.includes('bidStatBadges') && c.includes("t('bidMatchTop')") && c.includes("t('bidLinksTitle')") && c.includes("t('bidWatchLabel')"));
+  c.includes('招采数据暂时用不了：需要安装并启用「招采雷达」插件。') && c.includes('function BidUnavailable('));
+check('客户抽屉招采区：统计徽章 + 最近 5 条 + 已关联 + 新公告提醒开关；没装招采雷达时整块不显示',
+  c.includes('bidStatBadges') && c.includes('asList(bidsData.items).slice(0, 5).map(bidMatchRow)') && c.includes("t('bidLinksTitle')")
+  && c.includes("t('bidWatchLabel')") && c.includes('const bidsBlock = bidsHidden ? null :'));
 check('抽屉匹配列表有加入跟进/关联/查看原文',
   c.includes("t('bidAddFollowup')") && c.includes("t('bidLink')") && c.includes("t('bidOpenSource')"));
 check('已关联可取消关联', c.includes("t('bidUnlink')") && c.includes("fdePost('/bids/unlink'"));
@@ -216,9 +225,11 @@ check('卡片徽章 tooltip 含最近日期', /，最近 ' \+ fmtDay\(b\.latest\
 check('原文链接 target=_blank + rel=noreferrer',
   /target: '_blank', rel: 'noreferrer noopener'/.test(c));
 check('金额展示为公告原文（不换算）', c.includes("t('bidAmountTip')"));
-check('候选人 ≠ 中标人 口径提示', c.includes('候选人 ≠ 中标人') && c.includes("t('bidCandidatesNote')"));
+check('候选人不等于中标人 口径提示（页面提示 + 候选人列表提示）',
+  c.includes("bidPageHint: '候选人不等于中标人；金额是公告原文，没有换算；按名称查到的结果需要人工核对。'")
+  && c.includes("t('bidPageHint')") && c.includes("t('bidCandidatesNote')"));
 check('导入链接探测 bid-intel（不可用隐藏）',
-  c.includes("'/bidintel/api/status'") && c.includes("'/bidintel/api/import-url'") && c.includes('importReady === true'));
+  c.includes("appUrl('bidintel/api/status')") && c.includes("appUrl('bidintel/api/import-url')") && c.includes('importReady === true'));
 check('设置页招标雷达开关 + 服务状态',
   c.includes("t('bidSettingsLabel')") && c.includes("t('bidServiceStatus')") && c.includes("t('bidServiceNotReady')"));
 check('采样口径：抽屉「相关 ≈N（采样 M 条）」文案',
@@ -275,22 +286,22 @@ check('流程在导航中（第 4 项）且带页内子页签',
 check('8 阶段从 meta.stages 派生（不硬编码阶段数与顺序）',
   c.includes('asList(meta && meta.stages)') && c.includes('stages.map(stepNode)')
   && !/\[\s*'lead'\s*,\s*'discovery'/.test(c) && !c.includes('7 个阶段') && !c.includes('7 列'));
-check('步进条：阶段名 + 当前客户数 + 门禁状态点',
-  ['processClientCountSuffix', 'fde-flow-step', 'fde-flow-gate-dot', 'fde-flow-name']
+check('阶段条：阶段名 + 当前客户数',
+  ['processClientCountSuffix', 'fde-flow-step', 'fde-flow-name']
     .every((k) => c.includes(k)));
-check('阶段详情：goal / inputs / activities / outputs / tools / pitfalls / 门禁清单',
+check('阶段详情：goal / inputs / activities / outputs / tools / pitfalls / 进入条件',
   ['processGoal', 'processInputs', 'processActivities', 'processOutputs', 'processTools',
-    'processPitfalls', 'processGateAuto', 'processGateManual'].every((k) => c.includes("t('" + k + "')")));
+    'processPitfalls', 'processGate', 'processGateManual'].every((k) => c.includes("t('" + k + "')")));
 check('工具 chips：method/template 跳方法页（onOpenMethod + initialName）',
   c.includes("tool.kind === 'method' || tool.kind === 'template'")
   && c.includes('onOpenMethod') && c.includes('initialName') && c.includes('initialSeq'));
-check('工具 chips：skill/tool 展开「在会话中这样用」示例 + 复制',
-  c.includes("tool.kind === 'skill'") && c.includes('copyExample')
-  && c.includes("t('processHowTo')") && c.includes("t('processCopy')"));
+check('技能与工具：点一下复制一句可粘贴到会话的话',
+  c.includes("tool.kind === 'skill'") && c.includes('copyExample(tool)')
+  && c.includes("t('processHowTo')") && c.includes("t('processCopied')"));
 check('工具 chips：library 跳资料库', c.includes("tool.kind === 'library'") && c.includes('onOpenLibrary'));
-check('阶段 × 工具矩阵（8 行 × 工具列，只读）',
-  c.includes('processMatrixTitle') && c.includes('fde-matrix') && c.includes('toolCols')
-  && c.includes('processColStage'));
+check('阶段 × 工具矩阵已移除（ADR 0010 D8）',
+  !c.includes('processMatrixTitle') && !c.includes('fde-matrix') && !c.includes('toolCols')
+  && !c.includes('processColStage'));
 check('meta 缺 playbook 时提示宿主未升级（不白屏）',
   c.includes('processNoPlaybook') && c.includes('hasPlaybook') && c.includes('processNoMeta'));
 check('流程 CSS 走 --fde-* 语义 token 且无裸色值',
@@ -304,7 +315,7 @@ check('生财页签 / ScysView / 专用接口与 CSS 均已移除',
 
 /* ---------- 8f. v1.5.0 只读演示模式（ADR 0006 / spec §8.8） ---------- */
 check('演示数据常量与触发条件（4 客户 / 3 任务 / 2 注意力 / 4 活动）',
-  c.includes('const DEMO_BOARD') && c.includes('const DEMO_BRIEF')
+  c.includes('const DEMO_ENGAGEMENTS') && c.includes('const DEMO_ITEMS') && c.includes('const DEMO_BRIEF')
   && ['demo-eng-1', 'demo-eng-2', 'demo-eng-3', 'demo-eng-4'].every((x) => c.includes(x))
   && ['demo-itm-scoping', 'demo-itm-discovery', 'demo-itm-meeting'].every((x) => c.includes(x))
   && ['demo-attn-decision', 'demo-attn-review'].every((x) => c.includes(x))
@@ -324,8 +335,8 @@ check('演示只读：demoGuard 包装 postJSON / runAction / openCreate / guard
 check('一键清除写 demoDismissed:true；设置卡片可重新查看（false）',
   c.includes("patch: { demoDismissed: true }") && c.includes("patch: { demoDismissed: false }")
   && c.includes('demoBypass: true') && c.includes("t('demoCardTitle')"));
-check('空态三步引导 + 示例客户名带「（示例）」后缀',
-  c.includes('fde-onboard-step') && c.includes("t('demoStepRestore')")
+check('空状态三个按钮（新建客户 / 导入已有文件夹 / 看示例）+ 示例客户名带「（示例）」后缀',
+  c.includes("t('demoOnboardTitle')") && c.includes("t('scanNow')") && c.includes("t('demoStepRestore')")
   && ['某集团（示例）', '某研究院（示例）', '某材料（示例）', '某能源（示例）'].every((x) => c.includes(x)));
 
 /* ---------- 9. 轮询 / 状态事实源 / 约束 ---------- */

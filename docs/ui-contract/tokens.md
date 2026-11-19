@@ -203,7 +203,7 @@
 
 | 现状值 | 出现在 | 目标 |
 |---|---|---|
-| `999px` | 自主性徽章、chip | `999px` + `corner-shape: round`（保留胶囊） |
+| `999px` | chip、资料页搜索框 | `999px` + `corner-shape: round`（保留胶囊） |
 | `50%` | 色点、spinner、步进数字 | `50%` + `corner-shape: round` |
 | `5px` | 键帽、行内 code | `--dsw-radius-xs` |
 | `6px` | 注意力 kind、招采关系徽章、资料库徽章 | `--dsw-radius-xs`（H20）或 sm |

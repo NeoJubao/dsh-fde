@@ -260,3 +260,89 @@
 **回滚**：`git checkout -- client.js src/ui/ui-panel.js` 后重跑 `node build.mjs`；无宿主路由/数据迁移，回滚不影响 board 与客户卷。
 
 | 10.6 | 客户端（追加） | 按用户指示移除经典模式：删 `ClassicApp`/旧五页签与 `.rw-*` 视觉、页头/设置页/未就绪页三个入口、62 个失去引用的 DICT key；未就绪页精简为「重试 + 重启说明」；宿主旧路由暂留 | `node build.mjs`；`node verify/all.mjs` 全绿（断言改为「经典模式已移除」）；真机无经典入口 |
+
+---
+
+## 11. v2.0 可交付版（2026-11-19，ADR 0010）
+
+> 触发：用户要求「整体进行一次重构……去掉无用说明、改掉用户不懂的晦涩文字、最大程度简化用户操作，达到可交付的标准状态」。
+> 决策与边界见 `docs/adr/0010-v2-可交付版.md`；契约见 `docs/01-spec.md` §22（§1 / §5 / §6 / §8 的旧表述以 §22 为准）。
+> 改前快照：工作区 `.archive/dsh-fde-pre-v2-20261119-143501.tar.gz`；分支 `feature/v2-delivery-refactor`。
+
+### 11.1 重构前的事实（重构前截图 + 代码核对）
+
+| # | 现象 | 证据 |
+|---|---|---|
+| 1 | 11 个文案 key 直接显示在界面（看板卡片、客户列表表头、设置页标题、资料库类型等） | 扫描 `t('key')` 与字典：`boardNoNext` `customersStage` `customersPriority` `tabSettings` `settingsAutonomy` `settingsAutonomyDesc` `methodsSkills` `bidRelNotice` `board` `converted` `noSession`；另 `libKind*` 动态 key 整组缺失 |
+| 2 | 界面显示规则编号、对象编号、检查项 key、字段名、接口路径、状态文件名 | 今日页 `stall` / `due_soon`；抽屉 `eng_…`、`subject_locked`；流程页 `company / source / nextAction`、`/fde/meta` |
+| 3 | 同一逾期事项在今日页出现三次 | `derivedAttention` 把待处理提醒并入注意力，面板又单独渲染「建议」栏；`overdue` 规则与派生逾期重复 |
+| 4 | 提醒不过期、标题天数不更新，上限 8 条会被旧提醒占满 | `refreshProposals` 只追加；`proposalRecentlyExists` 对 pending 永久去重 |
+| 5 | 「采纳」对 `stall` / `due_soon` / `review_lag` 是空操作 | `executeProposal` 只处理 `create_item` 与带 `patch` 的提醒 |
+| 6 | 设置页两个开关没有效果；自主性两档实现相同 | `folderWatch` / `briefOnOpen` 在宿主无读取点；`applySafeProposals` 只区分 `observe` 与其它 |
+| 7 | 客户抽屉：推进条件默认「未评估」、四个保存按钮、主操作在底部 | 重构前抽屉截图 |
+| 8 | 8 列看板在 1440 宽下第 8 列被截断，用两行文字解释操作 | 重构前看板截图 |
+
+### 11.2 工作项
+
+| # | 范围 | 改动 | 验证 |
+|---|---|---|---|
+| 11.2.1 | `docs/adr/0010-*.md`、`docs/01-spec.md` §22、本节 | 决策、契约、计划先行 | 文档评审 |
+| 11.2.2 | `src/host/fde-schema.js`、`fde-rules.js`、`fde-api.js`、`fde-prompts.js`、`index.js`（提示词与返回文本） | D1/D4/D11/D12：给人看的文本改写；四条规则标 `derived`；提醒自动失效与标题更新；系统提示词加用词约定 | `verify/fde-host.mjs`、`acceptance-audit.mjs`、`host-smoke.mjs`、`security.mjs` |
+| 11.2.3 | `src/ui/ui-panel.js`、`client.js`、`build.mjs` | D2/D3/D5–D10：字典重写与补齐、今日去重、看板与卡片、客户抽屉重排、流程与设置收敛、页头；构建期字典完整性校验 | `node build.mjs`；`verify/client-static.mjs`、`fde-client.mjs`、`client-runtime.mjs`；离线 harness 截图逐页复核 |
+| 11.2.4 | `skills/**`、`methods/**`、`templates/**` | 与新界面对不上的页签名、按钮名、用词同步；不改方法口径 | `scripts/health-check.mjs`、`verify/open-source.mjs` |
+| 11.2.5 | `README.md`、`CHANGELOG.md`、`AGENTS.md`、`docs/GETTING-STARTED.md`、`docs/ui-contract/`、`assets/`、`package.json`、`locale/` | 版本 2.0.0；上手教程与截图换成新界面；键盘操作说明移入教程 | `scripts/check-readme-version.mjs`、`scripts/release-preflight.mjs` |
+| 11.2.6 | DSH 0.2.1 规范核对 | 对照本机 `@deepseek-ai/dsh@0.2.1-rc.5` 的清单、客户端注入、主题 token、技能与工具注册约定，记录差异并修复可在插件内解决的项 | 审计结论写入本节 11.5 |
+
+### 11.3 验收
+
+1. `node build.mjs` 通过（含字典完整性校验）；`node verify/all.mjs` 全绿；`node scripts/health-check.mjs` 0 FAIL。
+2. 面板源码的中文文案里没有 ADR 0010 D1「不再出现」一栏的词，也没有内部标识。
+3. 离线 harness 在 1440×900 与 1180×800 下逐页截图：今日、客户（看板 / 列表 / 任务）、客户抽屉、任务抽屉、资料、流程、情报、设置、空工作区、示例数据；明暗主题各一套今日与看板。
+4. 存量看板读取：四条 `derived` 规则的待处理提醒被自动关闭，其它数据不变；`board.json` 结构版本不变。
+5. 真实 DSH 重启后的人工验收由用户执行（本次不重启 DSH、不改 profile）。
+
+### 11.4 回滚
+
+解包 `.archive/dsh-fde-pre-v2-20261119-143501.tar.gz`，或切回 `main`。数据无迁移；被自动关闭的提醒在旧版本里表现为「已忽略」。
+
+### 11.5 执行结果（2026-11-19）
+
+| 工作项 | 状态 | 交付 | 验证 |
+|---|---|---|---|
+| 11.2.1 文档先行 | ✅ | `docs/adr/0010-v2-可交付版.md`（D1–D16）、`docs/01-spec.md` §22（含 §22.7 DSH 0.2.1 约定、§22.9 交给 AI 用哪个阶段的做法）、本节 | — |
+| 11.2.2 宿主 | ✅ | 给人看的文本全部改写；四条规则标 `derived`；提醒「求值 → 失效与更新 → 生成 → 清理」；`stats.todo`；新模块 `src/host/tool-output.js`；`inject` 缩到 `tools` + `systemPrompt`；技能带 `source`；`/reveal` 传 `signal`；新建任务负责人空值；交接任务标题；删除个人目录兜底 | `fde-host` 318 → 478；`host-smoke` 55；`security` 70；`fde-scys-host` 110 → 115；`acceptance-audit` 669 → 682，全过 |
+| 11.2.3 面板 | ✅ | 字典重写（改 308、补 28、删 51）；今日去重与按钮；看板列宽与卡片；客户抽屉 / 任务抽屉重排；流程页；设置页改了就存；页头；未就绪页；`appUrl()`；样式约定；清理 42 条无引用样式与 15 个无引用函数；`build.mjs` 两项检查（`tools/panel-checks.mjs`） | `client-static` 105 → 132；`fde-client` 122；`client-runtime` 191 → 234，全过；界面契约 8/8、漂移 0（基线 2） |
+| 11.2.4 技能与方法 | ✅ | 16 个技能、7 篇方法、2 个模板、2 份参考：指路与用词对齐；否决项编号与实现对齐；产物文件名统一；悬空引用清理；简写标准速查里的符合度声明模板删除 | `health-check` 技能三项 OK；`open-source` 66；`fde-tools` 74 |
+| 11.2.5 文档与发布件 | ✅ | `README.md`、`CHANGELOG.md`、`AGENTS.md`、`docs/GETTING-STARTED.md`、`docs/DEVELOPING.md`、`docs/ui-contract/`、`examples/README.md`、`locale/`、`package.json`（2.0.0、`engines.dsh <0.3.0-0`）、`assets/` 8 张新截图 | `check-readme-version`；`pack` 41 |
+| 11.2.6 DSH 0.2.1 核对 | ✅ | 只读审计 4 个 P1 全部修复并有断言；P2 中的版本上界、接口地址、样式约定、图标尺寸、样式标签、外链校验、`DSH_HOME` 已修；其余列入 11.6 | 宿主子代理用官方包实测：16 个技能可加载、工具返回值零拒绝 |
+
+| 11.2.7 独立审查与收尾 | ✅ | 请独立审查读完整份改动：没有会报错或写坏数据的问题，指出 9 条行为缺陷，全部修复——抽屉与设置页的草稿被别处更新冲掉、旧记录显示替换误伤用户写的标题、没开成会话时不给那段话、只多空格也算改动、流程页停在上次跳转的阶段、按提醒处理覆盖已写的下一步、导入结果提示、文案检查的引号盲区。核对其中一条时发现「交给 AI 给错了做法」（ADR 0010 D16 / spec §22.9），一并改正：做法跟着要补的材料走，看板卡片与抽屉读同一组条件 | `fde-host` 478 → 492；`client-runtime` 234 → 245；`fde-client` 122 → 123；`acceptance-audit` 682 → 696 |
+
+`node verify/all.mjs`：全部验证通过。`node scripts/health-check.mjs`：14 OK / 4 WARN / 0 FAIL（WARN 与基线相同：缓存日期、历史审计报告里的路径、重启状态）。`node scripts/release-preflight.mjs`：通过（只检查，不发布）。
+
+**独立审查没有看到的范围（如实）**：`fde-schema.js` 与 `fde-prompts.js` 的完整差异、`fde-scys.js` 的授权目录改动、资料库 / 招采 / 资料页与文件预览的实现、样式与窄屏、文档与技能的改动、spec §22 与实现的逐条比对。这些只有自测和截图核对。
+
+**界面核对方式**：离线渲染环境（面板源码 + 插件自己的 DSH 侧实现 + 合成工作区）逐页截图，1440×900 与 1180×800，今日与看板另有暗色。实施中靠截图发现了两处测试没覆盖到的缺陷（抽屉打开不核对推进条件、页面里残留的文案 key）。
+
+**没有做的验证（如实）**：没有重启真实 DSH 做整体验收（按工作区规则不重启 DSH、不改 profile）；没有在 Windows 上重跑；没有用真实工作区的看板做写入测试（只读统计过其中记录文本的句式，用于显示替换的规则）。
+
+**对存量数据的影响**：首次打开后，`stall` / `overdue` / `gate_ready` / `review_lag` 留下的待处理提醒会被自动关闭（标记 `expired`），条件已不成立的其它提醒同理；这次刷新会写一次盘（写前照常备份）。其余数据不变。
+
+### 11.6 Backlog（本次不做）
+
+- 拆分 `src/ui/ui-panel.js`（现 7500 行）：保持零构建依赖的前提下，用 `build.mjs` 按顺序拼接多个源文件；需要同步 6 个读取源码路径的验证脚本。
+- 方法库缺口：试点、交付、采用三个阶段没有独立的方法文档，也没有试点方案 / 实施计划 / 验收清单 / 风险登记的骨架模板；`methods/00` 标题写「端到端」但只覆盖到出方案。
+- DSH 0.2.1 的新能力（未采用）：`ctx.connection.fetch.register`（路由自带鉴权，可替换自写守卫）；`plugins.bundle.config` / `activation`（把设置与首次引导放进官方「插件」页）；工具 `execute(args, exec)`（取消信号、按会话取工作区根与只读模式）；`ctx.locale`（界面多语言）；`ctx.credentials`（替代工作区里的授权文件）。
+- 上一轮审计遗留、本次未动：GET 读路径在提醒有变化时会写盘（已做到无变化不写）；上传上限 300MB；面板字号仍有写死的 px（界面契约 A5 已在刻度内）。
+- 离线渲染环境在仓库外（`plugin-audit/fde-v2/harness/`），v2 起需要按 `docs/DEVELOPING.md` §6 的说明补三处才能正确渲染；可考虑收进仓库的 `verify/` 下并接入 `verify/all.mjs` 做截图冒烟。
+- 示例与方法里若干来自真实调研的数字与地名是否需要进一步模糊（清单见 11.7）。
+- 清理面板已不调用的旧路由（`/status`、`/projects`、`/scaffold`），见 ADR 0009 后果一节。
+- `settings.sources.folderWatch` / `briefOnOpen` 两个无效字段从默认设置中移除（需要结构版本与校验同步）。
+
+### 11.7 需要人确认的事项
+
+1. **方法与参考文档里的具体数字和地名**。`methods/01` §四、`reference/雷区清单.md` C 节、`methods/02` §一、`methods/00` §3.2、`reference/数据源清单.md`、`methods/04` 里有若干来自真实调研的金额、比例、地方平台域名和公开公司的引述。它们通过了发布检查的客户词扫描，但是否足够脱敏需要人判断；本次按「不删事实、不改数字」没有动。
+2. **按旧模板填过的场景评估表**。否决项编号 4、5、6 的含义在本版对齐了实现；工作区里有 1 份按旧模板建的 `scoping/场景评估.md`，复用前要重新核对编号。
+3. **提交与发布**。改动都在分支 `feature/v2-delivery-refactor` 的工作树里，未提交；npm 发布、打 tag、推送都没有做。
+4. **真实 DSH 验收**。重启 DSH 后按 `docs/GETTING-STARTED.md` 走一遍，重点看：技能能否加载、今日的提醒数量、打开客户抽屉是否直接显示推进条件、新建任务、设置改了就存、点「交给 AI 准备材料」后 AI 拿到的是不是要进入的那个阶段的做法。
+5. **导入的客户放在哪一列**。工作区里现有的客户都是从文件夹导入的，是按「文件夹里有没有这个阶段的材料」放列的；当前列自己的条件没有通过记录（例如放在「方案」但可能还没有成本测算、报价单）。2.0 起交给 AI 准备的是进入下一列的材料，同时会在给 AI 的话里写明当前列还缺什么。哪几家放得太靠后、要不要拖回前一列，需要你看一眼决定（往回拖不需要条件）。

@@ -22,14 +22,18 @@ if (typeof mod.apply !== 'function') fail.push('缺少 apply 导出');
 else ok.push('apply 导出存在');
 if (!Array.isArray(mod.inject)) fail.push('缺少 inject 数组');
 else ok.push('inject: ' + mod.inject.join(','));
-/* v1.3 开源改造（ADR 0004 D3）：webServer 改为可选挂载（ctx.inject(['webServer'])，服务缺失不影响
- * 工具/技能/提示词），inject 里不再声明 webServer；其余四个服务仍是硬依赖。 */
+/* DSH 0.2.1 兼容：硬依赖只有 dsh-base 自带的 tools 与 systemPrompt。
+ * workspaceRegistry / sessionController 只在 Web 组合里有，写进 inject 会让 headless / acp / sdk 载体下
+ * apply 根本不执行；webServer 自 v1.3 起就是可选挂载（ADR 0004 D3）。三者都改为用到时懒取。 */
 if (Array.isArray(mod.inject)) {
-  const need = ['tools', 'systemPrompt', 'workspaceRegistry', 'sessionController'];
+  const need = ['tools', 'systemPrompt'];
+  const mustNot = ['workspaceRegistry', 'sessionController', 'webServer', 'skills'];
   const missing = need.filter((n) => !mod.inject.includes(n));
+  const extra = mod.inject.filter((n) => !need.includes(n));
   if (missing.length) fail.push('inject 缺少：' + missing.join(','));
-  else if (mod.inject.includes('webServer')) fail.push('inject 不应声明 webServer（改为可选挂载）');
-  else ok.push('inject 契约：含 tools/systemPrompt/workspaceRegistry/sessionController，不含 webServer');
+  else if (mustNot.some((n) => mod.inject.includes(n))) fail.push('inject 不应硬依赖：' + mustNot.filter((n) => mod.inject.includes(n)).join(','));
+  else if (extra.length) fail.push('inject 只应含 tools / systemPrompt，多出：' + extra.join(','));
+  else ok.push('inject 契约：只硬依赖 tools / systemPrompt（workspaceRegistry / sessionController / webServer / skills 懒取）');
 }
 if (mod.name !== 'research-workbench') fail.push('name 应为 research-workbench，实际 ' + mod.name);
 else ok.push('name=' + mod.name);
@@ -39,6 +43,7 @@ const tools = [];
 const routes = [];
 const sections = [];
 const openCalls = [];
+const openSignals = [];
 /* Phase 3 · 子进程替身：记录 spawn spec，不真的执行命令（用于断言走的是官方 ctx.subprocess 路径）。 */
 const subCalls = [];
 const fakeSubprocess = {
@@ -72,8 +77,14 @@ const fakeCtx = {
     if (n === 'sessionController') return {
       create: async () => ({ sessionId: 'test-session-1' }),
       prompt: async () => true,
-      /* reveal 路由首选这条；测试里只记录，不真的调起 Finder */
-      openWorkspacePath: async (req) => { openCalls.push(req); return { opened: true }; },
+      /* reveal 路由首选这条；测试里只记录，不真的调起 Finder。
+       * 与 DSH 0.2.1 的实现同口径：第一步就是 signal.throwIfAborted()——不传 signal 必抛 TypeError。 */
+      openWorkspacePath: async (req, signal) => {
+        signal.throwIfAborted();
+        openSignals.push(signal);
+        openCalls.push(req);
+        return { opened: true };
+      },
     };
     /* Phase 3 · 官方子进程服务替身：让 rw_export_pdf / rw_qa_pdf 走 ctx.subprocess 主路径。 */
     if (n === 'subprocess') return fakeSubprocess;
@@ -259,6 +270,11 @@ const callRoute = async (pathWithQuery, method, body) => {
   if (!rvOpen.payload || !rvOpen.payload.ok || !rvOpen.payload.isDir) fail.push('reveal 路由（目录 open）失败：' + JSON.stringify(rvOpen.payload));
   else if (!openCalls[1] || openCalls[1].action !== undefined) fail.push('目录 open 不该带 action：' + JSON.stringify(openCalls[1]));
   else ok.push('reveal 路由 OK（目录 open → 交给默认应用）');
+  /* DSH 0.2.1：openWorkspacePath 的第二参必须是可用的 AbortSignal（未取消），否则原生通道恒失败、静默退回系统命令。 */
+  const badSignal = openSignals.filter((sg) => !sg || typeof sg.throwIfAborted !== 'function' || typeof sg.addEventListener !== 'function' || sg.aborted !== false);
+  if (openSignals.length !== openCalls.length || openSignals.length < 2) fail.push('reveal 未给 openWorkspacePath 传 signal（调用 ' + openCalls.length + ' 次，带 signal ' + openSignals.length + ' 次）');
+  else if (badSignal.length) fail.push('reveal 传给 openWorkspacePath 的 signal 不可用或已取消');
+  else ok.push('reveal 传给 openWorkspacePath 的第二参是可用的 AbortSignal（' + openSignals.length + ' 次调用）');
 
   const rvOut = await callRoute('/research-workbench/api/reveal', 'POST', { path: '/etc/hosts' });
   if (!rvOut.payload || rvOut.payload.ok) fail.push('reveal 应拒绝工作区外的路径');
@@ -473,6 +489,143 @@ else {
   if (!c.includes("id: 'dsh-fde'")) fail.push('client.js 模块 id 不符（应为 dsh-fde）');
   else if (!c.includes("id: 'researchworkbench'")) fail.push('client.js 侧栏 panel id 不符（应保持 researchworkbench）');
   else ok.push('client.js 就绪');
+}
+
+/* ============================ DSH 0.2.1 兼容性 ============================ */
+
+/** 与 dsh-skill 0.2.1 同口径的技能服务替身：register 只校验名称与描述，get（加载）时校验
+ *  source / provider / content 必须是字符串——缺 source 的技能「能注册、能列出，加载必抛」。 */
+function makeStrictSkills() {
+  const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const runtime = new Map();
+  return {
+    register(skill) {
+      if (!SKILL_NAME.test(skill.name)) throw new Error(`invalid skill name "${skill.name}"`);
+      if (skill.description.length === 0) throw new Error(`skill "${skill.name}" requires a description`);
+      if (runtime.has(skill.name)) return () => {};
+      runtime.set(skill.name, {
+        ...skill,
+        invocation: skill.invocation ?? { modelInvocable: true, userInvocable: true },
+        provider: skill.provider ?? 'runtime',
+      });
+      return () => { runtime.delete(skill.name); };
+    },
+    async list() { return [...runtime.values()].map((d) => ({ name: d.name, description: d.description, source: d.source, provider: d.provider })); },
+    async get(skillName) {
+      const d = runtime.get(skillName);
+      if (d === undefined) return undefined;
+      if (typeof d.name !== 'string') throw new TypeError('loaded skill name must be a string');
+      if (typeof d.description !== 'string') throw new TypeError(`loaded skill "${d.name}" description must be a string`);
+      if (typeof d.source !== 'string') throw new TypeError(`loaded skill "${d.name}" source must be a string`);
+      if (typeof d.provider !== 'string') throw new TypeError(`loaded skill "${d.name}" provider must be a string`);
+      if (typeof d.content !== 'string') throw new TypeError(`loaded skill "${d.name}" content must be a string`);
+      if (d.path !== undefined && typeof d.path !== 'string') throw new TypeError(`loaded skill "${d.name}" path must be a string`);
+      return d;
+    },
+    _names: () => [...runtime.keys()],
+  };
+}
+
+/* 替身自检（反例）：缺 source 的注册对象，加载时必须抛——证明下面的断言不是空转。 */
+{
+  const probe = makeStrictSkills();
+  probe.register({ name: 'probe-skill', description: '反例', content: '正文' });
+  let msg = '';
+  try { await probe.get('probe-skill'); } catch (e) { msg = String(e && e.message); }
+  if (!/source must be a string/.test(msg)) fail.push('技能服务替身没有校验 source（反例未抛）：' + msg);
+  else ok.push('技能服务替身与 dsh-skill 0.2.1 同口径（缺 source → 加载抛 TypeError）');
+}
+
+/* 最小服务集：只有 tools + systemPrompt（dsh-base 自带；headless / acp / sdk 载体就是这样）。
+ * apply 必须成功、16 个工具注册、不注册路由；工具可调用且不抛。 */
+{
+  const minTools = [];
+  const minSections = [];
+  const modMin = await import(__toUrl(join(ROOT, 'index.js')) + '?minimal=1');
+  const minCtx = {
+    logger: { info() {}, warn() {}, error() {} },
+    get(n) {
+      if (n === 'tools') return { register: (d) => minTools.push(d) };
+      if (n === 'systemPrompt') return { section: (d) => minSections.push(d), getSectionOrder: () => 2950 };
+      return undefined;
+    },
+  };
+  let threw = null;
+  try { modMin.apply(minCtx); } catch (e) { threw = e; }
+  if (threw) fail.push('最小服务集（tools + systemPrompt）apply 抛错：' + String(threw && threw.message));
+  else if (minTools.length !== 16) fail.push('最小服务集应注册 16 个工具，实际 ' + minTools.length);
+  else if (minSections.length !== 1) fail.push('最小服务集应注册 1 段系统提示词，实际 ' + minSections.length);
+  else ok.push('最小服务集（只有 tools + systemPrompt）apply 成功：16 个工具 + 1 段系统提示词，不注册路由');
+  if (!threw && minTools.length === 16) {
+    const run = async (toolName, args) => {
+      try { return await minTools.find((t) => t.name === toolName).execute(args); } catch (e) { return { threw: String(e && e.message) }; }
+    };
+    const st = await run('rw_status', { root: ws });
+    const bd = await run('fde_board', { view: 'board', root: ws });
+    const sn = await run('fde_scenario', { action: 'template' });
+    const bad = [['rw_status', st], ['fde_board', bd], ['fde_scenario', sn]].filter(([, r]) => !r || r.threw || r.ok === false || typeof r.text !== 'string');
+    if (bad.length) fail.push('最小服务集下工具不可用：' + bad.map(([n, r]) => n + ' → ' + JSON.stringify(r).slice(0, 120)).join('；'));
+    else ok.push('最小服务集下工具可用（rw_status / fde_board / fde_scenario；没有 workspaceRegistry 与 sessionController）');
+  }
+}
+
+/* 真实 cordis 的访问语义：没写进 inject 的服务用属性访问会抛（cannot get property … without inject），
+ * 只能 ctx.get；晚到的服务经 ctx.inject(deps, cb) 通知。验证：apply 不受影响，skills / webServer 晚到后补注册。 */
+{
+  const lateTools = [];
+  const lateRoutes = [];
+  const provided = {
+    tools: { register: (d) => lateTools.push(d) },
+    systemPrompt: { section() {}, getSectionOrder: () => 2950 },
+  };
+  const waiters = [];
+  const base = {
+    logger: { info() {}, warn() {}, error() {} },
+    get: (n) => provided[n],
+    inject: (deps, cb) => { waiters.push({ deps, cb }); },
+    effect: (fn) => { try { const d = typeof fn === 'function' ? fn() : undefined; return typeof d === 'function' ? d : () => {}; } catch { return () => {}; } },
+  };
+  const strictCtx = new Proxy(base, {
+    get(t, prop) {
+      if (typeof prop === 'symbol' || prop in t) return t[prop];
+      throw new Error(`cannot get property "${String(prop)}" without inject`);
+    },
+  });
+  const modLate = await import(__toUrl(join(ROOT, 'index.js')) + '?late=1');
+  let threw = null;
+  try { modLate.apply(strictCtx); } catch (e) { threw = e; }
+  if (threw) fail.push('未声明服务属性访问会抛的上下文里 apply 失败：' + String(threw && threw.message));
+  else if (lateTools.length !== 16) fail.push('未声明服务属性访问会抛的上下文里应注册 16 个工具，实际 ' + lateTools.length);
+  else ok.push('未声明的服务只走 ctx.get（属性访问抛错也不影响 apply，16 个工具注册）');
+  const waiting = waiters.map((w) => w.deps.join('+')).sort().join(',');
+  if (waiting !== 'skills,webServer') fail.push('应等待 skills 与 webServer 晚到，实际等待：' + (waiting || '（无）'));
+  else {
+    /* 服务晚到：先挂上，再触发 ctx.inject 的回调。 */
+    const strictSkills = makeStrictSkills();
+    provided.skills = strictSkills;
+    provided.webServer = { register: (d) => { lateRoutes.push(d); return () => {}; } };
+    let lateErr = null;
+    try { for (const w of waiters) w.cb(strictCtx); } catch (e) { lateErr = e; }
+    const names = strictSkills._names();
+    const diskSkills = (await import(__toUrl(join(ROOT, 'src', 'host', 'fde-api.js')))).discoverSkills(join(ROOT, 'skills'));
+    if (lateErr) fail.push('服务晚到后的补注册抛错：' + String(lateErr && lateErr.message));
+    else if (names.length !== diskSkills.length || names.length < 1) fail.push('skills 晚到后应补注册 ' + diskSkills.length + ' 个技能，实际 ' + names.length);
+    else if (lateRoutes.length < 37) fail.push('webServer 晚到后应挂载 ≥37 条路由，实际 ' + lateRoutes.length);
+    else ok.push('skills / webServer 晚到后补注册（技能 ' + names.length + ' 个 · 路由 ' + lateRoutes.length + ' 条）');
+    /* 注册 + 读取：每个技能都能加载，source 是非空字符串。 */
+    const loadBad = [];
+    for (const n of names) {
+      try {
+        const d = await strictSkills.get(n);
+        if (!d || typeof d.source !== 'string' || !d.source || d.provider !== 'runtime' || typeof d.content !== 'string' || !d.content) loadBad.push(n + '（字段不全）');
+      } catch (e) { loadBad.push(n + ' → ' + String(e && e.message)); }
+    }
+    if (loadBad.length) fail.push('技能加载失败（DSH 0.2.1 要求 source 是字符串）：' + loadBad.join('；'));
+    else if (names.length) ok.push('技能注册 + 读取：' + names.length + ' 个技能全部可加载，source 均为非空字符串（runtime）');
+    const srcBad = diskSkills.filter((x) => typeof x.source !== 'string' || !x.source);
+    if (srcBad.length) fail.push('discoverSkills 产出的对象缺 source：' + srcBad.map((x) => x.name).join('、'));
+    else ok.push('discoverSkills 产出的每个对象都带 source（' + diskSkills.length + ' 个）');
+  }
 }
 
 console.log('\n=== 通过 ===');

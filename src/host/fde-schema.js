@@ -34,18 +34,18 @@ export const ENGAGEMENT_STAGES = [
       goal: '识别并登记一个值得跟进的客户机会，写清来源与可检查的下一步',
       inputs: ['公司名与机会来源', '初步接触人信息', '触发信号（招标、招聘、公开讲话等）'],
       activities: [
-        '补齐 company / source / nextAction（谁、做什么、何时）',
-        '建立客户卷骨架（00-项目档案.md，日期用本地日期）',
+        '写清公司全称、线索来源和下一步（谁、做什么、什么时候）',
+        '建好客户文件夹和项目档案（日期用当天日期）',
         '判断是否值得进入研判：预算、需求、可触达性至少一条成立',
       ],
       outputs: ['00-项目档案.md', 'research/线索来源与初步判断.md'],
       tools: [
-        { kind: 'skill', name: 'fde-engagement', label: 'fde-engagement 技能' },
+        { kind: 'skill', name: 'fde-engagement', label: '客户建档技能' },
         { kind: 'method', name: '00-调研执行流程.md', label: '调研执行流程' },
         { kind: 'template', name: '项目档案模板.md', label: '项目档案模板' },
-        { kind: 'tool', name: 'fde_board', label: 'FDE 看板' },
-        { kind: 'tool', name: 'fde_library', label: 'FDE 资料库' },
-        { kind: 'library', name: 'method', label: '资料库·方法与模板' },
+        { kind: 'tool', name: 'fde_board', label: '客户看板' },
+        { kind: 'tool', name: 'fde_library', label: '资料库' },
+        { kind: 'library', name: 'method', label: '资料库 · 方法与模板' },
       ],
       pitfalls: [
         '把道听途说当线索：来源必须可追溯（谁说的、哪份公开材料）',
@@ -58,23 +58,23 @@ export const ENGAGEMENT_STAGES = [
     definition: '主体锁定、事实核查、KPI/痛点假设',
     playbook: {
       goal: '先锁主体，再做事实核查与 KPI/痛点假设，给出可验证的判断',
-      inputs: ['线索登记信息', '公司公告/官网/招聘/采购等原始材料', '可触达的干系人线索'],
+      inputs: ['线索登记信息', '公司公告/官网/招聘/采购等原始材料', '能接触到的关键人线索'],
       activities: [
         '主体锁定：地址锚定 + 三链验证，排除同园区他单位',
-        '抓取原文并落 raw/（curl + pdftotext），事实按 A/B/C 分级',
+        '抓取原文并存进客户文件夹，事实按 A/B/C 分级',
         '数字自检：占比重算、分项求和、口径区分、候选人 ≠ 中标人',
         '反推 KPI 与痛点假设：置信度 + 依据 + 可提问验证的问法',
-        '查采购史/中标记录（fde_bid）补经营证据',
+        '查采购史和中标记录，补充经营证据',
       ],
       outputs: ['research/主体锁定与归属核对.md', 'research/事实核查清单.md', 'research/KPI与痛点假设.md'],
       tools: [
-        { kind: 'skill', name: 'fde-discovery', label: 'fde-discovery 技能' },
+        { kind: 'skill', name: 'fde-discovery', label: '研判技能' },
         { kind: 'method', name: '01-事实核查协议.md', label: '事实核查协议' },
         { kind: 'method', name: '02-KPI与痛点假设法.md', label: 'KPI 与痛点假设法' },
         { kind: 'method', name: '数据源清单.md', label: '数据源清单' },
-        { kind: 'tool', name: 'fde_bid', label: '招采雷达（客户关联层）' },
-        { kind: 'tool', name: 'fde_library', label: 'FDE 资料库' },
-        { kind: 'library', name: 'intl-official', label: '资料库·国外官方' },
+        { kind: 'tool', name: 'fde_bid', label: '招采查询' },
+        { kind: 'tool', name: 'fde_library', label: '资料库' },
+        { kind: 'library', name: 'intl-official', label: '资料库 · 国外官方' },
       ],
       pitfalls: [
         '主体锁错：把同园区、同集团其他单位当主体，后面全盘皆错',
@@ -97,12 +97,12 @@ export const ENGAGEMENT_STAGES = [
       ],
       outputs: ['meeting/<客户>面谈Brief.md', 'meeting/<客户>面谈研判底稿（完整版）.md', 'meeting/<客户>合作地图.md', 'scoping/需求池.md'],
       tools: [
-        { kind: 'skill', name: 'fde-meeting', label: 'fde-meeting 技能' },
+        { kind: 'skill', name: 'fde-meeting', label: '会面准备技能' },
         { kind: 'method', name: '03-合作地图构建法.md', label: '合作地图构建法' },
         { kind: 'method', name: '文档模板库.md', label: '文档模板库' },
-        { kind: 'tool', name: 'fde_bid', label: '招采雷达（客户关联层）' },
-        { kind: 'tool', name: 'fde_library', label: 'FDE 资料库' },
-        { kind: 'library', name: 'cn-official', label: '资料库·国内官方' },
+        { kind: 'tool', name: 'fde_bid', label: '招采查询' },
+        { kind: 'tool', name: 'fde_library', label: '资料库' },
+        { kind: 'library', name: 'cn-official', label: '资料库 · 国内官方' },
       ],
       pitfalls: [
         '对象层级错配：对执行层讲战略、对一把手讲接口细节',
@@ -118,20 +118,20 @@ export const ENGAGEMENT_STAGES = [
       goal: '把需求池收敛到一个 90 天内可上线、可测量、有姓名发起人的场景',
       inputs: ['会面需求清单与场景池', '数据与系统现状', '客户组织与考核信息'],
       activities: [
-        '逐场景用 fde_scenario 判定四条硬门槛（有姓名发起人 / 14 天首次集成 / 90 天上线 / 使用可测）',
+        '逐个场景过四条硬门槛（有姓名发起人 / 14 天首次集成 / 90 天上线 / 使用可测）',
         '数据体检：数据在哪、谁给、多久能拿到、质量如何；不可得数据写替代方案',
         '按 12 维评分卡打分并逐维写依据（空依据按 3 分封顶），用 Σ(分×权重)/Σ权重 归一化；任一否决项命中 → 不进方案（例外需人签字）',
         '锁定一期范围与「不做什么」，确认发起人愿意每周投入（非挂名）',
-        '场景与范围、优先级书面确认后才可进入方案；门禁由人勾选',
+        '场景与范围、优先级书面确认后才可进入方案；推进条件由你逐项确认',
       ],
       outputs: ['scoping/场景评估表.md', 'scoping/数据可得性清单.md', 'scoping/范围边界.md'],
       tools: [
-        { kind: 'skill', name: 'fde-scoping', label: 'fde-scoping 技能' },
+        { kind: 'skill', name: 'fde-scoping', label: '场景选择技能' },
         { kind: 'method', name: '06-场景选择与数据体检.md', label: '场景选择与数据体检' },
         { kind: 'template', name: '场景评估表.md', label: '场景评估表' },
-        { kind: 'tool', name: 'fde_scenario', label: '场景评估器' },
-        { kind: 'tool', name: 'fde_library', label: 'FDE 资料库' },
-        { kind: 'library', name: 'opensource', label: '资料库·开源工具' },
+        { kind: 'tool', name: 'fde_scenario', label: '场景评估' },
+        { kind: 'tool', name: 'fde_library', label: '资料库' },
+        { kind: 'library', name: 'opensource', label: '资料库 · 开源工具' },
       ],
       pitfalls: [
         '四个场景都说能做，结果没有主场景、资源摊薄',
@@ -146,22 +146,22 @@ export const ENGAGEMENT_STAGES = [
     definition: '方案、成本测算、报价单/SOW、边界纪律',
     playbook: {
       goal: '把锁定场景写成可执行方案，并给出可复核的成本与报价，写明边界',
-      inputs: ['场景评估表与范围边界', '数据可得性清单', '定价配置 reference/fde-pricing.json'],
+      inputs: ['场景评估表与范围边界', '数据可得性清单', '内部成本费率配置（方法默认值，待验证）'],
       activities: [
         '按目标 → 范围（含明确不做）→ 分阶段路径 → 双方分工 → 验收口径 → 风险 写方案',
-        '用 fde_quote 计算成本与报价：三点估算 P80 计价人天、数据评测/云 token/合规/运维等非人力、预备费 15%、毛利 35%、税 6%，产出成本测算与报价单',
+        '测算成本与报价：三点估算 P80 计价人天、数据评测/云 token/合规/运维等非人力、预备费 15%、毛利 35%、税 6%，产出成本测算与报价单',
         '写明假设、除外、变更条款与验收口径；多对象分层出方案（决策层一页纸 / 执行层技术方案）',
-        '对外发送前必须由人确认；agent 只准备材料',
+        '对外发送前必须由你确认；AI 只准备材料',
       ],
       outputs: ['proposal/<项目>建设方案.md', 'proposal/成本测算.md', 'proposal/报价单.md'],
       tools: [
-        { kind: 'skill', name: 'fde-solution', label: 'fde-solution 技能' },
+        { kind: 'skill', name: 'fde-solution', label: '方案技能' },
         { kind: 'method', name: '07-成本评估与报价.md', label: '成本评估与报价' },
         { kind: 'method', name: '04-领域模型合作方法论.md', label: '领域模型合作方法论' },
         { kind: 'template', name: '成本测算与报价单.md', label: '成本测算与报价单' },
-        { kind: 'tool', name: 'fde_quote', label: '成本测算与报价器' },
-        { kind: 'tool', name: 'fde_library', label: 'FDE 资料库' },
-        { kind: 'library', name: 'intl-official', label: '资料库·国外官方' },
+        { kind: 'tool', name: 'fde_quote', label: '成本与报价测算' },
+        { kind: 'tool', name: 'fde_library', label: '资料库' },
+        { kind: 'library', name: 'intl-official', label: '资料库 · 国外官方' },
       ],
       pitfalls: [
         '报价凭感觉：不算人天、不列非人力，亏损在交付期暴露',
@@ -181,15 +181,16 @@ export const ENGAGEMENT_STAGES = [
         '写 Pilot Charter：首次集成 ≤14 天、上线 ≤90 天、撤出 ≤120 天 + 成功指标 + 验收口径',
         '定义基线、目标与测量方式，写清数据与资源边界',
         '控制范围：只验证一个假设，不做顺带需求',
-        '客户确认与门禁勾选由人完成',
+        '客户确认与推进条件的确认都由你完成',
       ],
       outputs: ['pilot/Pilot Charter.md', 'pilot/成功指标与验收口径.md'],
       tools: [
-        { kind: 'skill', name: 'fde-pilot', label: 'fde-pilot 技能' },
+        { kind: 'skill', name: 'fde-pilot', label: '试点技能' },
         { kind: 'method', name: '03-合作地图构建法.md', label: '合作地图构建法' },
-        { kind: 'method', name: '文档模板库.md', label: '文档模板库' },
-        { kind: 'tool', name: 'fde_library', label: 'FDE 资料库' },
-        { kind: 'library', name: 'opensource', label: '资料库·开源工具' },
+        { kind: 'method', name: '07-成本评估与报价.md', label: '成本评估与报价' },
+        { kind: 'method', name: '06-场景选择与数据体检.md', label: '场景选择与数据体检' },
+        { kind: 'tool', name: 'fde_library', label: '资料库' },
+        { kind: 'library', name: 'opensource', label: '资料库 · 开源工具' },
       ],
       pitfalls: [
         '成功指标不可测（没有基线/测量方式）',
@@ -212,12 +213,12 @@ export const ENGAGEMENT_STAGES = [
       ],
       outputs: ['delivery/实施计划.md', 'delivery/验收清单.md', 'delivery/风险登记.md'],
       tools: [
-        { kind: 'skill', name: 'fde-delivery', label: 'fde-delivery 技能' },
+        { kind: 'skill', name: 'fde-delivery', label: '交付技能' },
         { kind: 'method', name: '05-正式对外文档交付（DOCX·公文版式）.md', label: '正式对外文档交付' },
-        { kind: 'tool', name: 'rw_export_pdf', label: '按需导出 PDF' },
-        { kind: 'tool', name: 'rw_qa_pdf', label: 'PDF 版面质检' },
-        { kind: 'tool', name: 'fde_library', label: 'FDE 资料库' },
-        { kind: 'library', name: 'method', label: '资料库·方法与模板' },
+        { kind: 'tool', name: 'rw_export_pdf', label: '导出 PDF' },
+        { kind: 'tool', name: 'rw_qa_pdf', label: 'PDF 版面检查' },
+        { kind: 'tool', name: 'fde_library', label: '资料库' },
+        { kind: 'library', name: 'method', label: '资料库 · 方法与模板' },
       ],
       pitfalls: [
         '验收清单不可检查（「效果良好」不算口径）',
@@ -240,11 +241,11 @@ export const ENGAGEMENT_STAGES = [
       ],
       outputs: ['adoption/使用证据.md', 'adoption/价值证明.md', 'adoption/扩展地图.md'],
       tools: [
-        { kind: 'skill', name: 'fde-adoption', label: 'fde-adoption 技能' },
-        { kind: 'method', name: '00-调研执行流程.md', label: '调研执行流程' },
+        { kind: 'skill', name: 'fde-adoption', label: '采用技能' },
+        { kind: 'method', name: '01-事实核查协议.md', label: '事实核查协议' },
         { kind: 'tool', name: 'fde_harvest', label: '复盘草稿' },
-        { kind: 'tool', name: 'fde_library', label: 'FDE 资料库' },
-        { kind: 'library', name: 'community', label: '资料库·社区动态' },
+        { kind: 'tool', name: 'fde_library', label: '资料库' },
+        { kind: 'library', name: 'community', label: '资料库 · 社区动态' },
       ],
       pitfalls: [
         '使用证据靠自述，没有可核对的数据',
@@ -266,15 +267,16 @@ export const TERMINAL_STAGES = [
 /**
  * 泳道：inbox / canceled 不上看板（inbox 在今日处理）。
  * wip: true 的列受 settings.wipLimits 约束（默认 doing=5）。
+ * label / definition 是给人看的文本（ADR 0010 D1：任务状态），key 与结构不变。
  */
 export const ITEM_LANES = [
-  { key: 'inbox', label: '收集箱', order: 0, board: false, definition: '刚捕获、未分类，默认不显示在看板（显示在今日）' },
-  { key: 'todo', label: '待办', order: 1, board: true, definition: '已明确、未开始' },
-  { key: 'doing', label: '进行中', order: 2, board: true, wip: true, definition: '正在做（WIP 受限）' },
-  { key: 'waiting', label: '等外部', order: 3, board: true, definition: '等客户/等上级/等材料，不由我们推进' },
-  { key: 'review', label: '待我审', order: 4, board: true, definition: 'agent 或协作者已完成，等人审阅' },
-  { key: 'done', label: '已完成', order: 5, board: true, definition: '有结果与证据' },
-  { key: 'canceled', label: '已取消', order: 6, board: false, definition: '明确不做' },
+  { key: 'inbox', label: '待整理', order: 0, board: false, definition: '刚记下来，还没分类；先在「今日」里整理' },
+  { key: 'todo', label: '待开始', order: 1, board: true, definition: '已经想清楚要做，还没开始' },
+  { key: 'doing', label: '进行中', order: 2, board: true, wip: true, definition: '正在做；同时进行的数量有上限' },
+  { key: 'waiting', label: '等对方', order: 3, board: true, definition: '在等客户、上级或材料，暂时推不动' },
+  { key: 'review', label: '待验收', order: 4, board: true, definition: '已经做完，等你验收' },
+  { key: 'done', label: '已完成', order: 5, board: true, definition: '有结果，也有依据' },
+  { key: 'canceled', label: '已取消', order: 6, board: false, definition: '确定不做了' },
 ];
 
 /** 看板默认显示的 5 列（顺序固定）：todo → doing → waiting → review → done。 */
@@ -300,21 +302,26 @@ export const PRIORITIES = [
   { key: 'low', label: '低', order: 2 },
 ];
 
-/** 自主性模式（spec §6）。 */
+/**
+ * 自主性模式（spec §6 / §22.4；界面称「AI 权限」）。
+ * assisted 与 auto 的实现相同（applySafeProposals），界面合并显示为同一档；三档 key 都保留。
+ * 「小事」的范围以 applySafeProposals 为准，definition 如实描述。
+ */
+const AUTONOMY_SMALL_THINGS = 'AI 可以给没定下一步的客户补一条待确认的下一步、为新招采公告建跟进任务；其余都要你决定';
 export const AUTONOMY_MODES = [
-  { key: 'observe', label: '只建议', definition: '生成建议，展示「待采纳」；不做任何自动动作' },
-  { key: 'assisted', label: '建议+一键执行', definition: '安全动作可一键执行：建 item、改 nextAction、标逾期；门禁/对外材料/删除归档仍需人工确认' },
-  { key: 'auto', label: '安全动作自动', definition: '自动执行安全动作；门禁、对外材料、删除归档、阶段推进仍只能人工' },
+  { key: 'observe', label: '只提醒，由我决定', definition: 'AI 只提醒，不替你改任何东西；每件事都由你决定' },
+  { key: 'assisted', label: '小事可以直接处理', definition: AUTONOMY_SMALL_THINGS },
+  { key: 'auto', label: '小事可以直接处理', definition: AUTONOMY_SMALL_THINGS },
 ];
 
-/** 任何模式都不自动执行的红线动作（spec §6）。 */
+/** 任何模式都不自动执行的红线动作（spec §6；界面称「只能由你决定的事」）。 */
 export const RED_LINES = [
-  '推进 engagement 阶段',
-  '通过门禁',
-  '标记交付/验收完成',
-  '导出/发送对外材料',
+  '推进客户阶段',
+  '确认推进条件',
+  '标记交付或验收完成',
+  '导出或发送对外材料',
   '删除客户或任务',
-  '修改客户卷定稿文件',
+  '修改客户文件夹里的定稿文件',
 ];
 
 /* ============================ 门禁 ============================ */
@@ -328,23 +335,28 @@ export const RED_LINES = [
  * - content    方案文本关键词：alternatives 任一目录下 md 正文命中（dir 为空=整个项目目录）
  * - stakeholders engagement.stakeholders 数量 ≥ min
  * 两类都通过才算 gate pass；force 需人给 reason 并记 forced。
+ *
+ * 给人看的文本（ADR 0010 D1 / D11，界面称「推进条件」）：
+ * - gate.label      「进入「<阶段名>」的条件」
+ * - check.label     一句人能看懂的话（不含文件匹配规则、字段名）
+ * - check.missingText  auto 检查没通过时的原因（fde-rules 的 detail 直接取它；meta 不输出）
  */
 export const GATES = {
   intake: {
-    key: 'intake', label: '线索准入', stage: 'lead',
+    key: 'intake', label: '进入「线索」的条件', stage: 'lead',
     auto: [
-      { key: 'company', label: '公司名非空', type: 'field', field: 'company' },
-      { key: 'source', label: '来源非空', type: 'field', field: 'source.kind' },
-      { key: 'next_action', label: '下一步非空', type: 'field', field: 'nextAction.text' },
+      { key: 'company', label: '写了公司全称', missingText: '还没写公司全称', type: 'field', field: 'company' },
+      { key: 'source', label: '写了线索来源', missingText: '还没写线索来源', type: 'field', field: 'source.kind' },
+      { key: 'next_action', label: '定了下一步', missingText: '还没定下一步', type: 'field', field: 'nextAction.text' },
     ],
     manual: [],
   },
   discovery: {
-    key: 'discovery', label: '研判门禁', stage: 'discovery',
+    key: 'discovery', label: '进入「研判」的条件', stage: 'discovery',
     auto: [
-      { key: 'archive', label: '项目档案 00-项目档案.md 存在', type: 'archive' },
-      { key: 'factcheck', label: '事实核查 md ≥1', type: 'artifact', alternatives: [{ match: '事实核查' }], min: 1 },
-      { key: 'kpi', label: 'KPI 或痛点 md ≥1', type: 'artifact', alternatives: [{ match: 'KPI|痛点' }], min: 1 },
+      { key: 'archive', label: '有项目档案', missingText: '客户文件夹里没有项目档案', type: 'archive' },
+      { key: 'factcheck', label: '有事实核查清单', missingText: '还没找到事实核查清单', type: 'artifact', alternatives: [{ match: '事实核查' }], min: 1 },
+      { key: 'kpi', label: '有 KPI 或痛点假设', missingText: '还没找到 KPI 或痛点假设', type: 'artifact', alternatives: [{ match: 'KPI|痛点' }], min: 1 },
     ],
     manual: [
       { key: 'subject_locked', label: '主体已锁定' },
@@ -352,20 +364,20 @@ export const GATES = {
     ],
   },
   meeting: {
-    key: 'meeting', label: '会面门禁', stage: 'meeting',
+    key: 'meeting', label: '进入「会面」的条件', stage: 'meeting',
     auto: [
-      { key: 'brief', label: 'meeting/ 下 Brief md ≥1', type: 'artifact', alternatives: [{ dir: 'meeting', match: 'Brief|brief' }], min: 1 },
-      { key: 'stakeholders', label: '干系人 ≥1', type: 'stakeholders', min: 1 },
+      { key: 'brief', label: '有会面 Brief', missingText: '还没找到会面 Brief', type: 'artifact', alternatives: [{ dir: 'meeting', match: 'Brief|brief' }], min: 1 },
+      { key: 'stakeholders', label: '至少登记 1 位关键人', type: 'stakeholders', min: 1 },
     ],
     manual: [
       { key: 'meeting_goal', label: '会面目标与对象层级已确认' },
     ],
   },
   scoping: {
-    key: 'scoping', label: '场景门禁', stage: 'scoping',
+    key: 'scoping', label: '进入「场景」的条件', stage: 'scoping',
     auto: [
       {
-        key: 'scenario', label: '场景评估 md ≥1（scoping/ 或历史 meeting/ 场景选择表）', type: 'artifact',
+        key: 'scenario', label: '有场景评估表', missingText: '还没找到场景评估表', type: 'artifact',
         alternatives: [{ dir: 'scoping', match: '场景' }, { dir: 'meeting', match: '场景' }], min: 1,
       },
     ],
@@ -379,16 +391,16 @@ export const GATES = {
     ],
   },
   solution: {
-    key: 'solution', label: '方案门禁', stage: 'solution',
+    key: 'solution', label: '进入「方案」的条件', stage: 'solution',
     auto: [
-      { key: 'proposal', label: 'proposal/ 下 md ≥1', type: 'artifact', alternatives: [{ dir: 'proposal' }], min: 1 },
-      { key: 'boundary', label: '方案文本含「不做什么」或「边界」', type: 'content', alternatives: [{ dir: 'proposal', match: '不做什么|边界' }] },
+      { key: 'proposal', label: '有方案文档', missingText: '还没找到方案文档', type: 'artifact', alternatives: [{ dir: 'proposal' }], min: 1 },
+      { key: 'boundary', label: '方案里写明了不做什么', missingText: '方案里还没写明不做什么', type: 'content', alternatives: [{ dir: 'proposal', match: '不做什么|边界' }] },
       {
-        key: 'cost', label: '成本测算 md ≥1（proposal/ 或文件名含「成本」）', type: 'artifact',
+        key: 'cost', label: '有成本测算', missingText: '还没找到成本测算', type: 'artifact',
         alternatives: [{ dir: 'proposal', match: '成本' }, { match: '成本' }], min: 1,
       },
       {
-        key: 'quote', label: '报价单/SOW md ≥1（文件名含「报价」「SOW」「工作说明书」）', type: 'artifact',
+        key: 'quote', label: '有报价单或工作说明书', missingText: '还没找到报价单或工作说明书', type: 'artifact',
         alternatives: [{ match: '报价|SOW|工作说明书' }], min: 1,
       },
     ],
@@ -398,43 +410,43 @@ export const GATES = {
     ],
   },
   pilot: {
-    key: 'pilot', label: '试点门禁', stage: 'pilot',
+    key: 'pilot', label: '进入「试点」的条件', stage: 'pilot',
     auto: [
       {
-        key: 'pilot_md', label: 'pilot/ 下 md ≥1（或 proposal/ 含试点）', type: 'artifact',
+        key: 'pilot_md', label: '有试点方案', missingText: '还没找到试点方案', type: 'artifact',
         alternatives: [{ dir: 'pilot' }, { dir: 'proposal', match: '试点|POC|pilot' }], min: 1,
       },
     ],
     manual: [
-      { key: 'pilot_scope', label: '范围与成功指标客户确认' },
+      { key: 'pilot_scope', label: '范围与成功指标已和客户确认' },
     ],
   },
   delivery: {
-    key: 'delivery', label: '交付门禁', stage: 'delivery',
+    key: 'delivery', label: '进入「交付」的条件', stage: 'delivery',
     auto: [
       {
-        key: 'delivery_md', label: 'delivery/ 下 md ≥1（或 docs/）', type: 'artifact',
+        key: 'delivery_md', label: '有交付文档', missingText: '还没找到交付文档', type: 'artifact',
         alternatives: [{ dir: 'delivery' }, { dir: 'docs' }], min: 1,
       },
     ],
     manual: [
-      { key: 'acceptance', label: '验收清单' },
-      { key: 'milestones', label: '里程碑' },
-      { key: 'risks', label: '风险登记' },
+      { key: 'acceptance', label: '验收清单已和客户确认' },
+      { key: 'milestones', label: '里程碑已排定' },
+      { key: 'risks', label: '风险登记已建立' },
     ],
   },
   adoption: {
-    key: 'adoption', label: '采用门禁', stage: 'adoption',
+    key: 'adoption', label: '进入「采用」的条件', stage: 'adoption',
     auto: [
       {
-        key: 'adoption_evidence', label: 'adoption/ 下 md ≥1（或 research/ 含价值证明）', type: 'artifact',
+        key: 'adoption_evidence', label: '有使用或价值证据', missingText: '还没找到使用或价值证据', type: 'artifact',
         alternatives: [{ dir: 'adoption' }, { dir: 'research', match: '价值|使用证据|培训|扩展' }], min: 1,
       },
     ],
     manual: [
-      { key: 'usage_evidence', label: '使用证据' },
-      { key: 'training', label: '培训完成' },
-      { key: 'expansion_map', label: '扩展地图' },
+      { key: 'usage_evidence', label: '使用证据已收集' },
+      { key: 'training', label: '培训已完成' },
+      { key: 'expansion_map', label: '扩展地图已画出' },
     ],
   },
 };
@@ -443,10 +455,10 @@ export const GATES = {
 
 /** 招采关系（spec §17.3，优先级即数组顺序）：buyer 该单位采购 → winner 客户中标 → candidate 候选人（≠中标）→ mention 全文提及。 */
 export const BID_RELATIONS = [
-  { key: 'buyer', label: '采购方', order: 1, definition: '该单位发布的采购/招标公告（buyer 命中）' },
-  { key: 'winner', label: '中标', order: 2, definition: '我们的客户是中标人/成交人（只有中标/成交公告才算）' },
-  { key: 'candidate', label: '候选人', order: 3, definition: '候选人公示名次，**不是中标**' },
-  { key: 'mention', label: '提及', order: 4, definition: '公告全文/标题提及，不构成成交' },
+  { key: 'buyer', label: '采购方', order: 1, definition: '这家单位自己发布的采购或招标公告' },
+  { key: 'winner', label: '中标', order: 2, definition: '客户是中标人或成交人（只有中标或成交公告才算）' },
+  { key: 'candidate', label: '候选人', order: 3, definition: '候选人公示的名次，不是中标' },
+  { key: 'mention', label: '提及', order: 4, definition: '公告标题或正文里提到，不代表成交' },
 ];
 export const BID_RELATION_KEYS = BID_RELATIONS.map((x) => x.key);
 export const BID_DEFAULT_SIGNAL_DAYS = 30;
@@ -458,14 +470,14 @@ export function isBidRelation(key) { return BID_RELATION_KEYS.includes(key); }
  * 同级：到期日升序 → 优先级（high 先）。
  */
 export const ATTENTION_KINDS = [
-  { key: 'blocked', label: '受阻', order: 1, text: '受阻：', actions: ['open', 'resolve'], target: 'item' },
-  { key: 'decision', label: '需要决定', order: 2, text: '需要决定：', actions: ['answer', 'accept'], target: 'both' },
-  { key: 'review', label: '待审阅', order: 3, text: '待审阅：', actions: ['pass', 'return'], target: 'item' },
-  { key: 'answer', label: '需要回答', order: 4, text: '需要回答：', actions: ['answer'], target: 'both' },
-  { key: 'overdue', label: '逾期', order: 5, text: '逾期', actions: ['reschedule', 'done'], target: 'both' },
-  { key: 'gate', label: '门禁待确认', order: 6, text: '门禁待确认：', actions: ['confirm'], target: 'engagement' },
-  { key: 'stall', label: '停滞', order: 7, text: '停滞', actions: ['followup', 'pause'], target: 'engagement' },
-  { key: 'proposal', label: '建议', order: 8, text: '', actions: ['accept', 'dismiss'], target: 'proposal' },
+  { key: 'blocked', label: '卡住了', order: 1, text: '', actions: ['open', 'resolve'], target: 'item' },
+  { key: 'decision', label: '等你决定', order: 2, text: '', actions: ['answer', 'accept'], target: 'both' },
+  { key: 'review', label: '待验收', order: 3, text: '', actions: ['pass', 'return'], target: 'item' },
+  { key: 'answer', label: '等你回复', order: 4, text: '', actions: ['answer'], target: 'both' },
+  { key: 'overdue', label: '已逾期', order: 5, text: '', actions: ['reschedule', 'done'], target: 'both' },
+  { key: 'gate', label: '等你确认', order: 6, text: '', actions: ['confirm'], target: 'engagement' },
+  { key: 'stall', label: '没有进展', order: 7, text: '', actions: ['followup', 'pause'], target: 'engagement' },
+  { key: 'proposal', label: '提醒', order: 8, text: '', actions: ['accept', 'dismiss'], target: 'proposal' },
 ];
 
 /** 显式注意力允许的 kind（写 attention 时校验）。 */
@@ -474,49 +486,52 @@ export const ATTENTION_EXPLICIT_KINDS = ['decision', 'blocked', 'answer', 'quest
 /* ============================ 规则清单 ============================ */
 
 /**
- * proposals 规则（spec §6）。kind 取 nudge|create_item|start_session|update_next。
+ * proposals 规则（spec §6 / §22.2；界面称「提醒」）。kind 取 nudge|create_item|start_session|update_next。
  * safe = 在 assisted/auto 模式下允许自动/一键执行的安全动作。
+ * derived = 该情形已由派生注意力（待我处理）覆盖：规则定义保留（meta.rules 仍是 8 条），
+ *           但 refreshProposals 不再为它生成提醒，存量的待处理提醒在刷新时自动失效（ADR 0010 D4）。
+ * label / condition / detail 是给人看的文本，不含字段名与设置项标识。
  */
 export const RULES = [
   {
-    ruleId: 'stall', label: '停滞', kind: 'nudge', safe: true,
-    condition: '活跃阶段停留 > stallDays 且无近期活动',
-    detail: '建议：安排一次跟进，或标记暂停',
+    ruleId: 'stall', label: '没有进展', kind: 'nudge', safe: true, derived: true,
+    condition: '在跟的客户超过设定天数没有任何进展',
+    detail: '安排一次跟进，或先暂停这家客户',
   },
   {
-    ruleId: 'due_soon', label: '即将到期', kind: 'nudge', safe: true,
-    condition: 'nextAction 或 item 2 天内到期',
-    detail: '建议：确认下一步动作与负责人',
+    ruleId: 'due_soon', label: '快到期', kind: 'nudge', safe: true,
+    condition: '客户的下一步或任务在 2 天内到期',
+    detail: '确认能不能按时完成，由谁来做',
   },
   {
-    ruleId: 'overdue', label: '已逾期', kind: 'update_next', safe: true,
-    condition: 'nextAction 或 item 已逾期',
-    detail: '建议：改期或标记完成',
+    ruleId: 'overdue', label: '已逾期', kind: 'update_next', safe: true, derived: true,
+    condition: '客户的下一步或任务已经过了到期日',
+    detail: '改期，或标记为已完成',
   },
   {
-    ruleId: 'no_next', label: '缺下一步', kind: 'update_next', safe: true,
-    condition: '活跃客户无 nextAction',
-    detail: '建议：补一个可检查的下一步',
+    ruleId: 'no_next', label: '没定下一步', kind: 'update_next', safe: true,
+    condition: '在跟的客户还没有定下一步',
+    detail: '写清谁、做什么、什么时候',
   },
   {
-    ruleId: 'gate_ready', label: '门禁可确认', kind: 'start_session', safe: false,
-    condition: '自动检查全过、人工项缺失、阶段停留 > 7 天',
-    detail: '建议：发起会话补齐门禁证据',
+    ruleId: 'gate_ready', label: '等你确认', kind: 'start_session', safe: false, derived: true,
+    condition: '进入下一阶段的材料已齐、还有事项等你确认，并且在本阶段超过 7 天',
+    detail: '逐项确认，或交给 AI 补齐依据',
   },
   {
-    ruleId: 'meeting_soon', label: '会面临近', kind: 'start_session', safe: false,
-    condition: 'meeting 类 item 48 小时内到期',
-    detail: '建议：发起会面材料会话',
+    ruleId: 'meeting_soon', label: '会面快到了', kind: 'start_session', safe: false,
+    condition: '会面类任务在 2 天内到期',
+    detail: '可以交给 AI 先准备会面材料',
   },
   {
-    ruleId: 'review_lag', label: '审阅滞后', kind: 'nudge', safe: false,
-    condition: 'item 在 review 停留 > 3 天',
-    detail: '建议：尽快审阅并给出结论',
+    ruleId: 'review_lag', label: '验收拖延', kind: 'nudge', safe: false, derived: true,
+    condition: '任务做完后超过 3 天还没验收',
+    detail: '尽快验收并给出结论',
   },
   {
-    ruleId: 'bid_signal', label: '招采信号', kind: 'create_item', safe: true,
-    condition: 'settings.sources.bidWatch=true 且近 bidSignalDays 天该客户有新招标/采购公告（关系 buyer/mention）',
-    detail: '建议：建跟进任务，确认公告是否与客户经营相关（候选人≠中标人；批次为推断）',
+    ruleId: 'bid_signal', label: '新招采公告', kind: 'create_item', safe: true,
+    condition: '开启招采关注后，客户在最近一段时间（默认 30 天）有新的招标或采购公告',
+    detail: '可以建一个跟进任务，确认是否和这家客户有关。候选人不等于中标人。',
   },
 ];
 
@@ -557,6 +572,8 @@ export const AUTONOMY_KEYS = AUTONOMY_MODES.map((a) => a.key);
 export const ATTENTION_ORDER = ATTENTION_KINDS.map((a) => a.key);
 export const GATE_KEYS = Object.keys(GATES);
 export const RULE_IDS = RULES.map((r) => r.ruleId);
+/** derived 规则（不生成提醒；由待我处理覆盖）。 */
+export const DERIVED_RULE_IDS = RULES.filter((r) => r.derived === true).map((r) => r.ruleId);
 
 const STAGE_MAP = new Map(ENGAGEMENT_STAGES.map((s) => [s.key, s]));
 const TERMINAL_MAP = new Map(TERMINAL_STAGES.map((s) => [s.key, s]));
@@ -606,6 +623,14 @@ export function attentionRank(kind) {
 export function attentionDef(kind) { return ATTENTION_MAP.get(kind) || null; }
 export function ruleDef(ruleId) { return RULE_MAP.get(ruleId) || null; }
 export function isRuleId(id) { return RULE_MAP.has(id); }
+/** 是否 derived 规则（未知 ruleId 返回 false）。 */
+export function isDerivedRule(ruleId) { const r = RULE_MAP.get(ruleId); return !!(r && r.derived === true); }
+/** 优先级中文名（未知 key 原样返回）。 */
+export function priorityLabel(p) { const hit = PRIORITIES.find((x) => x.key === p); return hit ? hit.label : String(p || ''); }
+/** 待我处理分类中文名（未知 kind 原样返回）。 */
+export function attentionLabel(kind) { const a = ATTENTION_MAP.get(kind); return a ? a.label : String(kind || ''); }
+/** 提醒规则中文名（未知 ruleId 返回「提醒」）。 */
+export function ruleLabel(ruleId) { const r = RULE_MAP.get(ruleId); return r ? r.label : '提醒'; }
 /** 优先级排序权重（high=0 / normal=1 / low=2 / 未知=3）。 */
 export function priorityOrder(p) {
   const hit = PRIORITIES.find((x) => x.key === p);

@@ -561,7 +561,7 @@ export function makeLink({ record, bidId, relation, note, by, now }) {
  * 纯 board 变更；事务与落盘在 fde-api。
  */
 export function applyLink(board, engagement, { record, bidId, relation, note, by, now }) {
-  if (!engagement) return { ok: false, code: 'NOT_FOUND', reason: '客户不存在' };
+  if (!engagement) return { ok: false, code: 'NOT_FOUND', reason: '找不到这家客户，请刷新后再试' };
   const id = String(bidId || (record && record.id) || '');
   if (!id) return { ok: false, code: 'INVALID', reason: '缺少 bidId' };
   const watch = ensureBidWatch(engagement);
@@ -586,7 +586,7 @@ export function applyLink(board, engagement, { record, bidId, relation, note, by
 
 /** 取消关联（幂等：不存在时返回 changed:false）。 */
 export function applyUnlink(board, engagement, bidId, by, now) {
-  if (!engagement) return { ok: false, code: 'NOT_FOUND', reason: '客户不存在' };
+  if (!engagement) return { ok: false, code: 'NOT_FOUND', reason: '找不到这家客户，请刷新后再试' };
   const id = String(bidId || '');
   if (!id) return { ok: false, code: 'INVALID', reason: '缺少 bidId' };
   const watch = ensureBidWatch(engagement);
@@ -601,7 +601,7 @@ export function applyUnlink(board, engagement, bidId, by, now) {
  * + item.bidRefs + 关联（link）。纯 board 变更；事务与落盘在 fde-api。
  */
 export function applyPromote(board, engagement, { record, bidId, relation, note, by, now, settings }) {
-  if (!engagement) return { ok: false, code: 'NOT_FOUND', reason: '客户不存在' };
+  if (!engagement) return { ok: false, code: 'NOT_FOUND', reason: '找不到这家客户，请刷新后再试' };
   const id = String(bidId || (record && record.id) || '');
   if (!id) return { ok: false, code: 'INVALID', reason: '缺少 bidId' };
   const rec = record || recordById(currentBidService(), id);
@@ -629,7 +629,7 @@ export function applyPromote(board, engagement, { record, bidId, relation, note,
     reports: [],
     sessionId: '',
     createdAt: at,
-    history: [{ at, kind: 'created', text: '由招采雷达提升为跟进任务', by: actor }],
+    history: [{ at, kind: 'created', text: '由招采公告创建', by: actor }],
     bidRefs: [{
       bidId: id,
       title: String(rec.title || ''),

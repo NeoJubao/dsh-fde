@@ -380,7 +380,7 @@ function checkA6() {
 }
 
 /* ------------------------------------------------------------------ *
- * A7 重复全局控件（刷新 / 自主性徽章每页只允许壳层 1 处）
+ * A7 重复全局控件（全局刷新只允许页头 1 处；v2.0 起页头不再有 AI 权限徽章，出现即违规）
  * ------------------------------------------------------------------ */
 const REFRESH_RES = [/t\('refresh'\)/g];              // 全局刷新（壳层唯一）
 const BLOCK_REFRESH_RES = [/t\('libRefresh'\)/g, /t\('bidRefresh'\)/g, /t\('artifactsRefresh'\)/g]; // 块级刷新（合法）
@@ -409,7 +409,8 @@ function checkA7() {
   // 壳层重复检测：App 渲染里 refresh 只允许 1 次
   const appFn = view('FdeApp') || fnBodies.find((f) => f.name.indexOf('App') >= 0 && f.body.indexOf('fde-nav-wrap') >= 0);
   if (appFn) {
-    const shellRefresh = (appFn.body.match(/t\('refresh'\)/g) || []).length;
+    /* 页头刷新是一个图标按钮：title 与 aria-label 各引用一次文案，按按钮数（aria-label）计 */
+    const shellRefresh = (appFn.body.match(/'aria-label': t\('refresh'\)/g) || []).length;
     if (shellRefresh > 1) bad.push('壳层刷新按钮 ' + shellRefresh + ' 个（应 1 个）');
     rows.push('壳层：刷新 ' + shellRefresh + ' 个 / 自主性 ' + (appFn.body.match(/AutonomyBadge\s*\(/g) || []).length + ' 个');
   }

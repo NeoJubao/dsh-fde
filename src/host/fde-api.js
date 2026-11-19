@@ -35,6 +35,64 @@ const okr = (extra) => Object.assign({ ok: true }, extra || {});
 const pickString = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const isPlainObject = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
 
+/* ---------------- 给人看的文本（ADR 0010 D1 / D11，spec §22.6） ----------------
+ * 新写入 timeline / activity / history 的文本，以及面板会直接弹给人看的失败原因，
+ * 用界面上的词：不出现规则编号、检查项 key、门禁 key、会话编号、泳道 key 与英文枚举。
+ * 存量记录不改写（面板显示时替换）。 */
+
+const NOT_FOUND_ENGAGEMENT = '找不到这家客户，请刷新后再试';
+const NOT_FOUND_ITEM = '找不到这个任务，请刷新后再试';
+const NOT_FOUND_PROPOSAL = '找不到这条提醒，可能已经处理过了；请刷新后再试';
+const PROPOSAL_DONE = '这条提醒已经处理过了';
+const FORCE_NEEDS_REASON = '破例推进需要写明原因';
+
+/** 字段的中文名（记录文本用）；没登记的字段统一叫「其它信息」。 */
+const ENGAGEMENT_FIELD_LABELS = {
+  name: '名称', company: '公司全称', shortName: '简称', dir: '客户文件夹', priority: '优先级',
+  owner: '负责人', tags: '标签', source: '来源', value: '金额备注', nextAction: '下一步',
+  stakeholders: '关键人', paused: '暂停状态', bidWatch: '招采关注',
+};
+const ITEM_FIELD_LABELS = {
+  title: '标题', type: '类型', priority: '优先级', due: '到期日', owner: '负责人',
+  engagementId: '关联客户', autonomy: 'AI 权限',
+};
+const SETTING_LABELS = {
+  autonomy: 'AI 权限', stallDays: '没有进展的天数', wipLimits: '同时进行上限', sources: '数据来源',
+  workdirs: '工作目录', cacheTtlMs: '刷新间隔', bidSignalDays: '新招采公告的回看天数', demoDismissed: '示例数据',
+};
+function fieldNames(keys, labels) {
+  const out = [];
+  for (const k of keys || []) {
+    const n = labels[k] || '其它信息';
+    if (!out.includes(n)) out.push(n);
+  }
+  return out.join('、');
+}
+
+/** 进展（report）五种情况的说法。 */
+const REPORT_WORDS = { progress: '更新了进展', ready: '做完了，等验收', blocked: '卡住了', failed: '没做成', dropped: '不做了' };
+/** 交给 AI（handoff）按目的的说法；没登记的目的统一叫「交给 AI 推进」。 */
+const HANDOFF_WORDS = { stage: '交给 AI 推进', gate: '交给 AI 补齐材料', meeting: '交给 AI 准备会面材料', review: '交给 AI 检查任务结果', harvest: '交给 AI 整理复盘' };
+const handoffWords = (intent) => HANDOFF_WORDS[intent] || HANDOFF_WORDS.stage;
+/** 提问（attention ask / resolve）的说法。 */
+const ASK_WORDS = { decision: '等你决定', blocked: '卡住了', answer: '等你回复', question: '有个问题' };
+const RESOLVE_WORDS = { decision: '已决定', blocked: '卡点已解除', answer: '已回复', question: '已回复' };
+function askRecordText(kind, question, by) {
+  const ai = by === 'agent';
+  switch (kind) {
+    case 'decision': return (ai ? 'AI 提了一个需要你决定的问题：' : '记下一个要决定的问题：') + question;
+    case 'blocked': return (ai ? 'AI 报告卡住了：' : '标记为卡住了：') + question;
+    case 'answer': return (ai ? 'AI 提了一个需要你回复的问题：' : '记下一个要回复的问题：') + question;
+    default: return (ai ? 'AI 提了一个问题：' : '记下一个问题：') + question;
+  }
+}
+/** 缺项的简短列举（失败原因里用，最多列 3 项）。 */
+function missingBrief(missing) {
+  const list = (missing || []).map((m) => (m && m.label) || '').filter(Boolean);
+  if (!list.length) return '';
+  return list.slice(0, 3).join('、') + (list.length > 3 ? ' 等' : '');
+}
+
 function ttlOf(board) {
   const n = Number(board && board.settings && board.settings.cacheTtlMs);
   return Number.isFinite(n) && n >= 0 ? n : store.DEFAULT_CACHE_TTL_MS;
@@ -54,7 +112,7 @@ function scanOf(root, engagement, ttlMs) {
 /** 读取 board 的统一入口（失败结果可直接返回给调用方）。 */
 function load(root) {
   const r = store.readBoard(root);
-  if (!r.ok) return { ok: false, code: r.code || 'INTERNAL', reason: r.reason || '读取 board 失败' };
+  if (!r.ok) return { ok: false, code: r.code || 'INTERNAL', reason: r.reason || '读取看板数据失败' };
   return { ok: true, board: r.board, fresh: !!r.fresh };
 }
 
@@ -104,9 +162,9 @@ function runAction(root, mutate) {
         staleSkipped: !!w.staleSkipped,
       });
     }
-    if (w.code !== 'CONFLICT') return { ok: false, code: w.code || 'INTERNAL', reason: w.reason || '写入 board 失败' };
+    if (w.code !== 'CONFLICT') return { ok: false, code: w.code || 'INTERNAL', reason: w.reason || '保存看板数据失败' };
   }
-  return err('board 并发冲突：已重读并重试一次仍失败，请刷新后重试', 'CONFLICT');
+  return err('刚才有别处同时在改看板，这次没能保存；请刷新后再试', 'CONFLICT');
 }
 
 /** 工具层红线（F1 / spec §6、§7）：阶段推进/归档/门禁勾选与 force 只能由人在面板执行。 */
@@ -114,14 +172,14 @@ const AGENT_FORBIDDEN_ENGAGEMENT_ACTIONS = new Set(['move', 'archive']);
 export function agentGuard(body, action) {
   if (byOf(body) !== 'agent') return null;
   if (AGENT_FORBIDDEN_ENGAGEMENT_ACTIONS.has(action)) {
-    return err('阶段推进/归档只能由人在面板执行（agent 红线：只能准备、建议、提问）', 'BLOCKED');
+    return err('推进阶段、归档只能由人在面板执行（AI 只能准备、建议、提问）', 'BLOCKED');
   }
   const patch = isPlainObject(body.patch) ? body.patch : {};
   const wantsGateWrite = body.force === true || patch.force === true ||
     (isPlainObject(body.checks) && Object.keys(body.checks).length > 0) ||
     (isPlainObject(patch.checks) && Object.keys(patch.checks).length > 0);
   if (action === 'gate' && wantsGateWrite) {
-    return err('门禁勾选与 force 放行只能由人在面板执行（agent 红线：gate 只允许只读评估）', 'BLOCKED');
+    return err('确认推进条件、破例推进只能由人在面板执行（AI 调用 gate 只能做只读评估）', 'BLOCKED');
   }
   return null;
 }
@@ -134,7 +192,7 @@ function sanitizeStakeholders(list) {
   for (const raw of list.slice(0, 50)) {
     if (!isPlainObject(raw)) continue;
     const name = pickString(raw.name, 60);
-    if (!name) return { ok: false, reason: 'stakeholders[].name 不能为空' };
+    if (!name) return { ok: false, reason: '关键人的姓名不能为空' };
     const level = ['top', 'vp', 'exec', 'unknown'].includes(raw.level) ? raw.level : 'unknown';
     out.push({ name, role: pickString(raw.role, 80), level, stance: pickString(raw.stance, 200), verified: !!raw.verified });
   }
@@ -158,7 +216,7 @@ export function sanitizeEngagementPatch(root, patch, board, existing) {
   if (!isPlainObject(patch)) return { ok: false, reason: 'patch 必须为对象' };
   if ('name' in patch) {
     const v = pickString(patch.name, 120);
-    if (!v) return { ok: false, reason: 'name 不能为空' };
+    if (!v) return { ok: false, reason: '客户名称不能为空' };
     out.name = v;
   }
   for (const k of ['company', 'shortName', 'owner']) {
@@ -167,13 +225,13 @@ export function sanitizeEngagementPatch(root, patch, board, existing) {
   if ('dir' in patch) {
     const raw = pickString(patch.dir, 200);
     if (raw) {
-      try { safeDirName(raw); } catch (e) { return { ok: false, reason: '非法目录名：' + ((e && e.message) || e) }; }
+      try { safeDirName(raw); } catch (e) { return { ok: false, reason: '客户文件夹名称不合法：' + ((e && e.message) || e) }; }
       try { safeProjectPath(root, raw); } catch (e) {
-        if (e instanceof PathError) return { ok: false, reason: '非法目录名：' + e.message };
-        return { ok: false, reason: '目录校验失败：' + ((e && e.message) || e) };
+        if (e instanceof PathError) return { ok: false, reason: '客户文件夹名称不合法：' + e.message };
+        return { ok: false, reason: '客户文件夹校验失败：' + ((e && e.message) || e) };
       }
       const dup = (board.engagements || []).find((x) => x.dir === raw && (!existing || x.id !== existing.id));
-      if (dup) return { ok: false, reason: `目录已被客户占用：${raw}` };
+      if (dup) return { ok: false, reason: `这个文件夹已经关联了别的客户：${raw}` };
     }
     out.dir = raw;
   }
@@ -206,7 +264,7 @@ export function sanitizeEngagementPatch(root, patch, board, existing) {
     if (!isPlainObject(patch.nextAction)) return { ok: false, reason: 'nextAction 必须为对象' };
     const na = patch.nextAction;
     const due = pickString(na.due, 20);
-    if (due && !store.isDueStr(due)) return { ok: false, reason: 'nextAction.due 必须为 YYYY-MM-DD 或空' };
+    if (due && !store.isDueStr(due)) return { ok: false, reason: '下一步的到期日格式应为 YYYY-MM-DD（或留空）' };
     out.nextAction = { text: pickString(na.text, 300), due, owner: pickString(na.owner, 60) };
   }
   if ('stakeholders' in patch) {
@@ -248,9 +306,9 @@ export function sanitizeEngagementPatch(root, patch, board, existing) {
     }
     out.bidWatch = w;
   }
-  if ('stage' in patch) return { ok: false, reason: '改阶段请用 action=move（受门禁约束）' };
-  if ('gateState' in patch) return { ok: false, reason: '门禁请用 action=gate' };
-  if ('attention' in patch) return { ok: false, reason: '注意力请用 attention 动作' };
+  if ('stage' in patch) return { ok: false, reason: '改阶段请用 action=move（要先满足推进条件）' };
+  if ('gateState' in patch) return { ok: false, reason: '推进条件请用 action=gate' };
+  if ('attention' in patch) return { ok: false, reason: '向人提问请用 fde_attention' };
   return { ok: true, patch: out };
 }
 
@@ -260,7 +318,7 @@ export function sanitizeItemPatch(patch, board) {
   if (!isPlainObject(patch)) return { ok: false, reason: 'patch 必须为对象' };
   if ('title' in patch) {
     const v = pickString(patch.title, 200);
-    if (!v) return { ok: false, reason: 'title 不能为空' };
+    if (!v) return { ok: false, reason: '任务标题不能为空' };
     out.title = v;
   }
   if ('type' in patch) {
@@ -273,16 +331,17 @@ export function sanitizeItemPatch(patch, board) {
   }
   if ('due' in patch) {
     const due = pickString(patch.due, 20);
-    if (due && !store.isDueStr(due)) return { ok: false, reason: 'due 必须为 YYYY-MM-DD 或空' };
+    if (due && !store.isDueStr(due)) return { ok: false, reason: '到期日格式应为 YYYY-MM-DD（或留空）' };
     out.due = due;
   }
-  if ('owner' in patch) {
-    if (!['human', 'agent', 'both'].includes(patch.owner)) return { ok: false, reason: 'owner 必须是 human|agent|both' };
+  /* 负责人留空 = 不指定（创建时按调用方取默认值），不当成非法值拒绝。 */
+  if ('owner' in patch && patch.owner !== '' && patch.owner !== null && patch.owner !== undefined) {
+    if (!['human', 'agent', 'both'].includes(patch.owner)) return { ok: false, reason: '负责人只能选：我（human）、AI（agent）、我和 AI（both）' };
     out.owner = patch.owner;
   }
   if ('engagementId' in patch) {
     const eid = pickString(patch.engagementId, 40);
-    if (eid && !findById(board.engagements, eid)) return { ok: false, reason: 'engagementId 不存在：' + eid };
+    if (eid && !findById(board.engagements, eid)) return { ok: false, reason: '关联的客户不存在：' + eid };
     out.engagementId = eid;
   }
   if ('autonomy' in patch) {
@@ -291,8 +350,8 @@ export function sanitizeItemPatch(patch, board) {
     if (mode && !schema.isAutonomy(mode)) return { ok: false, reason: 'autonomy.mode 非法' };
     out.autonomy = { mode: mode || 'observe', rule: pickString(patch.autonomy.rule, 60) };
   }
-  if ('stage' in patch) return { ok: false, reason: '改泳道请用 action=move' };
-  if ('reports' in patch) return { ok: false, reason: '回报请用 action=report' };
+  if ('stage' in patch) return { ok: false, reason: '改状态请用 action=move' };
+  if ('reports' in patch) return { ok: false, reason: '记进展请用 action=report' };
   return { ok: true, patch: out };
 }
 
@@ -342,9 +401,9 @@ function bidContext(board, service, ttlMs) {
   const summaries = {};
   const available = bids.isAvailable(service);
   for (const e of board.engagements || []) {
-    if (!schema.isStage(e.stage)) { summaries[e.id] = Object.assign(bidUnavailable('客户已终止'), { total: 0, tender: 0, award: 0, candidate: 0, latest: '', queries: [], matches: [] }); continue; }
+    if (!schema.isStage(e.stage)) { summaries[e.id] = Object.assign(bidUnavailable('客户已归档或已流失'), { total: 0, tender: 0, award: 0, candidate: 0, latest: '', queries: [], matches: [] }); continue; }
     if (e.bidWatch && e.bidWatch.enabled === false) {
-      summaries[e.id] = Object.assign(bidUnavailable('该客户已关闭招采雷达'), { enabled: false, total: 0, tender: 0, award: 0, candidate: 0, latest: '', queries: [], matches: [] });
+      summaries[e.id] = Object.assign(bidUnavailable('这家客户已关闭招采关注'), { enabled: false, total: 0, tender: 0, award: 0, candidate: 0, latest: '', queries: [], matches: [] });
       continue;
     }
     if (!available) { summaries[e.id] = Object.assign(bidUnavailable(), { total: 0, tender: 0, award: 0, candidate: 0, latest: '', queries: [], matches: [] }); continue; }
@@ -357,7 +416,14 @@ function bidContext(board, service, ttlMs) {
   return { summaries, bidStats: stats };
 }
 
-/** 刷新 proposals（含 bid_signal）+ company 回填：有变更时按 CAS 落盘（读时求值，spec §6）。
+/** 提醒刷新结果是否改动了 board（新建 / 自动失效 / 标题更新，任一即需落盘；spec §22.2）。 */
+function proposalsChanged(r) {
+  return !!(r && ((r.added && r.added.length) || r.expired || r.updated));
+}
+
+/** 刷新 proposals（含 bid_signal）+ company 回填：有变更时按 CAS 落盘（读时求值，spec §6 / §22.2）。
+ * 「有变更」= 新建提醒、提醒自动失效、提醒标题更新、company 回填，任一成立；
+ * 四者都没有时返回 noWrite——只读请求不写文件（bidWatch.lastMatchAt 这类派生字段不单独触发写盘）。
  * GET 读路径容忍并发：冲突重试后仍失败时用最新 board 继续，绝不覆盖别人刚写入的数据。 */
 function refreshAndPersist(root, opts = {}) {
   const service = opts.bidIntel || null;
@@ -365,13 +431,13 @@ function refreshAndPersist(root, opts = {}) {
     const ttl = ttlOf(board);
     const backfilled = backfillCompanies(board);
     const r = rules.refreshProposals(root, board, { ttlMs: ttl, bidIntel: service });
-    if (!r.added.length && !backfilled) return noWrite({ added: 0, backfilled: 0 });
-    return { ok: true, added: r.added.length, backfilled };
+    if (!proposalsChanged(r) && !backfilled) return noWrite({ added: 0, expired: 0, updated: 0, backfilled: 0 });
+    return { ok: true, added: r.added.length, expired: r.expired || 0, updated: r.updated || 0, backfilled };
   });
   if (res.ok) return res;
   if (opts.tolerant && res.code === 'CONFLICT') {
     const again = load(root);
-    if (again.ok) return okr({ board: again.board, added: 0, conflict: true });
+    if (again.ok) return okr({ board: again.board, added: 0, expired: 0, updated: 0, conflict: true });
   }
   return res;
 }
@@ -410,6 +476,8 @@ export function board(root, opts = {}) {
     generatedAt: store.nowIso(),
     fresh: false,
     proposalsAdded: refreshed.added || 0,
+    proposalsExpired: refreshed.expired || 0,
+    proposalsUpdated: refreshed.updated || 0,
     companiesBackfilled: refreshed.backfilled || 0,
   };
   if (opts.view === 'brief') result.brief = buildBrief(b, { attention, stats, artifacts, period: 'today', bidCtx });
@@ -439,16 +507,18 @@ function buildBrief(b, { attention, stats, period = 'today', bidCtx = null }) {
     .slice(0, 3);
   const proposals = (b.proposals || []).filter((p) => p.status === 'pending');
   const activity = (b.activity || []).slice(-10).reverse();
-  const headline = `活跃客户 ${stats.active} 个 · 待处理 ${attention.length} 条 · 今天到期 ${stats.dueToday} · 逾期 ${stats.overdue}`;
+  /* 「待我处理」只算必须有人动作的事，不含提醒（spec §22.3）；brief.attention 仍含 proposal 种类以兼容工具。 */
+  const todo = attention.filter((a) => a && a.kind !== 'proposal').length;
+  const headline = `在跟客户 ${stats.active} 个 · 待我处理 ${todo} 件 · 今天到期 ${stats.dueToday} · 已逾期 ${stats.overdue}`;
   const dueTodayItems = (b.items || []).filter((it) => store.isDueStr(it.due) && it.due === store.todayStr() && schema.isLane(it.stage)).map((it) => ({ id: it.id, title: it.title, engagementId: it.engagementId, stage: it.stage }));
   return {
     generatedAt: store.nowIso(),
     period: period === 'week' ? 'week' : 'today',
     headline,
-    greeting: stats.active === 0
-      ? '还没有客户在推进：先「导入现有项目」或新建一个客户'
-      : (attention.length ? `今天有 ${attention.length} 件事需要你处理` : '今天没有需要你处理的事'),
-    stats,
+    greeting: !(b.engagements || []).some((e) => e && schema.isStage(e.stage))
+      ? '还没有客户：新建一个，或导入已有文件夹'
+      : (todo ? `今天有 ${todo} 件事等你处理` : '今天没有等你处理的事'),
+    stats: Object.assign({}, stats, { todo }),
     autonomy: (b.settings && b.settings.autonomy) || 'observe',
     attention,
     proposals,
@@ -484,7 +554,7 @@ function createEngagement(root, b, body) {
   if (!s.ok) return err(s.reason);
   const p = s.patch;
   const name = p.name || pickString(patch.company, 120);
-  if (!name) return err('请提供 name（看板标题）或 company（工商全称）');
+  if (!name) return err('请填写客户名称或公司全称');
   const by = byOf(body);
   const now = store.nowIso();
   const e = {
@@ -509,7 +579,7 @@ function createEngagement(root, b, body) {
     sessionId: '',
     createdAt: now,
     adopted: false,
-    timeline: [{ at: now, kind: 'created', text: '看板创建客户', by }],
+    timeline: [{ at: now, kind: 'created', text: '新建客户', by }],
   };
   if (p.bidWatch) {
     e.bidWatch = Object.assign(e.bidWatch, p.bidWatch);
@@ -517,7 +587,7 @@ function createEngagement(root, b, body) {
     if (Array.isArray(p.bidWatch.links)) e.bidWatch.links = p.bidWatch.links.slice();
   }
   b.engagements.push(e);
-  store.pushActivity(b, { kind: 'created', text: `创建客户：${e.name}`, engagementId: e.id, by });
+  store.pushActivity(b, { kind: 'created', text: `新建客户：${e.name}`, engagementId: e.id, by });
   return okr({ engagement: e });
 }
 
@@ -526,23 +596,23 @@ function moveEngagement(root, b, body) {
   const patch = isPlainObject(body.patch) ? body.patch : {};
   const id = pickString(body.id, 40);
   const e = findById(b.engagements, id);
-  if (!e) return err(`客户不存在：${id || '(空)'}`, 'NOT_FOUND');
+  if (!e) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
   const target = pickString(patch.stage || body.stage, 40);
   const force = !!(patch.force || body.force);
   const reason = pickString(patch.reason || body.reason, 300);
   if (!schema.isEngagementStage(target)) return err(`非法阶段：${target || '(空)'}（${schema.STAGE_KEYS.join('|')}|archived|lost）`);
   if (!schema.isStage(target)) return err(`move 只能推进到 ${schema.ENGAGEMENT_STAGES.length} 个阶段之一；归档请用 action=archive`);
-  if (!schema.isStage(e.stage)) return err('客户已终止（归档/流失），不能再移动阶段', 'CONFLICT');
+  if (!schema.isStage(e.stage)) return err('这家客户已归档或已流失，不能再调整阶段', 'CONFLICT');
   const curOrder = schema.stageOrder(e.stage);
   const targetOrder = schema.stageOrder(target);
   const backward = targetOrder < curOrder;
   if (!force && !backward) {
     if (targetOrder !== curOrder + 1) {
       const nxt = schema.nextStage(e.stage);
-      return err(nxt ? `不可跳阶：当前「${schema.stageLabel(e.stage)}」只能推进到「${schema.stageLabel(nxt)}」（force 可越级）` : '已到最后一个阶段，只能归档', 'INVALID');
+      return err(nxt ? `不能跳过阶段：现在在「${schema.stageLabel(e.stage)}」，下一步只能进入「${schema.stageLabel(nxt)}」（确需跳过请用「破例推进」并写明原因）` : '已经是最后一个阶段了，接下来只能归档', 'INVALID');
     }
   } else if (force && !reason) {
-    return err('强制推进必须给出 reason（记录到 gateState.forced）');
+    return err(FORCE_NEEDS_REASON);
   }
   const gateKey = schema.gateKeyOfStage(target);
   const gsKey = gateKey ? schema.gateStateKey(gateKey) : '';
@@ -550,7 +620,7 @@ function moveEngagement(root, b, body) {
   const gate = !backward && gateKey ? rules.evaluateGate(root, e, gateKey, { ttlMs: ttlOf(b) }) : null;
   const forcedBefore = !!(gsKey && e.gateState[gsKey] && e.gateState[gsKey].forced === true);
   if (gate && !gate.passed && !force && !forcedBefore) {
-    return err(`门禁未通过（${gate.label}）：缺 ${gate.missing.length} 项`, 'BLOCKED', { blocked: true, gate, missing: gate.missing });
+    return err(`还不能进入「${schema.stageLabel(target)}」：还差 ${gate.missing.length} 项（${missingBrief(gate.missing)}）`, 'BLOCKED', { blocked: true, gate, missing: gate.missing });
   }
   const now = store.nowIso();
   if (gsKey && !backward) {
@@ -568,10 +638,10 @@ function moveEngagement(root, b, body) {
     kind: 'stage',
     text: backward
       ? `阶段回退：${schema.stageLabel(from)} → ${schema.stageLabel(target)}（人工纠正）`
-      : `阶段：${schema.stageLabel(from)} → ${schema.stageLabel(target)}${force && gate && !gate.passed ? `（force：${reason}）` : ''}`,
+      : `阶段：${schema.stageLabel(from)} → ${schema.stageLabel(target)}${force && gate && !gate.passed ? `（破例推进：${reason}）` : ''}`,
     by,
   });
-  store.pushActivity(b, { kind: 'moved', text: `${e.name}：${schema.stageLabel(from)} → ${schema.stageLabel(target)}${backward ? '（回退）' : (force ? '（force）' : '')}`, engagementId: e.id, by });
+  store.pushActivity(b, { kind: 'moved', text: `${e.name}：${schema.stageLabel(from)} → ${schema.stageLabel(target)}${backward ? '（回退）' : (force ? '（破例推进）' : '')}`, engagementId: e.id, by });
   const gateFinal = gateKey && !backward ? (rules.evaluateGate(root, e, gateKey, { ttlMs: ttlOf(b) }) || gate) : gate;
   return okr({ engagement: e, gate: gateFinal, missing: gateFinal ? gateFinal.missing : [] });
 }
@@ -582,12 +652,12 @@ function gateEvaluate(root, b, body) {
   const by = byOf(body);
   const id = pickString(a.engagementId || a.id, 40);
   const e = findById(b.engagements, id);
-  if (!e) return err(`客户不存在：${id || '(空)'}`, 'NOT_FOUND');
+  if (!e) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
   const stage = pickString(a.stage, 20) || e.stage;
   if (!schema.isEngagementStage(stage)) return err(`非法阶段：${stage}`);
-  if (!schema.isStage(stage)) return err('终止状态没有门禁');
+  if (!schema.isStage(stage)) return err('已归档或已流失的客户没有推进条件');
   const gateKey = schema.gateKeyOfStage(stage);
-  if (!gateKey) return err('该阶段没有门禁定义', 'NOT_FOUND');
+  if (!gateKey) return err('这个阶段没有设置推进条件', 'NOT_FOUND');
   const def = schema.gateDef(gateKey);
   const gsKey = schema.gateStateKey(gateKey);
   const now = store.nowIso();
@@ -606,7 +676,12 @@ function gateEvaluate(root, b, body) {
       touched.push(k);
       changed = true;
     }
-    if (touched.length) store.pushTimeline(e, { kind: 'gate', text: `门禁 ${gateKey} 人工项：${touched.join('、')}`, by });
+    /* 记录用检查项的中文名；勾上与取消分开记。 */
+    const manualLabel = (k) => { const c = def.manual.find((x) => x.key === k); return c ? c.label : '其它事项'; };
+    const confirmed = touched.filter((k) => gs.checks[k].status === 'pass').map(manualLabel);
+    const revoked = touched.filter((k) => gs.checks[k].status !== 'pass').map(manualLabel);
+    if (confirmed.length) store.pushTimeline(e, { kind: 'gate', text: `确认了推进条件：${confirmed.join('、')}`, by });
+    if (revoked.length) store.pushTimeline(e, { kind: 'gate', text: `取消了推进条件的确认：${revoked.join('、')}`, by });
   }
 
   /* 先把人工勾选写回 engagement.gateState（按阶段 key），再评估——否则 evaluateGate 读不到刚提交的勾选。 */
@@ -617,15 +692,15 @@ function gateEvaluate(root, b, body) {
   const force = !!a.force;
   const reason = pickString(a.reason, 300);
   if (force) {
-    if (!reason) return err('force 必须给出 reason');
+    if (!reason) return err(FORCE_NEEDS_REASON);
     if (!gate.passed) {
       gs.status = 'forced';
       gs.forced = true;
       gs.reason = reason;
       gs.at = now;
       changed = true;
-      store.pushTimeline(e, { kind: 'gate', text: `门禁 ${gateKey} 强制放行：${reason}`, by });
-      store.pushActivity(b, { kind: 'gate', text: `${e.name} 门禁 ${gateKey} 强制放行`, engagementId: e.id, by });
+      store.pushTimeline(e, { kind: 'gate', text: `破例推进到「${schema.stageLabel(stage)}」：${reason}`, by });
+      store.pushActivity(b, { kind: 'gate', text: `${e.name}破例推进到「${schema.stageLabel(stage)}」`, engagementId: e.id, by });
     }
   }
   /* 写回后重算一次：让人工勾选/force 的状态如实出现在响应里（面板据此渲染）。 */
@@ -638,7 +713,7 @@ function updateEngagement(root, b, body) {
   const by = byOf(body);
   const id = pickString(body.id, 40);
   const e = findById(b.engagements, id);
-  if (!e) return err(`客户不存在：${id || '(空)'}`, 'NOT_FOUND');
+  if (!e) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
   const patch = Object.assign({}, isPlainObject(body.patch) ? body.patch : {});
   for (const k of ['name', 'company', 'shortName', 'dir', 'priority', 'owner', 'tags', 'source', 'value', 'nextAction', 'stakeholders', 'paused']) {
     if (body[k] !== undefined && patch[k] === undefined) patch[k] = body[k];
@@ -655,7 +730,7 @@ function updateEngagement(root, b, body) {
     if (Array.isArray(nextBidWatch.links)) merged.links = nextBidWatch.links;
     e.bidWatch = merged;
   }
-  store.pushTimeline(e, { kind: 'note', text: '更新客户字段：' + Object.keys(s.patch).join('、'), by });
+  store.pushTimeline(e, { kind: 'note', text: '更新了：' + fieldNames(Object.keys(s.patch), ENGAGEMENT_FIELD_LABELS), by });
   store.pushActivity(b, { kind: 'updated', text: `更新客户：${e.name}`, engagementId: e.id, by });
   return okr({ engagement: e });
 }
@@ -667,8 +742,8 @@ function archiveEngagement(root, b, body) {
   const lost = !!(patch.lost || body.lost);
   const id = pickString(body.id, 40);
   const e = findById(b.engagements, id);
-  if (!e) return err(`客户不存在：${id || '(空)'}`, 'NOT_FOUND');
-  if (schema.isTerminal(e.stage)) return err('客户已归档或已流失', 'CONFLICT');
+  if (!e) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
+  if (schema.isTerminal(e.stage)) return err('这家客户已经归档或已流失了', 'CONFLICT');
   const target = lost ? 'lost' : 'archived';
   const now = store.nowIso();
   const from = e.stage;
@@ -709,7 +784,7 @@ function moveItem(item, lane, by) {
   if (item.stage === lane) return false;
   const from = item.stage;
   item.stage = lane;
-  store.pushHistory(item, { kind: 'moved', text: `泳道：${schema.laneLabel(from)} → ${schema.laneLabel(lane)}`, by: by || 'human' });
+  store.pushHistory(item, { kind: 'moved', text: `状态：${schema.laneLabel(from)} → ${schema.laneLabel(lane)}`, by: by || 'human' });
   return true;
 }
 
@@ -720,7 +795,7 @@ function createItem(root, b, body) {
     if (body[k] !== undefined && patch[k] === undefined) patch[k] = body[k];
   }
   const title = pickString(patch.title, 200);
-  if (!title) return err('title 不能为空');
+  if (!title) return err('任务标题不能为空');
   /* 创建时允许直接落在某泳道（move 才有「改泳道」限制），校验前先摘出 stage。 */
   const initialLane = pickString(patch.stage, 20) || 'inbox';
   const forPatch = Object.assign({}, patch);
@@ -729,7 +804,7 @@ function createItem(root, b, body) {
   if (!s.ok) return err(s.reason);
   const p = s.patch;
   const lane = initialLane;
-  if (!schema.isLane(lane)) return err(`非法泳道：${lane}（${schema.LANE_KEYS.join('|')}）`);
+  if (!schema.isLane(lane)) return err(`没有这个任务状态：${lane}（可选 ${schema.LANE_KEYS.join('|')}）`);
   const now = store.nowIso();
   const it = {
     id: store.newItemId(),
@@ -746,11 +821,11 @@ function createItem(root, b, body) {
     reports: [],
     sessionId: '',
     createdAt: now,
-    history: [{ at: now, kind: 'created', text: '创建任务', by }],
+    history: [{ at: now, kind: 'created', text: '新建任务', by }],
   };
   b.items.push(it);
   const eng = it.engagementId ? findById(b.engagements, it.engagementId) : null;
-  store.pushActivity(b, { kind: 'created', text: `创建任务：${it.title}`, engagementId: it.engagementId, itemId: it.id, by });
+  store.pushActivity(b, { kind: 'created', text: `新建任务：${it.title}`, engagementId: it.engagementId, itemId: it.id, by });
   if (eng) store.pushTimeline(eng, { kind: 'note', text: `新增任务：${it.title}`, by });
   return okr({ item: it });
 }
@@ -759,7 +834,7 @@ function updateItem(root, b, body) {
   const by = byOf(body);
   const id = pickString(body.id, 40);
   const it = findById(b.items, id);
-  if (!it) return err(`任务不存在：${id || '(空)'}`, 'NOT_FOUND');
+  if (!it) return err(NOT_FOUND_ITEM, 'NOT_FOUND');
   const patch = Object.assign({}, isPlainObject(body.patch) ? body.patch : {});
   for (const k of ['title', 'type', 'priority', 'due', 'owner', 'engagementId', 'autonomy']) {
     if (body[k] !== undefined && patch[k] === undefined) patch[k] = body[k];
@@ -768,7 +843,7 @@ function updateItem(root, b, body) {
   if (!s.ok) return err(s.reason);
   if (!Object.keys(s.patch).length) return noWrite({ item: it });
   Object.assign(it, s.patch);
-  store.pushHistory(it, { kind: 'updated', text: '更新字段：' + Object.keys(s.patch).join('、'), by });
+  store.pushHistory(it, { kind: 'updated', text: '更新了：' + fieldNames(Object.keys(s.patch), ITEM_FIELD_LABELS), by });
   store.pushActivity(b, { kind: 'updated', text: `更新任务：${it.title}`, engagementId: it.engagementId, itemId: it.id, by });
   return okr({ item: it });
 }
@@ -777,26 +852,26 @@ function moveItemAction(root, b, body) {
   const by = byOf(body);
   const id = pickString(body.id, 40);
   const it = findById(b.items, id);
-  if (!it) return err(`任务不存在：${id || '(空)'}`, 'NOT_FOUND');
+  if (!it) return err(NOT_FOUND_ITEM, 'NOT_FOUND');
   const patch = isPlainObject(body.patch) ? body.patch : {};
   const lane = pickString(patch.stage || body.stage, 20);
-  if (!schema.isLane(lane)) return err(`非法泳道：${lane || '(空)'}（${schema.LANE_KEYS.join('|')}）`);
+  if (!schema.isLane(lane)) return err(`没有这个任务状态：${lane || '(空)'}（可选 ${schema.LANE_KEYS.join('|')}）`);
   const force = !!(patch.force || body.force);
   const evidence = pickString(patch.evidence || body.evidence, 500);
   if (lane === 'done' && !(it.reports || []).length && !evidence && !force) {
-    return err('进入「已完成」需要至少 1 条回报或人工证据文本（可 force 覆盖）', 'BLOCKED', { blocked: true, missing: [{ type: 'manual', key: 'evidence', label: '回报或人工证据' }] });
+    return err(`移入「${schema.laneLabel('done')}」前，请先写一句结果说明（做成了什么、依据在哪）`, 'BLOCKED', { blocked: true, missing: [{ type: 'manual', key: 'evidence', label: '结果说明' }] });
   }
   if (it.stage === lane && !evidence) return noWrite({ item: it, warning: '', moved: false });
   let warning = '';
   if (lane === 'doing') {
     const lim = schema.wipLimitOf(b.settings, 'doing');
     const count = (b.items || []).filter((x) => x.stage === 'doing' && x.id !== it.id).length;
-    if (lim && count >= lim) warning = `WIP 已满：进行中 ${count} 个（上限 ${lim}），建议先推进再拉新`;
+    if (lim && count >= lim) warning = `进行中的任务已有 ${count} 个，达到同时进行上限（${lim} 个）；建议先做完手上的再开新的`;
   }
   if (!moveItem(it, lane, by)) return noWrite({ item: it, warning, moved: false });
-  if (evidence) store.pushHistory(it, { kind: 'updated', text: '人工证据：' + evidence, by });
+  if (evidence) store.pushHistory(it, { kind: 'updated', text: '结果说明：' + evidence, by });
   if (lane === 'done' || lane === 'canceled') it.attention = null;
-  store.pushActivity(b, { kind: 'moved', text: `任务「${it.title}」→ ${schema.laneLabel(lane)}`, engagementId: it.engagementId, itemId: it.id, by });
+  store.pushActivity(b, { kind: 'moved', text: `任务「${it.title}」改为「${schema.laneLabel(lane)}」`, engagementId: it.engagementId, itemId: it.id, by });
   return okr({ item: it, warning, moved: true });
 }
 
@@ -804,18 +879,18 @@ function reportItem(root, b, body) {
   const by = byOf(body);
   const id = pickString(body.id, 40);
   const it = findById(b.items, id);
-  if (!it) return err(`任务不存在：${id || '(空)'}`, 'NOT_FOUND');
+  if (!it) return err(NOT_FOUND_ITEM, 'NOT_FOUND');
   const rep = isPlainObject(body.report) ? body.report : body;
   const kind = pickString(rep.kind, 20);
   const kinds = ['progress', 'ready', 'blocked', 'failed', 'dropped'];
   if (!kinds.includes(kind)) return err(`report.kind 必须是 ${kinds.join('|')}`);
   const text = pickString(rep.text, 2000);
-  if (!text) return err('report.text 不能为空（≤300 字摘要 + 文件路径）');
+  if (!text) return err('进展内容不能为空（写一句摘要，可附文件路径）');
   const artifacts = Array.isArray(rep.artifacts) ? rep.artifacts.map((a) => pickString(a, 500)).filter(Boolean).slice(0, 30) : [];
   const now = store.nowIso();
   let warning = '';
   if (body.sessionId && it.sessionId && body.sessionId !== it.sessionId) {
-    warning = '会话 id 与任务关联会话不一致（仅警告，不阻断）';
+    warning = '这条进展不是从任务关联的那次对话里发来的（仅提示，不影响记录）';
   }
   it.reports.push({ at: now, kind, text, artifacts });
   let lane = it.stage;
@@ -831,10 +906,10 @@ function reportItem(root, b, body) {
     it.attention = attention;
   } else if (kind === 'dropped') { lane = 'canceled'; it.attention = null; }
   if (lane !== it.stage) moveItem(it, lane, by);
-  store.pushHistory(it, { kind: 'report', text: `${kind}：${text.slice(0, 120)}`, by });
+  store.pushHistory(it, { kind: 'report', text: `${REPORT_WORDS[kind]}：${text.slice(0, 120)}`, by });
   const eng = it.engagementId ? findById(b.engagements, it.engagementId) : null;
-  store.pushActivity(b, { kind: 'report', text: `回报（${kind}）：${it.title}`, engagementId: it.engagementId, itemId: it.id, by });
-  if (eng) store.pushTimeline(eng, { kind: 'report', text: `任务「${it.title}」回报：${kind}`, by });
+  store.pushActivity(b, { kind: 'report', text: `任务「${it.title}」${REPORT_WORDS[kind]}`, engagementId: it.engagementId, itemId: it.id, by });
+  if (eng) store.pushTimeline(eng, { kind: 'report', text: `任务「${it.title}」${REPORT_WORDS[kind]}`, by });
   const res = okr({ item: it, attention, lane });
   if (warning) res.warning = warning;
   return res;
@@ -843,12 +918,12 @@ function reportItem(root, b, body) {
 function deleteItem(root, b, body) {
   /* 红线（F1 / spec §6）：删除任务只能由人在面板执行，agent 工具来源一律拒绝。 */
   if (byOf(body) === 'agent') {
-    return err('删除任务只能由人在面板执行（agent 红线：只能准备、建议、提问）', 'BLOCKED');
+    return err('删除任务只能由人在面板执行（AI 只能准备、建议、提问）', 'BLOCKED');
   }
   const by = byOf(body);
   const id = pickString(body.id, 40);
   const idx = (b.items || []).findIndex((x) => x.id === id);
-  if (idx < 0) return err(`任务不存在：${id || '(空)'}`, 'NOT_FOUND');
+  if (idx < 0) return err(NOT_FOUND_ITEM, 'NOT_FOUND');
   const it = b.items[idx];
   b.items.splice(idx, 1);
   b.proposals = (b.proposals || []).filter((p) => p.itemId !== it.id);
@@ -865,7 +940,7 @@ export function item(root, body = {}) {
   }
   /* 工具层红线：fde_item 不提供 delete（宿主层同样拒绝 agent 来源）。 */
   if (action === 'delete' && byOf(args) === 'agent') {
-    return err('删除任务只能由人在面板执行（agent 红线）', 'BLOCKED');
+    return err('删除任务只能由人在面板执行', 'BLOCKED');
   }
   return runAction(root, (b) => {
     switch (action) {
@@ -881,7 +956,7 @@ export function item(root, body = {}) {
 
 /* ============================ attention ============================ */
 
-/** 注意力提问/解决/列表（POST /fde/attention；工具 fde_attention）。 */
+/** 注意力提问/解决/列表（POST /fde/attention；工具 fde_attention）。记录文本对人称「提问 / 待我处理」。 */
 export function attention(root, body = {}) {
   const args = normalizeArgs(body);
   const action = pickString(args.action, 20);
@@ -900,36 +975,40 @@ export function attention(root, body = {}) {
   return runAction(root, (b) => {
     const id = pickString(args.id, 40);
     const obj = target === 'engagement' ? findById(b.engagements, id) : findById(b.items, id);
-    if (!obj) return err(`${target === 'engagement' ? '客户' : '任务'}不存在：${id || '(空)'}`, 'NOT_FOUND');
+    if (!obj) return err(target === 'engagement' ? NOT_FOUND_ENGAGEMENT : NOT_FOUND_ITEM, 'NOT_FOUND');
+    /* 最近动态里的主语：客户名（后面留一个空格），或「任务「标题」」（引号结尾，不加空格）。 */
+    const subject = target === 'engagement' ? obj.name : `任务「${obj.title}」`;
+    const subjectHead = target === 'engagement' ? obj.name : subject;
 
     if (action === 'ask') {
       const kind = pickString(args.kind, 20) || 'decision';
       if (!schema.ATTENTION_EXPLICIT_KINDS.includes(kind)) return err(`attention.kind 必须是 ${schema.ATTENTION_EXPLICIT_KINDS.join('|')}`);
       const question = pickString(args.question, 1000);
-      if (!question) return err('question 不能为空');
+      if (!question) return err('问题内容不能为空');
       const now = store.nowIso();
       const att = { kind, question, askedAt: now, askedBy: by };
       obj.attention = att;
-      if (target === 'engagement') store.pushTimeline(obj, { kind: 'attention', text: `提问（${kind}）：${question}`, by });
-      else store.pushHistory(obj, { kind: 'attention', text: `提问（${kind}）：${question}`, by });
-      store.pushActivity(b, { kind: 'attention', text: `注意力：${question.slice(0, 80)}`, engagementId: target === 'engagement' ? obj.id : obj.engagementId, itemId: target === 'item' ? obj.id : '', by });
+      if (target === 'engagement') store.pushTimeline(obj, { kind: 'attention', text: askRecordText(kind, question, by), by });
+      else store.pushHistory(obj, { kind: 'attention', text: askRecordText(kind, question, by), by });
+      store.pushActivity(b, { kind: 'attention', text: `${subjectHead}${ASK_WORDS[kind] || ASK_WORDS.question}：${question.slice(0, 80)}`, engagementId: target === 'engagement' ? obj.id : obj.engagementId, itemId: target === 'item' ? obj.id : '', by });
       return okr({ attention: att });
     }
 
     /* resolve */
     const answer = pickString(args.answer, 2000);
     const had = obj.attention;
-    if (!had) return noWrite({ attention: null, cleared: false, warning: '该对象没有显式注意力' });
+    if (!had) return noWrite({ attention: null, cleared: false, warning: '这里没有等人处理的问题' });
     /* 红线（spec §6/§7；Phase 3 · 审查 F-20）：decision/blocked 是「需要人拍板/受阻」的显式注意力，
      * agent 来源不得自行 resolve；answer/question 仍可由 agent 记录人的回答。 */
     if (by === 'agent' && (had.kind === 'decision' || had.kind === 'blocked')) {
-      return err('需要决定/受阻的注意力只能由人在面板处理（agent 红线：不要自行替人清除，可继续用 ask 补充信息）', 'BLOCKED');
+      return err('等人决定或卡住的事只能由人在面板处理（AI 不能替人了结，可以继续用 ask 补充信息）', 'BLOCKED');
     }
     obj.attention = null;
     const now = store.nowIso();
-    if (target === 'engagement') store.pushTimeline(obj, { kind: 'attention', text: `已解决（${had.kind}）：${answer || '无补充'}`, by });
-    else store.pushHistory(obj, { kind: 'attention', text: `已解决（${had.kind}）：${answer || '无补充'}`, by });
-    store.pushActivity(b, { kind: 'attention', text: `注意力已解决：${had.question.slice(0, 60)}`, engagementId: target === 'engagement' ? obj.id : obj.engagementId, itemId: target === 'item' ? obj.id : '', by });
+    const resolved = RESOLVE_WORDS[had.kind] || RESOLVE_WORDS.question;
+    if (target === 'engagement') store.pushTimeline(obj, { kind: 'attention', text: `${resolved}${answer ? '：' + answer : ''}`, by });
+    else store.pushHistory(obj, { kind: 'attention', text: `${resolved}${answer ? '：' + answer : ''}`, by });
+    store.pushActivity(b, { kind: 'attention', text: `${subject}：${resolved}（${String(had.question || '').slice(0, 60)}）`, engagementId: target === 'engagement' ? obj.id : obj.engagementId, itemId: target === 'item' ? obj.id : '', by });
     return okr({ attention: null, cleared: true, answer, resolvedAt: now });
   });
 }
@@ -974,12 +1053,12 @@ export function adopt(root, body = {}) {
     try { candMap = new Map(store.adoptScan(root, b).map((c) => [c.dir, c])); } catch { candMap = new Map(); }
     for (const rawDir of dirs.slice(0, 100)) {
       const dir = pickString(rawDir, 200);
-      if (!dir) { rejected.push({ dir: String(rawDir), reason: '目录名为空' }); continue; }
-      try { safeDirName(dir); } catch (e) { rejected.push({ dir, reason: '非法目录名：' + ((e && e.message) || e) }); continue; }
+      if (!dir) { rejected.push({ dir: String(rawDir), reason: '文件夹名为空' }); continue; }
+      try { safeDirName(dir); } catch (e) { rejected.push({ dir, reason: '文件夹名称不合法：' + ((e && e.message) || e) }); continue; }
       /* F6：复用 safeProjectPath(realpath) 守卫——符号链接指向工作区外时 projectAbs 返回 ''，直接拒绝。 */
       const abs = store.projectAbs(root, dir);
-      if (!abs) { rejected.push({ dir, reason: '目录越界或指向工作区外（不允许符号链接逃逸）' }); continue; }
-      if (!existsSync(abs)) { rejected.push({ dir, reason: '目录不存在' }); continue; }
+      if (!abs) { rejected.push({ dir, reason: '这个文件夹在工作区之外，不能导入' }); continue; }
+      if (!existsSync(abs)) { rejected.push({ dir, reason: '文件夹不存在' }); continue; }
       const exist = (b.engagements || []).find((e) => e.dir === dir);
       if (exist) { skipped.push({ dir, reason: '已导入', engagementId: exist.id }); continue; }
       const scan = store.scanProjectArtifacts(root, dir, { ttlMs: 0, force: true });
@@ -1010,19 +1089,19 @@ export function adopt(root, body = {}) {
         timeline: [{
           at: now,
           kind: 'created',
-          text: `从目录导入（建议阶段「${schema.stageLabel(suggestion.stage)}」，置信度 ${suggestion.confidence}；证据：${suggestion.evidence.join('、') || '仅目录存在'}）`,
+          text: `从已有文件夹导入，放在「${schema.stageLabel(suggestion.stage)}」阶段`,
           by,
         }],
       };
       /* 导入前的历史阶段视为已完成：记 forced 并写明原因，保持可审计、可回滚。 */
       for (const st of schema.ENGAGEMENT_STAGES) {
         if (st.order >= schema.stageOrder(suggestion.stage)) break;
-        e.gateState[st.key] = { status: 'forced', checks: {}, forced: true, reason: '导入既有项目：历史阶段产物已在磁盘上', at: now };
-        store.pushTimeline(e, { kind: 'gate', text: `历史门禁「${st.label}」按导入处理（forced）`, by: 'system' });
+        e.gateState[st.key] = { status: 'forced', checks: {}, forced: true, reason: '从已有文件夹导入：之前阶段的材料已经在文件夹里', at: now };
+        store.pushTimeline(e, { kind: 'gate', text: `导入时已过「${st.label}」阶段，推进条件视为满足`, by: 'system' });
       }
       b.engagements.push(e);
       added.push({ dir, engagementId: e.id, stage: suggestion.stage });
-      store.pushActivity(b, { kind: 'adopt', text: `导入客户：${dir}`, engagementId: e.id, by });
+      store.pushActivity(b, { kind: 'adopt', text: `从已有文件夹导入客户：${e.name}`, engagementId: e.id, by });
     }
 
     const payload = { added, skipped, rejected, written: added.length > 0 };
@@ -1032,8 +1111,42 @@ export function adopt(root, body = {}) {
 
 /* ============================ handoff ============================ */
 
+/**
+ * 交给 AI 时用哪个阶段的做法（spec §22.9）。
+ * 推进条件属于要进入的那个阶段，所以默认取下一阶段；最后一个阶段取当前阶段。
+ */
+function handoffWorkStage(engagement, intent) {
+  if (!engagement || !schema.isStage(engagement.stage)) return 'lead';
+  if (intent === 'meeting') return 'meeting';
+  if (intent === 'harvest') return engagement.stage;
+  return schema.nextStage(engagement.stage) || engagement.stage;
+}
+/** 任务类型里没有「研判」，对应的是「调研」。 */
+const WORK_STAGE_ITEM_TYPE = { discovery: 'research' };
+
+/**
+ * 当前阶段自己还缺的材料（只读评估）。
+ * 只在当前阶段的条件没有通过记录时才看——典型是从文件夹导入的客户：
+ * 按「有没有这个阶段的材料」放列，材料未必齐。
+ */
+function currentStageGap(root, engagement, ttlMs) {
+  const cg = rules.currentGate(engagement);
+  if (!cg) return [];
+  const rec = engagement.gateState && engagement.gateState[schema.gateStateKey(cg.gateKey)];
+  if (rec && (rec.status === 'pass' || rec.status === 'forced' || rec.forced === true)) return [];
+  const g = rules.evaluateGate(root, engagement, cg.gateKey, { ttlMs });
+  return ((g && g.missing) || []).filter((m) => m.type === 'auto').map((m) => m.detail || m.label);
+}
+
 /** 客户阶段 handoff 的执行任务标题（含阶段名；用于「创建或复用」判定）。 */
-function handoffItemTitle(engagement) {
+function handoffItemTitle(engagement, workStage) {
+  const ws = schema.isStage(workStage) ? workStage : engagement.stage;
+  return ws !== engagement.stage
+    ? `准备进入「${schema.stageLabel(ws)}」：${engagement.name}`
+    : `推进「${schema.stageLabel(engagement.stage)}」：${engagement.name}`;
+}
+/** v1 的标题写法；在办的旧任务按它复用，不重复建。 */
+function legacyHandoffItemTitle(engagement) {
   return `执行任务：${schema.stageLabel(engagement.stage)} · ${engagement.name}`;
 }
 
@@ -1041,22 +1154,25 @@ function handoffItemTitle(engagement) {
  * 确保客户有一个 open 的执行任务（F2 / spec §9）：
  * source.kind=agent、ref=handoff、泳道 todo|doing，标题含当前阶段名；已存在则复用。
  */
-function ensureExecutionItem(root, engagementId, by) {
+function ensureExecutionItem(root, engagementId, by, intent) {
   return runAction(root, (b) => {
     const e = findById(b.engagements, engagementId);
-    if (!e) return err(`客户不存在：${engagementId || '(空)'}`, 'NOT_FOUND');
-    if (!schema.isStage(e.stage)) return err('客户已归档/流失，不发起阶段会话；需要复盘用 intent=harvest', 'CONFLICT');
-    const title = handoffItemTitle(e);
+    if (!e) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
+    if (!schema.isStage(e.stage)) return err('这家客户已归档或已流失，不能再交给 AI 推进；需要复盘时请写复盘草稿', 'CONFLICT');
+    const workStage = handoffWorkStage(e, intent);
+    const itemType = WORK_STAGE_ITEM_TYPE[workStage] || workStage;
+    const title = handoffItemTitle(e, workStage);
+    const legacyTitle = legacyHandoffItemTitle(e);
     const existing = (b.items || []).find((it) => it.engagementId === e.id &&
       it.source && it.source.kind === 'agent' && it.source.ref === 'handoff' &&
-      ['todo', 'doing'].includes(it.stage) && it.title === title);
+      ['todo', 'doing'].includes(it.stage) && (it.title === title || it.title === legacyTitle));
     if (existing) return noWrite({ item: existing, reused: true });
     const now = store.nowIso();
     const it = {
       id: store.newItemId(),
       engagementId: e.id,
       title,
-      type: schema.isItemType(e.stage) ? e.stage : 'followup',
+      type: schema.isItemType(itemType) ? itemType : 'followup',
       stage: 'doing',
       priority: e.priority || 'normal',
       due: (e.nextAction && e.nextAction.due) || '',
@@ -1067,10 +1183,10 @@ function ensureExecutionItem(root, engagementId, by) {
       reports: [],
       sessionId: '',
       createdAt: now,
-      history: [{ at: now, kind: 'created', text: '由 handoff 创建执行任务（回报闭环）', by }],
+      history: [{ at: now, kind: 'created', text: '交给 AI 时自动创建', by }],
     };
     b.items.push(it);
-    store.pushActivity(b, { kind: 'created', text: `执行任务：${it.title}`, engagementId: e.id, itemId: it.id, by });
+    store.pushActivity(b, { kind: 'created', text: `新建任务：${it.title}`, engagementId: e.id, itemId: it.id, by });
     return okr({ item: it, reused: false });
   });
 }
@@ -1098,13 +1214,13 @@ export async function handoff(root, body = {}, deps = {}) {
   let reusedItem = false;
 
   if (target === 'engagement') {
-    const ensured = ensureExecutionItem(root, id, by);
+    const ensured = ensureExecutionItem(root, id, by, intent);
     if (!ensured.ok) return ensured;
     item = ensured.item;
     reusedItem = !!ensured.reused;
     contextBoard = ensured.board;
     engagement = findById(contextBoard.engagements, id) || null;
-    if (!engagement) return err(`客户不存在：${id || '(空)'}`, 'NOT_FOUND');
+    if (!engagement) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
     const ttl = ttlOf(contextBoard);
     const ng = rules.nextGate(engagement) || rules.currentGate(engagement);
     if (ng) gate = rules.evaluateGate(root, engagement, ng.gateKey, { ttlMs: ttl });
@@ -1114,6 +1230,8 @@ export async function handoff(root, body = {}, deps = {}) {
       item,
       intent,
       gate,
+      workStage: handoffWorkStage(engagement, intent),
+      doorGap: currentStageGap(root, engagement, ttl),
       stayDays: rules.stageStayDays(engagement),
       hasSkills: !!deps.skillsAvailable,
     });
@@ -1122,17 +1240,20 @@ export async function handoff(root, body = {}, deps = {}) {
     if (!pre.ok) return pre;
     contextBoard = pre.board;
     item = findById(contextBoard.items, id);
-    if (!item) return err(`任务不存在：${id || '(空)'}`, 'NOT_FOUND');
+    if (!item) return err(NOT_FOUND_ITEM, 'NOT_FOUND');
     engagement = item.engagementId ? findById(contextBoard.engagements, item.engagementId) : null;
-    prompt = prompts.buildPrompt('item', { root, item, engagement, intent });
+    prompt = prompts.buildPrompt('item', {
+      root, item, engagement, intent,
+      workStage: engagement ? handoffWorkStage(engagement, intent) : '',
+    });
   }
 
   if (typeof deps.handoff !== 'function') {
-    return err('本部署未挂载 sessionController，无法自动开会话——请把 prompt 内容粘贴到对话框继续', 'INTERNAL', { prompt, sessionId: '', itemId: item ? item.id : '' });
+    return err('这里没法自动开新对话——请把下面这段话粘贴到对话框里继续', 'INTERNAL', { prompt, sessionId: '', itemId: item ? item.id : '' });
   }
   const hr = await deps.handoff(prompt, { root });
   if (!hr || !hr.ok) {
-    return err((hr && hr.reason) || '创建会话失败', 'INTERNAL', { prompt, sessionId: '', itemId: item ? item.id : '' });
+    return err((hr && hr.reason) || '没能开出新对话', 'INTERNAL', { prompt, sessionId: '', itemId: item ? item.id : '' });
   }
   const sessionId = hr.sessionId || '';
   /* 会话创建在事务外（避免冲突重试时重复建会话）；写回用 CAS 事务，绝不覆盖并发写。 */
@@ -1140,26 +1261,27 @@ export async function handoff(root, body = {}, deps = {}) {
     const now = store.nowIso();
     if (target === 'engagement') {
       const e = findById(b.engagements, id);
-      if (!e) return err('客户在会话创建后消失（可能被并发归档/删除）', 'NOT_FOUND');
+      if (!e) return err('新对话已开出，但这家客户找不到了（可能刚被别处改动）', 'NOT_FOUND');
       e.sessionId = sessionId;
-      store.pushTimeline(e, { kind: 'session', text: `发起会话 ${sessionId}（${intent}）`, by });
+      /* 记录里不写会话编号与英文目的；编号留在 sessionId 字段。 */
+      store.pushTimeline(e, { kind: 'session', text: handoffWords(intent), by });
       const it = item ? findById(b.items, item.id) : null;
       if (it) {
         it.sessionId = sessionId;
-        store.pushHistory(it, { kind: 'report', text: `发起会话 ${sessionId}（${intent}）`, by });
+        store.pushHistory(it, { kind: 'report', text: handoffWords(intent), by });
       }
-      store.pushActivity(b, { kind: 'session', text: `会话 ${sessionId}：${e.name}`, engagementId: e.id, itemId: it ? it.id : '', by });
+      store.pushActivity(b, { kind: 'session', text: `${e.name}已交给 AI`, engagementId: e.id, itemId: it ? it.id : '', by });
       return okr({});
     }
     const it = findById(b.items, id);
-    if (!it) return err('任务在会话创建后消失（可能被并发删除）', 'NOT_FOUND');
+    if (!it) return err('新对话已开出，但这个任务找不到了（可能刚被别处删除）', 'NOT_FOUND');
     it.sessionId = sessionId;
-    store.pushHistory(it, { kind: 'report', text: `发起会话 ${sessionId}（${intent}）`, by });
-    store.pushActivity(b, { kind: 'session', text: `会话 ${sessionId}：${it.title}`, engagementId: it.engagementId, itemId: it.id, by });
+    store.pushHistory(it, { kind: 'report', text: handoffWords(intent), by });
+    store.pushActivity(b, { kind: 'session', text: `任务「${it.title}」已交给 AI`, engagementId: it.engagementId, itemId: it.id, by });
     return okr({});
   });
   if (!wrote.ok) {
-    return err(wrote.reason || '会话已创建但写 board 失败', 'INTERNAL', { prompt, sessionId, itemId: item ? item.id : '' });
+    return err(wrote.reason || '新对话已开出，但没能记到看板上', 'INTERNAL', { prompt, sessionId, itemId: item ? item.id : '' });
   }
   return okr({
     sessionId,
@@ -1176,7 +1298,7 @@ export async function handoff(root, body = {}, deps = {}) {
 
 /* ============================ proposal ============================ */
 
-/** 采纳/忽略建议（POST /fde/proposal）。 */
+/** 处理提醒（POST /fde/proposal）：accept = 按提醒处理（建跟进任务 / 交给 AI 准备）；dismiss = 知道了。 */
 export async function proposal(root, body = {}, deps = {}) {
   const args = normalizeArgs(body);
   const by = byOf(args);
@@ -1186,24 +1308,24 @@ export async function proposal(root, body = {}, deps = {}) {
   const pre = load(root);
   if (!pre.ok) return pre;
   const p0 = findById(pre.board.proposals, id);
-  if (!p0) return err(`建议不存在：${id || '(空)'}`, 'NOT_FOUND');
-  if (p0.status !== 'pending') return err('建议已处理（status=' + p0.status + '）', 'CONFLICT');
+  if (!p0) return err(NOT_FOUND_PROPOSAL, 'NOT_FOUND');
+  if (p0.status !== 'pending') return err(PROPOSAL_DONE, 'CONFLICT');
 
   if (action === 'dismiss') {
     return runAction(root, (b) => {
       const p = findById(b.proposals, id);
-      if (!p) return err(`建议不存在：${id || '(空)'}`, 'NOT_FOUND');
-      if (p.status !== 'pending') return err('建议已处理（status=' + p.status + '）', 'CONFLICT');
+      if (!p) return err(NOT_FOUND_PROPOSAL, 'NOT_FOUND');
+      if (p.status !== 'pending') return err(PROPOSAL_DONE, 'CONFLICT');
       p.status = 'dismissed';
       p.decidedAt = store.nowIso();
-      store.pushActivity(b, { kind: 'proposal', text: `忽略建议：${p.title}`, engagementId: p.engagementId, itemId: p.itemId, by });
+      store.pushActivity(b, { kind: 'proposal', text: `不再提醒：${p.title}`, engagementId: p.engagementId, itemId: p.itemId, by });
       return okr({ proposal: p });
     });
   }
 
   /* start_session 需要真实创建会话（安全动作之外，必须有会话服务） */
   if (p0.kind === 'start_session') {
-    if (typeof deps.handoff !== 'function') return err('本部署无法创建会话，无法采纳 start_session 建议', 'BLOCKED');
+    if (typeof deps.handoff !== 'function') return err('这里没法自动开新对话，暂时不能把这条提醒交给 AI', 'BLOCKED');
     const payload = p0.payload || {};
     const target = p0.itemId ? 'item' : 'engagement';
     const hid = p0.itemId || p0.engagementId;
@@ -1212,12 +1334,12 @@ export async function proposal(root, body = {}, deps = {}) {
     /* handoff 内部已按 CAS 写回 board；这里再读改写一次标记建议状态（不再用旧快照整份覆盖）。 */
     const wrote = runAction(root, (b) => {
       const p = findById(b.proposals, id);
-      if (!p) return err('建议在会话创建后消失（可能被并发忽略）', 'NOT_FOUND');
-      if (p.status !== 'pending') return err('建议已被并发处理（status=' + p.status + '）', 'CONFLICT');
+      if (!p) return err('新对话已开出，但这条提醒找不到了（可能刚被别处处理）', 'NOT_FOUND');
+      if (p.status !== 'pending') return err(PROPOSAL_DONE, 'CONFLICT');
       p.status = 'accepted';
       p.decidedAt = store.nowIso();
       p.payload = Object.assign({}, p.payload || {}, { sessionId: hr.sessionId });
-      store.pushActivity(b, { kind: 'proposal', text: `采纳建议并创建会话：${p.title}`, engagementId: p.engagementId, itemId: p.itemId, by });
+      store.pushActivity(b, { kind: 'proposal', text: `已交给 AI 处理：${p.title}`, engagementId: p.engagementId, itemId: p.itemId, by });
       return okr({ proposal: p, sessionId: hr.sessionId });
     });
     if (!wrote.ok) return err(wrote.reason, wrote.code, { sessionId: hr.sessionId, prompt: hr.prompt });
@@ -1226,13 +1348,13 @@ export async function proposal(root, body = {}, deps = {}) {
 
   return runAction(root, (b) => {
     const p = findById(b.proposals, id);
-    if (!p) return err(`建议不存在：${id || '(空)'}`, 'NOT_FOUND');
-    if (p.status !== 'pending') return err('建议已处理（status=' + p.status + '）', 'CONFLICT');
+    if (!p) return err(NOT_FOUND_PROPOSAL, 'NOT_FOUND');
+    if (p.status !== 'pending') return err(PROPOSAL_DONE, 'CONFLICT');
     const ex = executeProposal(b, p, store.nowIso(), by);
-    if (!ex.ok) return err(ex.reason || '执行建议失败', 'INTERNAL');
+    if (!ex.ok) return err(ex.reason || '没能按提醒处理', 'INTERNAL');
     p.status = 'accepted';
     p.decidedAt = store.nowIso();
-    store.pushActivity(b, { kind: 'proposal', text: `采纳建议：${p.title}`, engagementId: p.engagementId, itemId: p.itemId, by });
+    store.pushActivity(b, { kind: 'proposal', text: `已按提醒处理：${p.title}`, engagementId: p.engagementId, itemId: p.itemId, by });
     return okr({ proposal: p, applied: ex.applied || {} });
   });
 }
@@ -1265,7 +1387,7 @@ function executeProposal(board, p, now, by) {
         reports: [],
         sessionId: '',
         createdAt: now,
-        history: [{ at: now, kind: 'created', text: `由建议 ${p.ruleId} 创建`, by: actor }],
+        history: [{ at: now, kind: 'created', text: '由提醒创建', by: actor }],
         bidRefs: isBid ? [{
           bidId: pickString(spec.bidId, 300),
           title: pickString(spec.title, 300),
@@ -1276,23 +1398,31 @@ function executeProposal(board, p, now, by) {
       };
       board.items.push(it);
       applied.item = it.id;
-      store.pushActivity(board, { kind: 'created', text: `按建议创建任务：${it.title}`, engagementId: it.engagementId, itemId: it.id, by: actor });
+      store.pushActivity(board, { kind: 'created', text: `建了跟进任务：${it.title}`, engagementId: it.engagementId, itemId: it.id, by: actor });
     }
     if (p.kind === 'update_next' || p.kind === 'nudge') {
       const patch = isPlainObject(payload.patch) ? payload.patch : {};
       if (p.engagementId && isPlainObject(patch.nextAction)) {
         const e = findById(board.engagements, p.engagementId);
         if (e) {
-          e.nextAction = Object.assign({ text: '', due: '', owner: '' }, e.nextAction || {}, patch.nextAction);
-          store.pushTimeline(e, { kind: 'note', text: `采纳建议：${p.title}`, by: actor });
-          applied.nextAction = e.nextAction;
+          /* 只补空着的字段：提醒生成之后人已经写了下一步，就不拿提醒里的占位文字去盖。 */
+          const cur = Object.assign({ text: '', due: '', owner: '' }, e.nextAction || {});
+          let filled = false;
+          for (const k of ['text', 'due', 'owner']) {
+            if (!String(cur[k] || '').trim() && String(patch.nextAction[k] || '').trim()) { cur[k] = patch.nextAction[k]; filled = true; }
+          }
+          if (filled) {
+            e.nextAction = cur;
+            store.pushTimeline(e, { kind: 'note', text: `已按提醒处理：${p.title}`, by: actor });
+          }
+          applied.nextAction = e.nextAction || cur;
         }
       }
       if (p.itemId && store.isDueStr(patch.due)) {
         const it = findById(board.items, p.itemId);
         if (it) {
           it.due = patch.due;
-          store.pushHistory(it, { kind: 'updated', text: `采纳建议改期至 ${patch.due}`, by: actor });
+          store.pushHistory(it, { kind: 'updated', text: `按提醒改期到 ${patch.due}`, by: actor });
           applied.due = it.due;
         }
       }
@@ -1304,13 +1434,17 @@ function executeProposal(board, p, now, by) {
 }
 
 /**
- * 按自主性模式执行安全建议（fde_brief apply=true 用；红线动作永不执行）。
+ * 按 AI 权限（autonomy）直接处理「小事」（fde_brief apply=true 用；红线动作永不执行）。
+ * 范围（spec §22.4）：safe 且非 derived、非 start_session 的提醒——
+ * no_next（补一条待确认的下一步）、bid_signal（建跟进任务）；due_soon 没有可执行动作，只标记为知道了。
+ * derived 规则的提醒一律跳过（即便存量里还有 pending 的；它们会在下次刷新时自动失效）。
+ * observe 档不执行；assisted 与 auto 行为相同。
  * F4：忽略调用方传入的 board（可能是带派生 artifacts 的响应副本），一律从磁盘重新 load 原始状态再写。
  */
 export function applySafeProposals(root, _ignoredBoard) {
   return runAction(root, (board) => {
     const mode = (board.settings && board.settings.autonomy) || 'observe';
-    const safeRuleIds = new Set(schema.RULES.filter((r) => r.safe).map((r) => r.ruleId));
+    const safeRuleIds = new Set(schema.RULES.filter((r) => r.safe && !r.derived).map((r) => r.ruleId));
     const pending = (board.proposals || []).filter((p) => p.status === 'pending');
     if (mode === 'observe') return noWrite({ applied: [], skipped: pending.map((p) => p.id), mode });
     const applied = [];
@@ -1322,7 +1456,9 @@ export function applySafeProposals(root, _ignoredBoard) {
       if (!ex.ok) { skipped.push(p.id); continue; }
       p.status = 'accepted';
       p.decidedAt = now;
-      store.pushActivity(board, { kind: 'proposal', text: `自动执行安全建议（${mode}）：${p.title}`, engagementId: p.engagementId, itemId: p.itemId, by: 'agent' });
+      /* 真的改了东西才说「已直接处理」；没有可执行动作的（如快到期）只是标记为知道了。 */
+      const did = ex.applied && Object.keys(ex.applied).length > 0;
+      store.pushActivity(board, { kind: 'proposal', text: `${did ? 'AI 已直接处理' : 'AI 已标记为知道了'}：${p.title}`, engagementId: p.engagementId, itemId: p.itemId, by: 'agent' });
       applied.push(p.id);
     }
     if (!applied.length) return noWrite({ applied, skipped, mode });
@@ -1349,7 +1485,7 @@ export function settings(root, body = {}) {
     else { next.autonomy = patch.autonomy; appliedKeys.push('autonomy'); }
   }
   if ('stallDays' in patch) {
-    if (!wantNum(patch.stallDays, 1, 365)) invalid.push('stallDays 应为 1..365');
+    if (!wantNum(patch.stallDays, 1, 365)) invalid.push('「没有进展」的天数应在 1 到 365 之间');
     else { next.stallDays = Math.round(Number(patch.stallDays)); appliedKeys.push('stallDays'); }
   }
   if ('wipLimits' in patch) {
@@ -1357,8 +1493,8 @@ export function settings(root, body = {}) {
     else {
       const wip = Object.assign({ doing: 5 }, next.wipLimits || {});
       for (const k of Object.keys(patch.wipLimits)) {
-        if (!schema.isLane(k)) { invalid.push('wipLimits 未知泳道：' + k); continue; }
-        if (!wantNum(patch.wipLimits[k], 1, 50)) { invalid.push(`wipLimits.${k} 应为 1..50`); continue; }
+        if (!schema.isLane(k)) { invalid.push('同时进行上限里有未知的任务状态：' + k); continue; }
+        if (!wantNum(patch.wipLimits[k], 1, 50)) { invalid.push('同时进行上限应在 1 到 50 之间'); continue; }
         wip[k] = Math.round(Number(patch.wipLimits[k]));
       }
       next.wipLimits = wip;
@@ -1389,7 +1525,7 @@ export function settings(root, body = {}) {
     else { next.cacheTtlMs = Math.round(Number(patch.cacheTtlMs)); appliedKeys.push('cacheTtlMs'); }
   }
   if ('bidSignalDays' in patch) {
-    if (!wantNum(patch.bidSignalDays, 1, 365)) invalid.push('bidSignalDays 应为 1..365');
+    if (!wantNum(patch.bidSignalDays, 1, 365)) invalid.push('新招采公告的回看天数应在 1 到 365 之间');
     else { next.bidSignalDays = Math.round(Number(patch.bidSignalDays)); appliedKeys.push('bidSignalDays'); }
   }
   /* ADR 0006：演示模式开关。false = 允许在空看板显示示例；true = 已清除且不再显示。 */
@@ -1400,7 +1536,7 @@ export function settings(root, body = {}) {
   if (invalid.length) return err(invalid.join('；'));
   if (!appliedKeys.length) return noWrite({ settings: next, appliedKeys, already: true });
   b.settings = next;
-  store.pushActivity(b, { kind: 'updated', text: '修改设置：' + appliedKeys.join('、'), by });
+  store.pushActivity(b, { kind: 'updated', text: '修改了设置：' + fieldNames(appliedKeys, SETTING_LABELS), by });
   return okr({ settings: next, appliedKeys });
   });
 }
@@ -1417,7 +1553,7 @@ export function sync(root, body = {}) {
     let filterId = '';
     if (body.engagementId) {
       const e = findById(b.engagements, body.engagementId);
-      if (!e) return err(`客户不存在：${body.engagementId}`, 'NOT_FOUND');
+      if (!e) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
       targets = [e];
       filterId = e.id;
     }
@@ -1427,9 +1563,13 @@ export function sync(root, body = {}) {
       artifacts[e.id] = store.summarizeArtifacts(store.scanProjectArtifacts(root, e.dir, { ttlMs: 0, force: true }));
     }
     const pr = rules.refreshProposals(root, b, { ttlMs: ttl });
-    refreshed = { engagementId: filterId, engagements: targets.map((e) => e.id), artifacts, proposalsAdded: pr.added.length, scannedAt: store.nowIso() };
-    /* 只有新增建议才落盘（其余刷新结果都是派生数据，不写状态文件）。 */
-    return pr.added.length ? okr({}) : noWrite({});
+    refreshed = {
+      engagementId: filterId, engagements: targets.map((e) => e.id), artifacts,
+      proposalsAdded: pr.added.length, proposalsExpired: pr.expired || 0, proposalsUpdated: pr.updated || 0,
+      scannedAt: store.nowIso(),
+    };
+    /* 提醒有新建 / 自动失效 / 标题更新才落盘（其余刷新结果都是派生数据，不写状态文件）。 */
+    return proposalsChanged(pr) ? okr({}) : noWrite({});
   });
   if (!res.ok) return res;
   const b = res.board;
@@ -1448,9 +1588,22 @@ export function sync(root, body = {}) {
 
 /* ============================ health ============================ */
 
+/** 自检项的名称（给人看；集中在这里，测试按它取）。 */
+export const HEALTH_NAMES = {
+  boardReadable: '看板数据可读',
+  boardValid: '看板数据完整',
+  dataVersion: '数据版本匹配',
+  folders: '客户文件夹都在',
+  dataDirWritable: '数据目录可写',
+  backups: '自动备份',
+  skills: '技能可用',
+  bidRadar: '招采雷达可用',
+};
+
 /**
  * 自检（GET /fde/health）。返回 {ok, healthy, checks:[{name,status,detail}]}；
  * 单项失败不抛异常。status：ok | warn | fail。
+ * name / detail 会原样显示在面板「运行状态」里：用人话，不出现状态文件名、内部模块名（ADR 0010 D11）。
  * @param {{skills?:{available:boolean,registered:number,error?:string}}} [deps]
  */
 export function health(root, deps = {}) {
@@ -1460,33 +1613,37 @@ export function health(root, deps = {}) {
   let b = null;
   if (r.ok) {
     b = r.board;
-    push('board 可读', 'ok', r.fresh ? 'board.json 不存在（首次使用，读写时自动创建）' : '已读取，version=' + b.version);
+    push(HEALTH_NAMES.boardReadable, 'ok', r.fresh ? '还没有看板数据，第一次保存时会自动创建' : '读取正常');
     const v = store.validateBoard(b);
-    push('board 结构', v.ok ? 'ok' : 'fail', v.ok ? '字段与引用校验通过' : v.reason);
-    push('schema 版本', b.version === schema.SCHEMA_VERSION ? 'ok' : 'fail', `board.version=${b.version}，插件支持 ${schema.SCHEMA_VERSION}`);
+    push(HEALTH_NAMES.boardValid, v.ok ? 'ok' : 'fail', v.ok ? '数据校验通过' : v.reason);
+    const sameVersion = b.version === schema.SCHEMA_VERSION;
+    push(HEALTH_NAMES.dataVersion, sameVersion ? 'ok' : 'fail', sameVersion
+      ? '看板数据的版本与插件一致'
+      : `看板数据是版本 ${b.version}，这个插件支持的是版本 ${schema.SCHEMA_VERSION}`);
     const missingDirs = (b.engagements || []).filter((e) => e.dir && !existsSync(store.projectAbs(root, e.dir))).map((e) => e.dir);
-    push('客户目录一致', missingDirs.length ? 'warn' : 'ok', missingDirs.length ? `${missingDirs.length} 个目录不存在：${missingDirs.slice(0, 5).join('、')}` : '全部存在');
+    push(HEALTH_NAMES.folders, missingDirs.length ? 'warn' : 'ok', missingDirs.length ? `有 ${missingDirs.length} 个客户文件夹找不到了：${missingDirs.slice(0, 5).join('、')}` : '全部都在');
   } else {
-    push('board 可读', 'fail', r.reason);
+    push(HEALTH_NAMES.boardReadable, 'fail', r.reason);
     b = null;
   }
-  push('状态目录可写', store.canWriteDir(store.fdeDir(root)) ? 'ok' : 'fail', store.fdeDir(root));
+  const dataDirOk = store.canWriteDir(store.fdeDir(root));
+  push(HEALTH_NAMES.dataDirWritable, dataDirOk ? 'ok' : 'fail', dataDirOk ? '可以正常保存' : `没有写入权限：${store.fdeDir(root)}`);
   const bk = store.backupsDir(root);
-  push('备份目录', existsSync(bk) ? 'ok' : 'warn', existsSync(bk) ? `已存在，保留最近 ${store.listBackups(root).length} 份` : '尚未创建（首次写 board 时创建）');
+  push(HEALTH_NAMES.backups, existsSync(bk) ? 'ok' : 'warn', existsSync(bk) ? `每次保存前自动备份，现有 ${store.listBackups(root).length} 份` : '还没有备份，第一次保存时会自动创建');
   const sk = deps.skills || {};
-  if (sk.available) push('skills 注册', sk.registered > 0 ? 'ok' : 'warn', `已注册 ${sk.registered} 个技能`);
-  else push('skills 注册', 'warn', 'skills 服务不可用或未注册：降级为系统提示词列出技能路径（不影响其他功能）');
+  if (sk.available) push(HEALTH_NAMES.skills, sk.registered > 0 ? 'ok' : 'warn', `技能已注册 ${sk.registered} 个`);
+  else push(HEALTH_NAMES.skills, 'warn', '技能暂时用不了：AI 会改为直接读方法文件来执行，其它功能不受影响');
   /* 招采雷达（spec §17.8）：服务可用且 records>0 → ok；未装载/旧版本 → warn（不 fail，FDE 其余功能不受影响）。 */
   const bidSvc = deps.bidIntel || null;
   if (bids.isAvailable(bidSvc)) {
     let meta = null;
     try { meta = bidSvc.dataMeta(); } catch { meta = null; }
     const records = Number(meta && meta.records) || 0;
-    push('招采雷达服务', records > 0 ? 'ok' : 'warn', records > 0
-      ? `bid-intel 已就绪：${records} 条公告（mtime=${meta ? meta.mtime : '?'}）`
-      : 'bid-intel 已装载但索引为空（可先运行采集/导入）');
+    push(HEALTH_NAMES.bidRadar, records > 0 ? 'ok' : 'warn', records > 0
+      ? `招采雷达可用（${records} 条公告）`
+      : '招采雷达已装好，但还没有公告数据（先采集或导入）');
   } else {
-    push('招采雷达服务', 'warn', 'bid-intel 未装载或未升级：招采功能降级 available:false，其余功能不受影响');
+    push(HEALTH_NAMES.bidRadar, 'warn', '招采雷达还没装好或版本太旧：招采功能暂时用不了，其它功能不受影响');
   }
   const healthy = checks.every((c) => c.status !== 'fail');
   return { ok: true, healthy, checks, root, checkedAt: store.nowIso() };
@@ -1522,7 +1679,9 @@ const SKILL_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
  * 扫描插件 skills/*\/SKILL.md，返回可注册的技能定义（目录为空/损坏一律跳过，不抛异常）。
- * @returns {Array<{name,description,content,path,resourceBase}>}
+ * source 固定为 'runtime'：DSH 0.2.1 的技能服务在加载时校验 source 是字符串，
+ * 运行时注册（ctx.skills.register）的既定取值就是 'runtime'。
+ * @returns {Array<{name,description,content,path,source,resourceBase}>}
  */
 export function discoverSkills(dir) {
   const base = dir || skillsDir();
@@ -1544,6 +1703,7 @@ export function discoverSkills(dir) {
           description,
           content: body && body.trim() ? body : raw,
           path: file,
+          source: 'runtime',
           resourceBase: { kind: 'directory', path: join(base, name) },
         });
       } catch { /* 单个技能失败不影响其他 */ }
@@ -1604,7 +1764,7 @@ export function bidsSearch(root, body = {}, opts = {}) {
     const pre = load(root);
     if (!pre.ok) return pre;
     engagement = findById(pre.board.engagements, eid);
-    if (!engagement) return err(`客户不存在：${eid}`, 'NOT_FOUND');
+    if (!engagement) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
   }
   const r = bids.searchBids(service, {
     q: body.q,
@@ -1633,7 +1793,7 @@ export function bidsMatch(root, body = {}, opts = {}) {
   const pre = load(root);
   if (!pre.ok) return pre;
   const engagement = findById(pre.board.engagements, eid);
-  if (!engagement) return err(`客户不存在：${eid || '(空)'}`, 'NOT_FOUND');
+  if (!engagement) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
   const linked = bids.linksOf(engagement);
   const refresh = body.refresh === true || body.refresh === '1' || body.refresh === 'true';
   const match = bids.matchEngagement(service, engagement, { refresh, ttlMs: ttlOf(pre.board) });
@@ -1661,14 +1821,14 @@ export function bidLink(root, body = {}, opts = {}) {
   const by = byOf(body);
   return runAction(root, (board) => {
     const e = findById(board.engagements, eid);
-    if (!e) return err(`客户不存在：${eid}`, 'NOT_FOUND');
+    if (!e) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
     const rec = bids.recordById(service, bidId);
     if (!rec) return err(`未找到公告：${bidId}`, 'NOT_FOUND');
     const r = bids.applyLink(board, e, { record: rec, bidId, relation: body.relation, note: body.note, by, now: store.nowIso() });
     if (!r.ok) return err(r.reason, r.code || 'INVALID');
     if (!r.changed) return noWrite({ available: true, link: r.link, engagement: e, changed: false, warning: '已关联，关系/备注已同步' });
-    store.pushTimeline(e, { kind: 'note', text: `关联招采公告：${r.link.title || bidId}`, by });
-    store.pushActivity(board, { kind: 'updated', text: `关联招采：${e.name} ← ${r.link.title || bidId}`, engagementId: e.id, by });
+    store.pushTimeline(e, { kind: 'note', text: `关联招采公告：${r.link.title || '（未命名公告）'}`, by });
+    store.pushActivity(board, { kind: 'updated', text: `${e.name}关联了招采公告：${r.link.title || '（未命名公告）'}`, engagementId: e.id, by });
     return okr({ available: true, link: r.link, engagement: e, changed: true });
   });
 }
@@ -1684,12 +1844,14 @@ export function bidUnlink(root, body = {}, opts = {}) {
   const by = byOf(body);
   return runAction(root, (board) => {
     const e = findById(board.engagements, eid);
-    if (!e) return err(`客户不存在：${eid}`, 'NOT_FOUND');
+    if (!e) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
+    /* 记录里写公告标题，不写公告编号：取消前先记下标题。 */
+    const unlinkedTitle = ((bids.linksOf(e) || []).find((x) => x && x.bidId === bidId) || {}).title || '';
     const r = bids.applyUnlink(board, e, bidId, by, store.nowIso());
     if (!r.ok) return err(r.reason, r.code || 'INVALID');
     if (!r.changed) return noWrite({ unlinked: false, changed: false, engagement: e });
-    store.pushTimeline(e, { kind: 'note', text: `取消关联招采公告：${bidId}`, by });
-    store.pushActivity(board, { kind: 'updated', text: `取消关联招采：${e.name}`, engagementId: e.id, by });
+    store.pushTimeline(e, { kind: 'note', text: `取消关联招采公告${unlinkedTitle ? '：' + unlinkedTitle : ''}`, by });
+    store.pushActivity(board, { kind: 'updated', text: `${e.name}取消关联了一条招采公告`, engagementId: e.id, by });
     return okr({ unlinked: true, changed: true, engagement: e });
   });
 }
@@ -1705,7 +1867,7 @@ export function bidPromote(root, body = {}, opts = {}) {
   const by = byOf(body);
   return runAction(root, (board) => {
     const e = findById(board.engagements, eid);
-    if (!e) return err(`客户不存在：${eid}`, 'NOT_FOUND');
+    if (!e) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
     const rec = bids.recordById(service, bidId);
     if (!rec) return err(`未找到公告：${bidId}`, 'NOT_FOUND');
     const r = bids.applyPromote(board, e, {
@@ -1713,8 +1875,8 @@ export function bidPromote(root, body = {}, opts = {}) {
       by, now: store.nowIso(), settings: board.settings,
     });
     if (!r.ok) return err(r.reason, r.code || 'INVALID');
-    store.pushTimeline(e, { kind: 'note', text: `招采提升为跟进任务：${r.item.title}`, by });
-    store.pushActivity(board, { kind: 'created', text: `招采提升：${r.item.title}`, engagementId: e.id, itemId: r.item.id, by });
+    store.pushTimeline(e, { kind: 'note', text: `为招采公告建了跟进任务：${r.item.title}`, by });
+    store.pushActivity(board, { kind: 'created', text: `建了跟进任务：${r.item.title}`, engagementId: e.id, itemId: r.item.id, by });
     return okr({ available: true, item: r.item, link: r.link, engagement: e });
   });
 }
@@ -1737,12 +1899,12 @@ export function bidsRefresh(root, body = {}, opts = {}) {
   let engagement = null;
   const res = runAction(root, (board) => {
     const e = findById(board.engagements, eid);
-    if (!e) return err(`客户不存在：${eid}`, 'NOT_FOUND');
+    if (!e) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
     engagement = e;
     match = bids.matchEngagement(service, e, { refresh: true, ttlMs: ttlOf(board) });
     const w = bids.ensureBidWatch(e);
     w.lastMatchAt = store.nowIso();
-    store.pushActivity(board, { kind: 'updated', text: `刷新招采匹配：${e.name}`, engagementId: e.id, by });
+    store.pushActivity(board, { kind: 'updated', text: `刷新了${e.name}的招采公告`, engagementId: e.id, by });
     return okr({});
   });
   if (!res.ok) return res;
@@ -1772,10 +1934,10 @@ export function bidsTimeline(root, body = {}, opts = {}) {
     source: String(body.source || ''),
     limit: Math.min(Math.max(Number(body.limit) || 3000, 1), 5000),
   };
-  if (!args.q) return err('timeline 需要 q（公司或采购单位关键字）');
+  if (!args.q) return err('查采购节奏需要 q（公司或采购单位关键字）');
   let r = null;
   try { r = service.timeline ? service.timeline(args) : null; } catch (e) {
-    return err('招采时间线查询失败：' + String((e && e.message) || e), 'INTERNAL');
+    return err('采购节奏查询失败：' + String((e && e.message) || e), 'INTERNAL');
   }
   if (!r) return okr({ available: false, reason: '招采雷达未就绪（bid-intel 未装载或未升级）', byMonth: {} });
   return okr({ available: true, q: args.q, mode: args.mode, byMonth: r.byMonth || {}, total: r.total || 0, items: (r.items || []).slice(0, 20) });
@@ -1797,9 +1959,9 @@ export function harvest(root, body = {}) {
   const pre = load(root);
   if (!pre.ok) return pre;
   const engagement = args.engagementId ? findById(pre.board.engagements, args.engagementId) : null;
-  if (args.engagementId && !engagement) return err(`客户不存在：${args.engagementId}`, 'NOT_FOUND');
+  if (args.engagementId && !engagement) return err(NOT_FOUND_ENGAGEMENT, 'NOT_FOUND');
   const it = args.itemId ? findById(pre.board.items, args.itemId) : null;
-  if (args.itemId && !it) return err(`任务不存在：${args.itemId}`, 'NOT_FOUND');
+  if (args.itemId && !it) return err(NOT_FOUND_ITEM, 'NOT_FOUND');
   const targets = Array.isArray(args.targets)
     ? args.targets.filter((t) => ['pitfall', 'method', 'skill'].includes(t))
     : ['pitfall', 'method'];
@@ -1822,7 +1984,7 @@ export function harvest(root, body = {}) {
   }
   /* 状态变更（activity）同样走 CAS 事务；草稿文件本身不在 board 里。 */
   const rec = runAction(root, (b) => {
-    store.pushActivity(b, { kind: 'updated', text: `复盘草稿：${base}`, engagementId: engagement ? engagement.id : '', itemId: it ? it.id : '', by });
+    store.pushActivity(b, { kind: 'updated', text: `写了复盘草稿：${base}`, engagementId: engagement ? engagement.id : '', itemId: it ? it.id : '', by });
     return okr({});
   });
   return okr({
@@ -1831,7 +1993,7 @@ export function harvest(root, body = {}) {
     bytes: md.length,
     engagementId: engagement ? engagement.id : '',
     itemId: it ? it.id : '',
-    next: '草稿在 research/.fde/drafts/，不是客户卷定稿。人审后：事实复盘进客户卷，方法沉淀进插件仓 docs/retros/、methods/、reference/、skills/（脱敏，示例用「某集团」）。',
+    next: '草稿在 research/.fde/drafts/，不是客户文件夹里的定稿。人审后：事实复盘进客户文件夹，方法沉淀进插件仓 docs/retros/、methods/、reference/、skills/（脱敏，示例用「某集团」）。',
     boardWritten: !!rec.ok,
     board: rec.ok ? rec.board : undefined,
   });

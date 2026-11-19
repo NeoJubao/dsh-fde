@@ -8,6 +8,9 @@
  * ④ 产物落盘路径与命名
  * ⑤ 回报要求（fde_item report，≤300 字摘要 + 文件路径）
  *
+ * 用词（ADR 0010 D12）：这段话会作为新对话的第一条消息被用户看到，模型也会照着它对用户说话，
+ * 所以状态名、推进条件、缺项等一律用界面上的词；工具名、参数名、kind 枚举是给模型用的，保持不变。
+ *
  * 纯字符串生成，不读写文件、不发会话。
  */
 import * as schema from './fde-schema.js';
@@ -20,9 +23,9 @@ export const STAGE_GUIDES = {
     goal: '线索准入：确认客户基本盘与来源，写出可检查的下一步',
     steps: [
       '补齐客户字段：company（工商全称）、source（线索来源）、nextAction（谁、做什么、何时）',
-      '若还没有客户目录，先按 research/<公司简称>-<本地日期>/ 建立项目骨架（用 rw_scaffold，不要手写目录名日期）',
+      '若还没有客户文件夹，先按 research/<公司简称>-<本地日期>/ 建立项目骨架（用 rw_scaffold，不要手写目录名日期）',
       '把线索来源与初步判断写入 00-项目档案.md，不要编造未证实的结论',
-      '门禁确认后由人推进到「研判」阶段；你不要自行改阶段',
+      '推进条件由人确认后，再由人推进到「研判」阶段；你不要自行改阶段',
     ],
     artifacts: ['00-项目档案.md', 'research/线索来源与初步判断.md'],
   },
@@ -64,7 +67,7 @@ export const STAGE_GUIDES = {
       '按 12 维评分卡（1–5 分）逐维打分并写明依据（空依据按 3 分封顶），归一化分 = Σ(分×权重)/Σ权重(101)，**不得除以 100**；任一否决项（1–7）命中 → 不进方案（例外需人签字）',
       '档位：归一化分 ≥3.6 且门槛全过且无否决 → 进方案；3.2–3.6 → 补证/小 POC；<3.2 → 拒绝或转咨询。评分只用于排序，不替代人的判断',
       '收敛范围：一期只做一个可上线场景，写清「不做什么」；确认发起人愿意每周投入（非礼节性挂名）',
-      '产物落盘 scoping/：场景评估表、数据可得性清单、范围边界；门禁人工项由人勾选，你不要自行推进阶段',
+      '产物落盘 scoping/：场景评估表、数据可得性清单、范围边界；需要人确认的事项由人来确认，你不要自行推进阶段',
     ],
     artifacts: ['scoping/场景评估表.md', 'scoping/数据可得性清单.md', 'scoping/范围边界.md'],
   },
@@ -85,20 +88,24 @@ export const STAGE_GUIDES = {
   },
   pilot: {
     skill: 'fde-pilot',
-    methods: ['methods/03-合作地图构建法.md', 'reference/文档模板库.md'],
+    /* 07：里程碑付款、试点（低价/免费）与「转正式的条件」；06：四条硬门槛里的 14 天 / 90 天。
+     * （原先指向 reference/文档模板库.md，那里没有试点相关内容。） */
+    methods: ['methods/03-合作地图构建法.md', 'methods/07-成本评估与报价.md', 'methods/06-场景选择与数据体检.md'],
     goal: '试点：范围受控、指标可验收的 POC 方案',
     steps: [
       '写 Pilot Charter 三条时间门限：首次集成 ≤14 天、生产上线 ≤90 天、撤出 ≤120 天',
       '写清试点假设：验证什么、成功指标（基线/目标/测量方式）、范围与不做什么、时间盒',
       '数据与资源边界要写实：客户提供什么、我们投入什么、不承诺额外资源',
       '产物落盘 pilot/：Pilot Charter、成功指标、验收口径',
-      '客户确认与门禁勾选由人完成',
+      '客户确认与推进条件的确认都由人完成',
     ],
     artifacts: ['pilot/Pilot Charter.md', 'pilot/成功指标与验收口径.md'],
   },
   delivery: {
     skill: 'fde-delivery',
-    methods: ['methods/00-调研执行流程.md', 'methods/05-正式对外文档交付（DOCX·公文版式）.md'],
+    /* 07：变更单机制、验收与质保、风险清单；成本测算与报价单模板：里程碑与付款、验收方式、变更机制。
+     * （原先指向 methods/00-调研执行流程.md，那里只到方案生成，没有交付内容。） */
+    methods: ['methods/07-成本评估与报价.md', 'templates/成本测算与报价单.md', 'methods/05-正式对外文档交付（DOCX·公文版式）.md'],
     goal: '交付：可检查的实施计划、验收清单与风险登记',
     steps: [
       '实施计划：里程碑、依赖、责任人、变更走确认流程',
@@ -110,7 +117,9 @@ export const STAGE_GUIDES = {
   },
   adoption: {
     skill: 'fde-adoption',
-    methods: ['methods/00-调研执行流程.md', 'reference/数据源清单.md'],
+    /* 01：证据分级（A/B/C）与数字自检——使用证据与价值证明都要过这一关。
+     * （原先指向 methods/00-调研执行流程.md，那里没有采用阶段的内容。） */
+    methods: ['methods/01-事实核查协议.md', 'reference/数据源清单.md'],
     goal: '采用：使用证据、培训完成、价值证明与扩展地图',
     steps: [
       '收集使用证据（A/B/C 分级，注明来源与时间）',
@@ -126,7 +135,7 @@ export const STAGE_GUIDES = {
     methods: ['methods/00-调研执行流程.md'],
     goal: '复盘：把事实复盘与方法沉淀分开',
     steps: [
-      '事实复盘进客户卷（发生了什么、为什么、下次怎么做）',
+      '事实复盘进客户文件夹（发生了什么、为什么、下次怎么做）',
       '方法沉淀进插件仓 docs/retros/ 与 methods/reference（脱敏，不写死客户信息）',
       '用 fde_harvest 生成复盘草稿，人审后再归档',
     ],
@@ -145,19 +154,37 @@ export const STAGE_GUIDES = {
   },
 };
 
+/** 任务类型对应哪个阶段的做法（「调研」对应研判；跟进、杂务不对应阶段）。 */
+const ITEM_TYPE_STAGE = {
+  research: 'discovery', meeting: 'meeting', scoping: 'scoping', solution: 'solution',
+  pilot: 'pilot', delivery: 'delivery', adoption: 'adoption',
+};
+
 const INTENT_LABELS = {
   stage: '推进当前阶段',
-  gate: '补齐门禁',
+  gate: '补齐推进条件需要的材料',
   meeting: '准备会面材料',
-  review: '审阅任务结果',
+  review: '检查任务结果',
   harvest: '复盘沉淀',
 };
+
+/** 推进条件评估结果的说法（给人看；status 枚举不直接露出）。 */
+const GATE_STATUS_WORDS = { pass: '已满足', forced: '已破例推进', pending: '还没满足', failed: '还没满足' };
+
+/** 任务负责人的说法。 */
+const OWNER_WORDS = { human: '人', agent: 'AI', both: '人和 AI' };
+
+/** 对用户说话的用词提示（与系统提示词同口径；一行，放在回报要求末尾）。 */
+const USER_WORDS_LINE = '- 对用户说话用界面上的词：客户、任务、推进条件、待我处理、提醒、进展、状态；不要说 engagement、item、gate、门禁、注意力、泳道、回报';
 
 function line(...parts) { return parts.filter((x) => x != null && x !== '').join(''); }
 
 function missingText(gate) {
-  if (!gate || !gate.missing || !gate.missing.length) return '无（自动检查与人工项均已通过）';
-  return gate.missing.map((m) => `${m.type === 'auto' ? '自动' : '人工'}：${m.label}${m.detail ? '（' + m.detail + '）' : ''}`).join('；');
+  if (!gate || !gate.missing || !gate.missing.length) return '不差了（材料齐了，需要人确认的也都确认了）';
+  /* 材料类直接说原因（「还没找到事实核查清单」）；确认类说等人确认哪一项。 */
+  const parts = gate.missing.map((m) => (m.type === 'auto' ? `材料没齐：${m.detail || m.label}` : `等人确认：${m.label}`));
+  /* 没有关联文件夹时，几项材料的原因是同一句话：只说一次。 */
+  return [...new Set(parts)].join('；');
 }
 
 function skillHint(names) {
@@ -183,31 +210,41 @@ export function engagementPrompt(ctxData) {
   const { root, engagement: e } = ctxData || {};
   const intent = ctxData.intent || 'stage';
   const stage = e && schema.isStage(e.stage) ? e.stage : 'lead';
-  const guide = STAGE_GUIDES[stage] || STAGE_GUIDES.lead;
+  /* 做法跟着要补的材料走（spec §22.9）：推进条件属于要进入的那个阶段，
+     所以用那个阶段的做法；调用方没指定时退回当前阶段。 */
+  const workStage = schema.isStage(ctxData.workStage) ? ctxData.workStage : stage;
+  const guide = STAGE_GUIDES[workStage] || STAGE_GUIDES.lead;
+  const ahead = workStage !== stage && schema.stageOrder(workStage) > schema.stageOrder(stage);
+  const doorGap = Array.isArray(ctxData.doorGap) ? ctxData.doorGap.filter(Boolean) : [];
   const gate = ctxData.gate || null;
   /* 执行任务：客户目标的 handoff 由宿主先建/复用 item，回报指令必须能定位它（spec §9）。 */
   const execItem = ctxData.item || null;
   const itemRef = execItem && execItem.id ? execItem.id : '';
   const dir = e && e.dir ? e.dir : '';
-  const rel = dir ? `research/${dir}` : 'research/<待建立客户目录>';
+  const rel = dir ? `research/${dir}` : 'research/<待建立的客户文件夹>';
   const skills = [guide.skill].concat(intent === 'harvest' ? ['fde-harvest'] : ['fde-board']);
   if (ctxData.extraSkills) skills.push(...ctxData.extraSkills);
 
   const lines = [
     '【FDE 工作站 · 阶段交接】',
     '',
-    `你是 FDE 工作站的执行会话，负责客户「${e ? e.name : '未命名客户'}」的${schema.stageLabel(stage)}阶段（intent=${intent}：${INTENT_LABELS[intent] || intent}）。`,
-    '**编排声明**：FDE 看板是唯一编排者；你只执行本任务并向看板回报。不要自行推进客户阶段、不要替人通过门禁、不要对外发送材料、不要修改客户卷定稿文件。',
+    ahead
+      ? `你是 FDE 工作站的执行会话，负责为客户「${e ? e.name : '未命名客户'}」准备进入「${schema.stageLabel(workStage)}」阶段需要的材料（按${schema.stageLabel(workStage)}阶段的做法${intent !== 'stage' && INTENT_LABELS[intent] ? '；本次要做：' + INTENT_LABELS[intent] : ''}）。`
+      : `你是 FDE 工作站的执行会话，负责客户「${e ? e.name : '未命名客户'}」的${schema.stageLabel(workStage)}阶段（本次要做：${INTENT_LABELS[intent] || INTENT_LABELS.stage}）。`,
+    '**编排声明**：FDE 看板是唯一编排者；你只执行本任务并向看板回报。不要自行推进客户阶段、不要替人确认推进条件、不要对外发送材料、不要修改客户文件夹里的定稿文件。',
     '',
     '【客户上下文】',
     `- 工作区：${root}`,
-    `- 客户目录：${rel}${dir ? '' : '（尚无目录；需要时用 rw_scaffold 建立，日期用本地日期）'}`,
+    `- 客户文件夹：${rel}${dir ? '' : '（还没有文件夹；需要时用 rw_scaffold 建立，日期用本地日期）'}`,
     `- 客户全称：${(e && (e.company || e.name)) || ''}${e && e.shortName ? '（简称 ' + e.shortName + '）' : ''}`,
-    `- 当前阶段：${schema.stageLabel(stage)}（停留 ${ctxData.stayDays != null ? ctxData.stayDays : '?'} 天）`,
-    `- 门禁：${gate ? gate.label + '｜' + gate.status : (schema.gateKeyOfStage(stage) || '—')}`,
-    `- 门禁缺口：${missingText(gate)}`,
+    `- 当前阶段：${schema.stageLabel(stage)}（在本阶段 ${ctxData.stayDays != null ? ctxData.stayDays : '?'} 天）`,
+    `- 推进条件：${gate ? gate.label + '｜' + (GATE_STATUS_WORDS[gate.status] || GATE_STATUS_WORDS.pending) : '—'}`,
+    `- 还差什么：${missingText(gate)}`,
+    doorGap.length
+      ? `- 注意：「${schema.stageLabel(stage)}」阶段自己的材料还缺：${[...new Set(doorGap)].join('；')}。这些不在本次任务里，不要自行补做；在进展里提醒人——补齐这些材料，或者调整客户所在的阶段`
+      : '',
     `- 下一步（人填）：${(e && e.nextAction && e.nextAction.text) || '未填写'}`,
-    execItem ? `- 执行任务：${execItem.title}（id=${execItem.id}，泳道 ${schema.laneLabel(execItem.stage)}，负责人 ${execItem.owner || 'agent'}）` : '',
+    execItem ? `- 执行任务：${execItem.title}（id=${execItem.id}，状态 ${schema.laneLabel(execItem.stage)}，负责人 ${OWNER_WORDS[execItem.owner] || OWNER_WORDS.agent}）` : '',
     '',
     skillHint(skills),
     '',
@@ -227,8 +264,9 @@ export function engagementPrompt(ctxData) {
     itemRef
       ? `- 本会话已关联执行任务 id=${itemRef}（看板可见）。完成后调用 \`fde_item\`（action=report，id=${itemRef}）回报：kind=ready/progress/blocked，text ≤300 字摘要，artifacts=[文件路径…]`
       : '- 完成前先调用 `fde_item`（action=create）建立本阶段执行任务，再对返回的 id 用 action=report 回报（kind=ready/progress/blocked，text ≤300 字摘要，artifacts=[文件路径…]）',
-    '- 需要人决定时用 `fde_attention`（action=ask）提问，不要自行替人决定；受阻用 kind=blocked',
-    `- 阶段与门禁推进只能由人执行；回报里列出「还缺什么」即可`,
+    '- 需要人决定时用 `fde_attention`（action=ask）提问，不要自行替人决定；卡住了用 kind=blocked',
+    '- 推进阶段、确认推进条件只能由人执行；回报里列出「还差什么」即可',
+    USER_WORDS_LINE,
   ];
   if (intent === 'harvest') {
     lines.push('', '【复盘】用 fde_harvest 生成复盘草稿（targets=pitfall/method/skill），脱敏；不写死客户信息到方法论。');
@@ -244,36 +282,42 @@ export function itemPrompt(ctxData) {
   const { root, item: it } = ctxData || {};
   const e = ctxData.engagement || null;
   const intent = ctxData.intent || 'stage';
-  const guide = STAGE_GUIDES[schema.isStage(e && e.stage) ? e.stage : 'lead'] || STAGE_GUIDES.lead;
-  const rel = e && e.dir ? `research/${e.dir}` : 'research/<客户目录>';
+  /* 技能按任务类型选（类型是阶段时）；否则按调用方给的阶段，再退回客户当前阶段（spec §22.9）。 */
+  const typeStage = ITEM_TYPE_STAGE[it && it.type] || '';
+  const guideStage = typeStage
+    || (schema.isStage(ctxData.workStage) ? ctxData.workStage : '')
+    || (schema.isStage(e && e.stage) ? e.stage : 'lead');
+  const guide = STAGE_GUIDES[guideStage] || STAGE_GUIDES.lead;
+  const rel = e && e.dir ? `research/${e.dir}` : 'research/<客户文件夹>';
   const lines = [
     '【FDE 工作站 · 任务交接】',
     '',
     `你是 FDE 工作站的执行会话，负责任务「${it ? it.title : '未命名任务'}」${e ? `（客户「${e.name}」）` : '（独立任务）'}。`,
-    '**编排声明**：FDE 看板是唯一编排者；你只执行本任务并向看板回报。不要自行推进客户阶段、不要替人通过门禁、不要对外发送材料、不要修改客户卷定稿文件。',
+    '**编排声明**：FDE 看板是唯一编排者；你只执行本任务并向看板回报。不要自行推进客户阶段、不要替人确认推进条件、不要对外发送材料、不要修改客户文件夹里的定稿文件。',
     '',
     '【任务上下文】',
     `- 工作区：${root}`,
-    `- 客户目录：${e && e.dir ? rel : '（无关联客户目录）'}`,
+    `- 客户文件夹：${e && e.dir ? rel : '（没有关联的客户文件夹）'}`,
     `- 任务类型：${schema.ITEM_TYPES.find((t) => t.key === (it && it.type)) ? schema.ITEM_TYPES.find((t) => t.key === it.type).label : (it && it.type) || ''}`,
-    `- 泳道：${schema.laneLabel(it && it.stage)}｜优先级：${(it && it.priority) || 'normal'}｜到期：${(it && it.due) || '未设'}`,
+    `- 状态：${schema.laneLabel(it && it.stage)}｜优先级：${schema.priorityLabel((it && it.priority) || 'normal')}｜到期：${(it && it.due) || '未设'}`,
     `- 完成标准：${(it && it.title) || ''}（有可检查的结果与证据）`,
     e ? `- 客户阶段：${schema.stageLabel(e.stage)}｜下一步：${(e.nextAction && e.nextAction.text) || '未填写'}` : '',
     '',
     skillHint([guide.skill, 'fde-board']),
     '',
-    `【产物落盘】${e && e.dir ? rel + '/' : '按任务内容选择客户卷或插件仓'} 下的 md 文件；不要写 research/.fde/`,
+    `【产物落盘】${e && e.dir ? rel + '/' : '按任务内容选择客户文件夹或插件仓'} 下的 md 文件；不要写 research/.fde/`,
     '',
     '【回报要求】',
     '- 调用 `fde_item`（action=report，id=' + (it ? it.id : '<itemId>') + '）回报：',
     '  - 完成：kind=ready，text ≤300 字摘要 + artifacts=[文件路径…]',
     '  - 进展：kind=progress',
-    '  - 受阻：kind=blocked（会自动进入「等外部」并生成注意力）',
-    '  - 失败：kind=failed（保持进行中并生成注意力）',
+    `  - 卡住了：kind=blocked（会自动进入「${schema.laneLabel('waiting')}」，并出现在「待我处理」里）`,
+    '  - 没做成：kind=failed（保持进行中，并出现在「待我处理」里）',
     '- 需要人决定时用 `fde_attention`（action=ask）提问',
+    USER_WORDS_LINE,
   ];
   if (intent === 'review') {
-    lines.push('', '【本次是审阅任务】读 reports 与产物，给出通过/退回结论与理由；结论由人在面板确认。');
+    lines.push('', '【本次是验收前检查】读进展记录与产物，给出通过或退回的建议与理由；结论由人在面板确认。');
   }
   return lines.filter((l) => l !== '').join('\n').replace(/\n{3,}/g, '\n\n');
 }
@@ -294,7 +338,7 @@ export function harvestDraft({ text, engagement, item, targets, at }) {
     `# 复盘草稿：${engagement ? engagement.name : (item ? item.title : '未命名')}`,
     '',
     `> 生成时间：${at || new Date().toISOString()}｜来源：FDE 工作站 fde_harvest（未审草稿）`,
-    `> 关联：${engagement ? 'engagement=' + engagement.id + '（' + engagement.name + '）' : '—'}${item ? '｜item=' + item.id + '（' + item.title + '）' : ''}`,
+    `> 关联客户：${engagement ? engagement.name : '—'}${item ? '｜关联任务：' + item.title : ''}`,
     '',
     '## 原始记录',
     '',
@@ -306,8 +350,8 @@ export function harvestDraft({ text, engagement, item, targets, at }) {
     '',
     '## 边界',
     '',
-    '- 本文件是**未审草稿**，位于 research/.fde/drafts/，不是客户卷定稿。',
-    '- 归档前需人确认：事实复盘进客户卷，方法沉淀进插件仓 docs/retros/、methods/、reference/。',
+    '- 本文件是**未审草稿**，位于 research/.fde/drafts/，不是客户文件夹里的定稿。',
+    '- 归档前需人确认：事实复盘进客户文件夹，方法沉淀进插件仓 docs/retros/、methods/、reference/。',
     '- 脱敏：不写客户真名、金额、人名到方法论；示例用「某集团」。',
   ];
   return lines.join('\n');

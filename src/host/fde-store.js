@@ -321,17 +321,17 @@ export function readBoard(root) {
   if (!existsSync(p)) return { ok: true, board: emptyBoard(), fresh: true, path: p };
   let raw;
   try { raw = readFileSync(p, 'utf8'); } catch (e) {
-    return { ok: false, code: 'INTERNAL', reason: `读取 board.json 失败：${(e && e.message) || e}` };
+    return { ok: false, code: 'INTERNAL', reason: `读取看板数据失败：${(e && e.message) || e}` };
   }
   let data;
   try { data = JSON.parse(raw); } catch {
-    return { ok: false, code: 'CONFLICT', reason: 'board.json 不是合法 JSON（可用备份恢复）' };
+    return { ok: false, code: 'CONFLICT', reason: '看板数据文件已损坏，读不出来（可以用备份恢复）' };
   }
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return { ok: false, code: 'CONFLICT', reason: 'board.json 结构不合法' };
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return { ok: false, code: 'CONFLICT', reason: '看板数据文件的内容不对（可以用备份恢复）' };
   const v = Number(data.version || 0);
-  if (!Number.isFinite(v) || v < 1) return { ok: false, code: 'INVALID', reason: 'board.version 缺失或非法' };
+  if (!Number.isFinite(v) || v < 1) return { ok: false, code: 'INVALID', reason: '看板数据缺少版本信息，无法读取' };
   if (v > schema.SCHEMA_VERSION) {
-    return { ok: false, code: 'CONFLICT', reason: `board.version=${v} 高于插件支持的 ${schema.SCHEMA_VERSION}，拒绝读写；请升级插件或删除 research/.fde/ 回滚` };
+    return { ok: false, code: 'CONFLICT', reason: `看板数据是更新版本的插件写的（版本 ${v}，这个插件只支持到版本 ${schema.SCHEMA_VERSION}），为避免写坏数据已停止读写；请升级插件后再用` };
   }
   return { ok: true, board: normalizeBoard(data), fresh: false, path: p };
 }
@@ -414,7 +414,7 @@ export function writeBoard(root, board, opts = {}) {
      * - 未显式传参：若提交的是更旧的快照（board.revision < 磁盘）→ 安全跳过，绝不覆盖新数据；
      *   否则按磁盘最新版本继续写（revision 以 max+1 自增）。 */
     const disk = readBoard(root);
-    if (!disk.ok) return { ok: false, code: disk.code || 'CONFLICT', reason: disk.reason || '读取 board 失败' };
+    if (!disk.ok) return { ok: false, code: disk.code || 'CONFLICT', reason: disk.reason || '读取看板数据失败' };
     const diskRev = Number(disk.board.revision) || 0;
     const boardRev = Number(board.revision) || 0;
     if (opts.expectedRevision != null && Number(opts.expectedRevision) !== diskRev) {
@@ -427,7 +427,7 @@ export function writeBoard(root, board, opts = {}) {
     const bk = backupBoard(root);
     if (bk && bk.backed === false && bk.ok === false) {
       /* 备份失败时宁可本次不写：旧 board 才是唯一事实来源。 */
-      return { ok: false, code: 'INTERNAL', reason: `备份失败，已取消写入以保护旧 board：${bk.reason || ''}` };
+      return { ok: false, code: 'INTERNAL', reason: `备份失败，为保护原有数据已取消这次保存：${bk.reason || ''}` };
     }
     const target = boardPath(root);
     const tmp = join(dir, `.${BOARD_FILENAME}.${process.pid}.${Date.now()}.${randomBytes(2).toString('hex')}.tmp`);
@@ -440,12 +440,12 @@ export function writeBoard(root, board, opts = {}) {
       renameSync(tmp, target);
     } catch (e) {
       if (created) { try { unlinkSync(tmp); } catch { /* 忽略 */ } }
-      return { ok: false, code: 'INTERNAL', reason: `写入 board 失败（旧文件已保留）：${(e && e.message) || e}` };
+      return { ok: false, code: 'INTERNAL', reason: `保存看板数据失败（原有数据没有动）：${(e && e.message) || e}` };
     }
     clearScanCache();
     return { ok: true, board, revision: board.revision, backup: bk && bk.path ? bk.path : '', staleSkipped: false };
   } catch (e) {
-    return { ok: false, code: 'INTERNAL', reason: `写入 board 异常：${(e && e.message) || e}` };
+    return { ok: false, code: 'INTERNAL', reason: `保存看板数据时出错：${(e && e.message) || e}` };
   }
 }
 

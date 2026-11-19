@@ -337,10 +337,17 @@ export function authFilePath(root) {
   return join(String(root || ''), 'research', '.fde', 'scys-auth.json');
 }
 
-/** MCP OAuth 状态目录（旧 scys-mcp 兼容路径；可用环境变量覆盖以便测试）。 */
+/**
+ * MCP OAuth 状态目录（旧 scys-mcp 兼容路径）。优先级从高到低：
+ *   ① SCYS_MCP_STATE_DIR（显式覆盖，测试也用它）
+ *   ② $DSH_HOME/mcp/scys-mcp（DSH 的数据根可由 DSH_HOME 改到别处；空白值视为未设置，与 DSH 的口径一致）
+ *   ③ ~/.dsh/mcp/scys-mcp（DSH 默认数据根）
+ */
 export function authStateDir() {
   const env = str(process.env.SCYS_MCP_STATE_DIR);
-  return env || join(homedir(), '.dsh', 'mcp', 'scys-mcp');
+  if (env) return env;
+  const dshHome = str(process.env.DSH_HOME);
+  return join(dshHome || join(homedir(), '.dsh'), 'mcp', 'scys-mcp');
 }
 
 function tokenFile() { return join(authStateDir(), 'tokens.json'); }

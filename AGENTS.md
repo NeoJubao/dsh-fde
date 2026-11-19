@@ -7,16 +7,17 @@
 `dsh-fde`：跑在 DeepSeek Harness 里的单机插件，把「调研工作台」演进为 **FDE 工作站**——客户（engagement）沿 **8 个阶段**推进，任务（item）在看板泳道流转，注意力（attention）汇总需要人动作的事，会话（session）由看板按阶段模板发起并由 agent 回报，门禁（gate）用产物与人工确认共同把关。
 
 - 宿主半：`index.js` + `src/host/`（工具、路由、提示词、技能注册、看板状态、资料库刷新、两个计算工具）。
-- 客户端半：`src/ui/ui-panel.js`（**5 页签 + 页头设置入口**面板：今日/客户/资料/流程/情报；子页签见 `docs/01-spec.md` §8）→ `node build.mjs` 生成 `client.js`。
+- 客户端半：`src/ui/ui-panel.js`（**5 页签 + 页头设置入口**面板：今日/客户/资料/流程/情报；v2 的界面契约见 `docs/01-spec.md` §22，界面用词见 `docs/adr/0010-v2-可交付版.md` D1）→ `node build.mjs` 生成 `client.js`。
 - 方法论与技能：`methods/`（8 篇）、`reference/`、`templates/`、`skills/`（**11 个 `fde-*` 编排技能**，含 v1.3 新增 `fde-scoping`；另 4 个方法库技能 + 1 个通用技能 `longdoc-brief`，长文一页纸（brief））。
 - 状态：`research/.fde/board.json`（看板，属于**工作区**）；`research/.fde/fde-library.json`（资料库每日缓存）；`research/.fde/scys-fde.json`（生财社区缓存）；`research/.fde/scys-auth.json`（生财链接授权，0600，可由面板清除）。
 
 ## 技术栈
 
-- 运行环境：DeepSeek Harness 0.2.0-rc.2（`engines.dsh: >=0.2.0-rc.2 <0.3.0`）；插件为纯 JS（ESM），**无编译、零新 npm 依赖**。
+- 运行环境：DeepSeek Harness 0.2.0-rc.2 起（`engines.dsh: >=0.2.0-rc.2 <0.3.0-0`），已在 0.2.1-rc.5 上核对；插件为纯 JS（ESM），**无编译、零新 npm 依赖**。
 - 安装：官方机制 `dsh plugin --profile <name> add <spec>`（本地路径会以 link 方式挂载，也可用 npm/git/tarball）；`tools/install_profiles.py` 只做 preflight 与打印命令，**不直接改 profile 文件**。
-- 许可：代码 MIT、方法/文档 CC BY 4.0（`LICENSE` / `LICENSE-docs`）；包名 `dsh-fde`，当前版本 `1.7.0`。
-- 禁止 `import '@deepseek-ai/*'`；服务一律 `ctx.get(...)` 懒取 + 容错，服务缺失时静默降级、不影响插件启动。
+- 许可：代码 MIT、方法/文档 CC BY 4.0（`LICENSE` / `LICENSE-docs`）；包名 `dsh-fde`，当前版本 `2.0.0`。
+- 禁止 `import '@deepseek-ai/*'`；`inject` 只硬依赖 `tools` 与 `systemPrompt`，其余服务一律懒取 + 容错，缺失时静默降级、不影响插件启动。
+- DSH 0.2.1 约定：技能注册对象带 `source: 'runtime'`；工具返回值必须是无损 JSON（统一走 `src/host/tool-output.js`，不逐个工具手改）；调用 `openWorkspacePath` 要传 `signal`；面板里的接口地址用 `appUrl()` 按文档 base 解析，不写根绝对路径。
 - 面板只用 `--dsw-alias-*` 主题 token；不写 localStorage 作为事实源。
 
 ## 工具与技能（宿主注册）
@@ -45,7 +46,7 @@
 
 | 命令 | 正常输出 |
 |---|---|
-| `node build.mjs` | `built: client.js (NN.N KB)`，且 `client.js` 与 `src/ui/ui-panel.js` 字节一致 |
+| `node build.mjs` | `built: client.js (NN.N KB)`，且 `client.js` 与 `src/ui/ui-panel.js` 字节一致；文案字典缺 key 或文案里出现面板禁词时报错退出 |
 | `node verify/all.mjs` | 逐项 `✓`，末尾 `✓ 全部验证通过`；失败打印 `✗` 与原因 |
 | `node scripts/health-check.mjs` | 逐项 `OK/WARN/FAIL` + JSON 摘要，末尾 `✓ 健康检查通过（exit 0）`；有 FAIL 时 exit 1 |
 | `node verify/fde-host.mjs` | 断言逐项 PASS |
@@ -64,9 +65,9 @@
 | 路径 | 内容 |
 |---|---|
 | `docs/00-intent.md` | 为什么做、约束、不做什么、成功指标 |
-| `docs/01-spec.md` | **唯一事实来源**：阶段/门禁/数据模型/路由/工具/面板/硬约束（含 §17 招采、§18 生财、§19 资料库、§20 流程 v2、§21 两个计算工具） |
+| `docs/01-spec.md` | **唯一事实来源**：阶段/门禁/数据模型/路由/工具/面板/硬约束（含 §17 招采、§18 生财、§19 资料库、§20 流程 v2、§21 两个计算工具、**§22 v2 的界面与提醒契约**——与 §1/§5/§6/§8 冲突处以 §22 为准） |
 | `docs/02-plan.md` | 实施计划、文件归属、验证与回滚 |
-| `docs/adr/` | 关键决策（`0001` 工作站、`0002` 招采、`0003` 资料库与流程 v2）；改主意新写一篇，不修改旧文 |
+| `docs/adr/` | 关键决策（`0001` 工作站、`0002` 招采、`0003` 资料库与流程 v2 … `0010` v2.0 可交付版：用词表、提醒机制、抽屉与设置）；改主意新写一篇，不修改旧文 |
 | `docs/retros/` | 复盘模板与复盘（方法沉淀） |
 | `docs/ui-contract/` | **UI 契约 v1**：`layout.md` 结构 / `design.md` 视觉 / `tokens.md` 取值 / `region-ids.mjs` 区域 id / `audit-ui-contract.mjs` 8 项体检（迁移中，advisory） |
 | `docs/RELEASE.md` | 发布手册：发布前清单、npm/git 命令、回滚、人工确认项 |
@@ -95,6 +96,10 @@
 12. **资料库口径**：目录人工策展、随插件发布；每日只刷 GitHub 指标与社区摘要，**不抓任意网页正文**；A/B/C 分级不得改写（B/C 不得标成 A）；社区内容是摘要非全文，原帖以链接为准；不写任何外部平台。
 13. **场景口径**：12 维权重合计 **101**，归一化 `Σ(分×权重) ÷ 101`（不得 ÷100）；四条硬门槛任一 false 不启动；否决项例外只能人签字；门禁只有人能过。
 14. **定价口径**：费率/毛利率/合规费用/甜点区一律标「方法默认值/经验区间，待验证」，**不得写成行业标准**；token 价格报价前现查官方定价页；对外报价由人复核（红线不变）。
+15. **界面用词（ADR 0010 D1）**：给人看的中文——面板文案、宿主返回的待我处理/提醒/记录/失败原因、技能里教模型对用户说的话——用「给人看的词」（待我处理、提醒、推进条件、破例推进、AI 权限、交给 AI、进展、状态、关键人、资料、记录）。界面不出现英文枚举、字段名、对象编号、检查项 key、接口路径、状态文件名。代码、数据、路由、工具参数里的英文 key 不改。本文件与 spec 里的「门禁 / 注意力 / 自主性」是内部概念名，不是界面用词。
+16. **面板文案**：新文案进 `DICT`（或就地写中文），不拼接 key；`node build.mjs` 会拦缺 key 与禁词（清单在 `tools/panel-checks.mjs`）。说明文字只留三类：后果提示、空状态的下一步、口径提示。
+17. **提醒口径（spec §22.2）**：与「待我处理」重复的四条规则（`stall` / `overdue` / `gate_ready` / `review_lag`）标 `derived`，不生成提醒；条件不成立的提醒自动失效；无变化时读取不写盘。
+18. **阶段口径（spec §22.9）**：推进条件属于**要进入的那个阶段**——客户停在某一列，表示这一列的材料已经有了。抽屉里的推进条件、看板卡片的「待确认」、交给 AI 用的做法与技能、指南链接，四处都取要进入的阶段（最后一个阶段取当前阶段）；改其中一处要同时核对另外三处。
 
 ## 禁区（CRITICAL）
 

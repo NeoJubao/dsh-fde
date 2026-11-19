@@ -6,7 +6,7 @@ description: 公司调研方法库（由 fde-discovery 编排，不独立自动�
 # 公司调研技能
 
 > **定位：本技能是方法库，由 `fde-discovery` 编排，不要独立自动触发。**
-> 需要走完整研判流程（锁定主体 → 事实核查 → KPI 假设 → 落盘回报）时先用 `fde-discovery`；本技能只提供方法细节与红线。会面材料见 `fde-meeting`，正式方案见 `fde-solution`。
+> 需要走完整研判流程（锁定主体 → 事实核查 → KPI 假设 → 落盘并报告进展）时先用 `fde-discovery`；本技能只提供方法细节与红线。会面材料见 `fde-meeting`，正式方案见 `fde-solution`。
 
 > 输入：公司全称（可含地址、见面对象）
 > 输出：主体锁定结论 + 事实核查清单 + KPI与痛点假设

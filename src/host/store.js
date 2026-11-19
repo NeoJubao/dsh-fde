@@ -102,9 +102,6 @@ export function detectRoot(svcOf, explicit) {
     if (up === cur) break;
     cur = up;
   }
-  for (const c of [join(homedir(), 'Documents', 'dshtest'), process.cwd()]) {
-    if (existsSync(c)) return { root: c, how: '常见位置回退' };
-  }
   return { root: process.cwd(), how: 'process.cwd()' };
 }
 

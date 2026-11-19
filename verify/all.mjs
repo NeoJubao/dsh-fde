@@ -55,8 +55,8 @@ await step('FDE 资料库宿主单测（mock GitHub，不联网）', 'node', [jo
 await step('FDE 计算工具单测（场景评分/成本报价，不联网）', 'node', [join(HERE, 'fde-tools.mjs')]);
 await step('独立审计（verifier：契约/安全/并发/红线/一致性）', 'node', [join(HERE, 'acceptance-audit.mjs')]);
 await step('客户端静态检查', 'node', [join(HERE, 'client-static.mjs')]);
-await step('FDE 面板静态验收（九页签/兼容页/主题 token）', 'node', [join(HERE, 'fde-client.mjs')]);
-await step('客户端准运行时测试（面板渲染 + 九页签 + Finder 按钮）', 'node', [join(HERE, 'client-runtime.mjs')]);
+await step('FDE 面板静态验收（5 页签/未就绪页/主题 token）', 'node', [join(HERE, 'fde-client.mjs')]);
+await step('客户端准运行时测试（面板渲染 + 5 页签 + 文件定位三通道）', 'node', [join(HERE, 'client-runtime.mjs')]);
 await step('README 版本一致性（README 顶部/声明版本 ⇄ package.json.version）', 'node', [join(ROOT, 'scripts', 'check-readme-version.mjs')]);
 await step('开源发布检查（ADR 0004：身份/许可/白名单/隐私/构建一致）', 'node', [join(HERE, 'open-source.mjs')]);
 await step('打包内容检查（A5）', 'node', [join(HERE, 'pack.mjs')]);

@@ -20,7 +20,7 @@
 dsh plugin --profile web add /path/to/dsh-fde
 
 # 改客户端后
-node build.mjs        # 打印 built: client.js (NN.N KB)，并断言字节一致
+node build.mjs        # 打印 built: client.js (NN.N KB)；文案字典缺 key 或文案里有面板禁词时报错退出
 
 # 提交前
 node verify/all.mjs   # 全量：宿主冒烟/安全/内核/工具/面板/开源/打包/自检
@@ -58,7 +58,7 @@ verify/                 验证脚本（见 §5）
 ### 3.1 加一个 agent 工具（宿主半）
 
 1. `index.js` 的 `registerTools()` 里 `tools.register({ name, description, parameters, output, execute, presentCall })`。
-2. 业务逻辑放 `src/host/*` 的纯函数（不要写在 `index.js`），参数校验失败返回 `{ ok:false, reason }`，**不抛异常**。
+2. 业务逻辑放 `src/host/*` 的纯函数（不要写在 `index.js`），参数校验失败返回 `{ ok:false, reason }`，**不抛异常**。返回值必须是无损 JSON（DSH 0.2.1 会拒绝带 `undefined`、`NaN` 的输出）：注册时已统一过 `src/host/tool-output.js`，不要绕开它。给人看的 `reason` 用界面用词（见 ADR 0010 D1）。
 3. `presentCall.kind` 只能是官方枚举：`read | edit | delete | move | search | execute | fetch | other`。
 4. 红线：涉及阶段推进/门禁/归档/对外发送的工具，必须经 `agentGuard` 拦截（参考 `fde_engagement` / `fde_attention`）。
 5. 测试：`verify/host-smoke.mjs` 断言工具已注册且枚举合法；业务函数测试放对应 `verify/fde-*.mjs`。
@@ -70,7 +70,7 @@ verify/                 验证脚本（见 §5）
 2. 路由数断言在 `verify/security.mjs`（总数）与 `verify/host-smoke.mjs`（逐条冒烟），加路由必须同步。
 3. 所有路径参数先过 `paths.root`/`safeRoot`/`safeProjectPath`/`resolveInsideRoot`，越界回 400/403。
 4. 返回值沿用 `{ ok, reason?, code? }`；业务降级用 `http200: true` + `{ ok:false, code }`。
-5. 面板调用：`src/ui/ui-panel.js` 的 `fdeGet` / `fdePost`（超时/去重已封装），不要另起 `fetch`。
+5. 面板调用：`src/ui/ui-panel.js` 的 `fdeGet` / `fdePost`（超时/去重已封装），不要另起 `fetch`；需要 DSH 自带路由时用 `appUrl('api/…')`，不写根绝对路径（页面可能挂在带前缀的代理或 `dsh-app://` 下）。
 
 ### 3.3 加一个页内视图/子页签（客户端半）
 
@@ -79,9 +79,11 @@ verify/                 验证脚本（见 §5）
 1. 在 `ui-panel.js` 里写 `function XxxView(props)`，用 `h()`；样式只加在 CSS 模板字符串里，只用 `--dsw-alias-*` / `--fde-*`。
 2. 挂到对应页签的页内子页签（`KnowledgePage` / `ProcessPage` / `CustomersPage` 的 `PageTabs`），不要往 `navItems` 里加。
 3. 空态/加载/失败态都要有（`Loading` / `Empty` / `ErrorLine` 原语）；操作失败用行内提示，不用 `alert`。
-4. 新区域先改 `docs/ui-contract/layout.md` §2 + `region-ids.mjs`，否则 `verify/ui-contract.mjs` 会报 A1。
-5. 测试：`verify/client-static.mjs`（静态结构/文案）、`verify/fde-client.mjs`（九项面板断言）、`verify/client-runtime.mjs`（迷你 React 渲染 + 交互）都要过；断言过时要同步，不许放宽。
-6. `node docs/ui-contract/audit-ui-contract.mjs` 应保持 8 项 PASS；`verify/ui-contract.mjs` 的 drift 数不能涨。
+4. **文案**：用词按 ADR 0010 D1 的对照表（待我处理、提醒、推进条件、交给 AI……）；复用的文案进 `DICT`，一次性的就地写中文。界面不显示英文枚举、字段名、对象编号、接口路径。说明文字只留三类：后果提示、空状态的下一步、口径提示。`node build.mjs` 会拦缺 key 和禁词（清单在 `tools/panel-checks.mjs`）。
+5. 新区域先改 `docs/ui-contract/layout.md` §2 + `region-ids.mjs`，否则 `verify/ui-contract.mjs` 会报 A1。
+6. 测试：`verify/client-static.mjs`（静态结构/文案）、`verify/fde-client.mjs`（面板断言）、`verify/client-runtime.mjs`（迷你 React 渲染 + 交互）都要过；断言过时要同步，不许放宽。
+7. `node docs/ui-contract/audit-ui-contract.mjs` 应保持 8 项 PASS；`verify/ui-contract.mjs` 的 drift 数不能涨。
+8. 子组件在挂载时要触发父组件的请求时，把需要的 id 作为参数传上去，不要依赖父组件用 effect 同步的 ref——子组件的 effect 先执行（1.x 的客户抽屉因此打开时不核对推进条件）。
 
 ## 4. 改契约：先文档后代码
 
@@ -104,8 +106,8 @@ verify/                 验证脚本（见 §5）
 | `verify/fde-scys-host.mjs` | 生财三路授权、feed 刷新/失败保留/重试上限（mock，不联网） |
 | `verify/fde-library-host.mjs` | 资料库目录校验、GitHub 刷新（mock，不联网） |
 | `verify/fde-tools.mjs` | `fde_scenario` / `fde_quote` 公式与警告 |
-| `verify/acceptance-audit.mjs` | 独立审计：spec 契约对照（当前 677 项断言） |
-| `verify/client-static.mjs` | 面板静态结构/文案/token 纪律 |
+| `verify/acceptance-audit.mjs` | 独立审计：spec 契约对照 |
+| `verify/client-static.mjs` | 面板静态结构/文案/token 纪律；v2 的字典完整、面板禁词、不显示内部标识 |
 | `verify/fde-client.mjs` | 面板关键组件/九项验收 |
 | `verify/client-runtime.mjs` | 迷你 React 渲染 + 交互（mock slots/remote） |
 | `verify/open-source.mjs` | 发布门禁：身份/许可/files 白名单/隐私/构建一致 |
@@ -128,6 +130,8 @@ python3 probe.py           # DOM 度量
 
 它直接加载 `ui-panel.js` 源码、伪造 `slots`/`uiWorkspace`、用插件自己的宿主业务层跑合成数据；改完面板用它截图**亲眼看过**再提交。真实宿主行为（登录态、窗口 chrome、用户字号）仍需重启后人工验收。
 
+> v2.0 起面板按文档 base 解析接口地址（与 DSH 0.2.1 一致）。这个 harness 的页面在 `/harness/` 下，要在 `page.html` 的 `<head>` 里加一行 `<base href="/">`，接口才会打到 `/research-workbench/api/…`；推进条件核对（`POST /fde/gate`，不带 `checks` / `force`）和文件预览（`GET /api/file`）也要在 `server.mjs` 里接到真实实现，否则抽屉显示「核对中」、预览显示读取失败。
+
 ## 7. 发布
 
 流程见 [docs/RELEASE.md](RELEASE.md)；一条命令做预检：
@@ -141,6 +145,7 @@ node scripts/release-preflight.mjs   # README 版本 / open-source / pack / heal
 ## 8. 常见坑
 
 - **忘了 `node build.mjs`**：`verify/all` 的「客户端产物一致」会红。
+- **构建报「文案字典缺 key」或「内部用语」**：前者是引用了字典里没有的 key（界面会显示成 key 名）；后者是文案里用了数据模型的词。按提示改文案，不要去改检查。
 - **改了导航/页签**：`verify/acceptance-audit.mjs` 的 5 页签断言与 `verify/fde-client.mjs` 会红；断言要同步口径，不许放宽。
 - **加路由没同步计数**：`verify/security.mjs` 的「路由数」断言会红。
 - **工具返回抛异常**：工具层错误要返回 `{ ok:false, reason }`，抛异常会变成宿主错误。

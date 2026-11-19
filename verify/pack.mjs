@@ -36,6 +36,7 @@ const NEED = [
   'src/host/fde-api.js',
   'src/host/fde-schema.js',
   'src/host/subprocess.js',
+  'src/host/tool-output.js',
   'methods/00-调研执行流程.md',
   'methods/05-正式对外文档交付（DOCX·公文版式）.md',
   'skills/fde-engagement/SKILL.md',

@@ -28,12 +28,22 @@ window.__ModuleLoader__.load({
      * 响应契约：成功 {ok:true,...}；失败 {ok:false, reason, code?}。
      * 不做客户端事实缓存：写操作后一律重新向服务端取 board。
      * ============================================================ */
-    const API = '/research-workbench/api';
+    /* 接口地址按文档 base 解析：DSH 的页面带 <base href="./">，可能挂在带前缀的代理下，
+       或以 dsh-app://app/ 提供（与官方客户端同一写法）。没有可用 base 时（单测）退回根路径。 */
+    function appUrl(rel) {
+      const path = String(rel || '').replace(/^\/+/, '');
+      try {
+        const base = typeof document !== 'undefined' ? String(document.baseURI || '') : '';
+        if (/^https?:/.test(base) || base.indexOf('dsh-app://app/') === 0) return new URL(path, base).href;
+      } catch (e) { /* ignore */ }
+      return '/' + path;
+    }
+    const API = appUrl('research-workbench/api');
     const FDE = API + '/fde';
     const POLL_MS = 12000; /* 轮询 10–15s，spec §16.8 */
     const FETCH_TIMEOUT_MS = 8000; /* F-17：请求超时（8s），避免慢响应永久挂起轮询 */
 
-    const errText = (e) => String((e && (e.message || e.code)) || e || '未知原因');
+    const errText = (e) => String((e && (e.message || e.code)) || e || '原因不明');
 
     /* 超时信号：优先 AbortSignal.timeout；不支持时用 AbortController + setTimeout 降级。 */
     function timeoutSignal(ms) {
@@ -71,7 +81,7 @@ window.__ModuleLoader__.load({
       try {
         text = await res.text();
       } catch (e) {
-        return { ok: false, reason: '读取响应失败：' + errText(e) };
+        return { ok: false, reason: '没能读取返回内容：' + errText(e) };
       }
       try {
         return JSON.parse(text);
@@ -80,8 +90,8 @@ window.__ModuleLoader__.load({
         return {
           ok: false,
           httpStatus: status,
-          reason: status === 404 ? 'HTTP 404（路由不存在，可能宿主未重启）'
-            : '响应不是 JSON（HTTP ' + (status || '?') + '）：' + String(text).slice(0, 160),
+          reason: status === 404 ? '还没准备好，重启 DSH 后再试（HTTP 404）'
+            : '返回的内容读不了（HTTP ' + (status || '?') + '）',
         };
       }
     }
@@ -97,7 +107,7 @@ window.__ModuleLoader__.load({
             ok: false,
             network: true,
             timeout: timedOut,
-            reason: (timedOut ? '请求超时（' + Math.round(FETCH_TIMEOUT_MS / 1000) + 's）：' : '网络请求失败：') + errText(e),
+            reason: timedOut ? '等了 ' + Math.round(FETCH_TIMEOUT_MS / 1000) + ' 秒没有回应，稍后再试' : '连不上 DSH：' + errText(e),
           };
         }
       });
@@ -106,7 +116,7 @@ window.__ModuleLoader__.load({
     /* 资料预览读取：走宿主同源已鉴权路由 GET /api/file（文本 / PDF 字节 / 图片直链）。
        面板组件不直接 fetch；文件大小上限由宿主控制（默认 50MiB），这里只做超时与错误归一。 */
     async function readFileAbs(abs, as) {
-      const url = '/api/file?path=' + encodeURIComponent(String(abs || ''));
+      const url = appUrl('api/file') + '?path=' + encodeURIComponent(String(abs || ''));
       try {
         const r = await fetch(url, { credentials: 'same-origin', signal: timeoutSignal(30000) });
         if (!r || !r.ok) return { ok: false, reason: 'HTTP ' + ((r && r.status) || '?') };
@@ -136,7 +146,7 @@ window.__ModuleLoader__.load({
           ok: false,
           network: true,
           timeout: timedOut,
-          reason: (timedOut ? '请求超时（' + Math.round(budget / 1000) + 's）：' : '网络请求失败：') + errText(e),
+          reason: timedOut ? '等了 ' + Math.round(budget / 1000) + ' 秒没有回应，稍后再试' : '连不上 DSH：' + errText(e),
         };
       }
     }
@@ -188,9 +198,7 @@ window.__ModuleLoader__.load({
   --fde-idle:var(--dsw-alias-state-idle-primary,#cfd3d6);
   --fde-hover:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.04));
   --fde-active:var(--dsw-alias-interactive-bg-active,rgba(0,0,0,.07));
-  --fde-focus:0 0 0 2px color-mix(in srgb,var(--dsw-alias-state-business-primary,#4d6bfe) 32%,transparent);
-  --fde-scroll:var(--dsw-alias-scrollbar-bg-l2,rgba(0,0,0,.12));
-  --fde-scroll-hover:var(--dsw-alias-scrollbar-hover-l2,rgba(0,0,0,.24));
+  --fde-focus:0 0 0 var(--dsw-focus-ring-width,2px) var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary,#4176e6));
   display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;
   background:var(--fde-bg);color:var(--fde-text);
   font-size:var(--dsh-content-font-size,13px);line-height:1.6;
@@ -198,9 +206,6 @@ window.__ModuleLoader__.load({
 .fde-root *{box-sizing:border-box}
 .fde-root button{font-family:inherit}
 .fde-root :focus-visible{outline:none;box-shadow:var(--fde-focus)}
-.fde-root ::-webkit-scrollbar{width:8px;height:8px}
-.fde-root ::-webkit-scrollbar-thumb{background:var(--fde-scroll);border-radius:var(--dsw-radius-sm,8px)}
-.fde-root ::-webkit-scrollbar-track{background:transparent}
 
 /* ---- 顶部标题栏 ---- */
 /* 窗口 chrome 避让（§2.9）：宿主用 CSS 变量下发顶栏 / 左侧占用，缺省 0 不影响普通页面 */
@@ -208,14 +213,7 @@ window.__ModuleLoader__.load({
   padding:calc(14px + var(--dsh-frame-top-clearance,0px)) 18px 10px calc(18px + var(--dsh-frame-leading-clearance,0px))}
 .fde-top-left{display:flex;flex-direction:column;gap:2px;min-width:0}
 .fde-title{font-size:20px;font-weight:650;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
-.fde-subtitle{font-size:12px;color:var(--fde-text-2)}
 .fde-top-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.fde-autonomy{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;
-  font-size:12px;border:0.5px solid var(--fde-border);background:var(--fde-surface-2);color:var(--fde-text-2);white-space:nowrap;corner-shape:round}
-.fde-autonomy b{color:var(--fde-text);font-weight:650}
-.fde-autonomy.observe{border-color:color-mix(in srgb,var(--fde-warn) 42%,transparent);background:color-mix(in srgb,var(--fde-warn) 12%,transparent);color:var(--fde-warn-text)}
-.fde-autonomy.assisted{border-color:color-mix(in srgb,var(--fde-accent) 40%,transparent);background:color-mix(in srgb,var(--fde-accent) 10%,transparent);color:var(--fde-accent)}
-.fde-autonomy.auto{border-color:color-mix(in srgb,var(--fde-danger) 40%,transparent);background:color-mix(in srgb,var(--fde-danger) 10%,transparent);color:var(--fde-danger)}
 
 /* ---- 九视图导航（分段选择） ---- */
 .fde-nav-wrap{padding:0 18px 10px;flex:0 0 auto}
@@ -224,6 +222,8 @@ window.__ModuleLoader__.load({
 .fde-iconbtn{width:32px;height:32px;border:0.5px solid var(--fde-border);border-radius:var(--dsw-radius-md,12px);
   background:var(--fde-surface-2);color:var(--fde-text-2);font-size:16px;line-height:1;
   cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.fde-iconbtn:disabled{opacity:.5;cursor:default}
+.fde-iconbtn.spinning{opacity:.6}
 .fde-iconbtn.on{border-color:color-mix(in srgb,var(--fde-accent) 46%,transparent);
   background:color-mix(in srgb,var(--fde-accent) 10%,transparent);color:var(--fde-accent)}
 /* Phase 3（v1.5.0）演示模式：常驻横幅 + 空态三步引导 */
@@ -235,10 +235,7 @@ window.__ModuleLoader__.load({
   corner-shape:round;background:color-mix(in srgb,var(--fde-accent) 16%,transparent);color:var(--fde-accent);
   font-size:11px;font-weight:600;white-space:nowrap}
 .fde-demo-banner-text{color:var(--fde-text-2);font-size:12px}
-.fde-onboard{display:flex;flex-direction:column;gap:6px;margin-top:8px;text-align:left}
-.fde-onboard-step{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--fde-text-2)}
-.fde-onboard-no{flex:0 0 auto;width:18px;height:18px;border-radius:var(--dsw-radius-sm,8px);corner-shape:round;
-  background:var(--fde-surface-2);color:var(--fde-text-2);display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+
 .fde-nav{display:inline-flex;gap:2px;padding:3px;border-radius:var(--dsw-radius-md,12px);background:var(--fde-surface-2);border:0.5px solid var(--fde-border);max-width:100%;overflow-x:auto}
 .fde-nav button{height:30px;padding:0 14px;border:1px solid transparent;border-radius:var(--dsw-radius-sm,8px);background:transparent;
   color:var(--fde-text-2);font-size:13px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;transition:background .15s,color .15s}
@@ -270,7 +267,7 @@ window.__ModuleLoader__.load({
 .fde-textarea{height:auto;min-height:72px;padding:8px 10px;line-height:1.6;resize:vertical}
 .fde-select{cursor:pointer}
 .fde-field{display:flex;flex-direction:column;gap:4px;min-width:0}
-.fde-field>label,.fde-label{font-size:12px;color:var(--fde-text-2);letter-spacing:.2px}
+.fde-field>label{font-size:12px;color:var(--fde-text-2);letter-spacing:.2px}
 .fde-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
 .fde-full{grid-column:1/-1}
 .fde-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -278,7 +275,7 @@ window.__ModuleLoader__.load({
 .fde-spacer{flex:1 1 auto}
 .fde-hint{font-size:12px;color:var(--fde-text-3);line-height:1.55}
 .fde-note{font-size:12px;color:var(--fde-text-2);line-height:1.6}
-.fde-chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 9px;border-radius:999px;font-size:12px;
+.fde-chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 9px;border-radius:999px;corner-shape:round;font-size:12px;
   border:0.5px solid var(--fde-border);background:var(--fde-surface-2);color:var(--fde-text-2);white-space:nowrap;line-height:1;corner-shape:round}
 .fde-chip.on,.fde-chip.accent{background:color-mix(in srgb,var(--fde-accent) 12%,transparent);
   border-color:color-mix(in srgb,var(--fde-accent) 40%,transparent);color:var(--fde-accent);font-weight:600}
@@ -295,11 +292,11 @@ window.__ModuleLoader__.load({
 .fde-section{display:flex;flex-direction:column;gap:8px;min-width:0}
 .fde-section-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .fde-section-title{font-size:12px;font-weight:650;letter-spacing:1px;color:var(--fde-text-2)}
-.fde-muted{color:var(--fde-text-2)}
-.fde-warn{color:var(--fde-danger)} /* 逾期/警示文本：原代码在用、但此前没有样式（§2.3） */
+
+.fde-warn{color:var(--fde-danger)} /* 逾期/警示文本 */
+.fde-warn-soft{color:var(--fde-warn-text)} /* 提示性缺失：还没定下一步 */
 .fde-dim{color:var(--fde-text-3)}
 .fde-num{font-variant-numeric:tabular-nums;letter-spacing:.3px}
-.fde-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--fde-text-2);word-break:break-all}
 
 /* ---- 状态：加载 / 空 / 失败 / 行内提示 ---- */
 .fde-loading{display:flex;align-items:center;gap:10px;padding:18px;color:var(--fde-text-2);font-size:13px}
@@ -322,8 +319,6 @@ window.__ModuleLoader__.load({
 .fde-msg.err{border-color:color-mix(in srgb,var(--fde-danger) 36%,transparent);background:color-mix(in srgb,var(--fde-danger) 8%,transparent);color:var(--fde-danger)}
 .fde-msg .fde-spacer{flex:1}
 .fde-live{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-.fde-kbd{display:inline-flex;align-items:center;height:18px;padding:0 5px;border-radius:var(--dsw-radius-xs,4px);border:0.5px solid var(--fde-border-2);
-  background:var(--fde-surface-2);color:var(--fde-text-3);font-size:11px;font-family:ui-monospace,Menlo,monospace}
 
 /* ---- 今日：统计条 / 双栏 ---- */
 .fde-stats{display:flex;flex-wrap:wrap;gap:8px}
@@ -351,7 +346,7 @@ window.__ModuleLoader__.load({
 .fde-kpi-label{font-size:11px;color:var(--fde-text-2);white-space:nowrap}
 /* 四块同级：卡片 + 固定标题条 + 块内滚动 body；宽档页面级不滚动 */
 .fde-today-grid{flex:1 1 auto;min-height:0;display:grid;gap:12px;
-  grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:minmax(0,1fr)}
+  grid-template-columns:minmax(0,1.45fr) minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 .fde-today-panel{padding:0;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
 .fde-today-panel-head{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:10px 12px 8px;
   border-bottom:0.5px solid var(--fde-border)}
@@ -370,7 +365,7 @@ window.__ModuleLoader__.load({
 @container (max-width:1199px){
   .fde-today-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr))}
 }
-/* 窄档（内容宽 <900）：单列、页面滚动，块内不再滚；顺序固定 待办→建议→焦点→活动 */
+/* 窄档（内容宽 <900）：单列、页面滚动，块内不再滚；顺序固定 待我处理→提醒→今天跟进→最近动态 */
 @container (max-width:899px){
   .fde-today-grid{display:flex;flex-direction:column;flex:0 0 auto;min-height:0}
   .fde-today-panel{min-height:180px}
@@ -379,13 +374,19 @@ window.__ModuleLoader__.load({
   .fde-today-kpis{margin-left:0;width:100%;gap:16px}
 }
 
-/* ---- 列表（注意力 / 建议 / 活动） ---- */
+/* ---- 列表（待我处理 / 提醒 / 动态） ---- */
 .fde-list{display:flex;flex-direction:column;min-width:0}
+/* 看起来像文字的按钮：行标题可点时用它，字体样式由后面的 .fde-li-title 决定 */
+.fde-linklike{background:transparent;border:0;padding:0;margin:0;text-align:left;font:inherit;color:inherit}
+.fde-li-button{background:transparent;border:0;border-bottom:1px dashed var(--fde-border);width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
 .fde-li{display:flex;align-items:flex-start;gap:10px;padding:10px 2px;border-bottom:1px dashed var(--fde-border);min-width:0}
 .fde-li:last-child{border-bottom:0}
 .fde-li-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}
 .fde-li-title{font-size:13px;font-weight:600;color:var(--fde-text);line-height:1.45;word-break:break-word}
 .fde-li-title.clickable{cursor:pointer}
+.fde-li-title.fde-li-quiet{font-weight:500}
+.fde-li-sub{font-size:12px;color:var(--fde-text-2);line-height:1.5;word-break:break-word}
+.fde-li-sub.fde-warn{color:var(--fde-warn-text)}
 .fde-li-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--fde-text-2)}
 .fde-li-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex:0 0 auto}
 .fde-attn-kind{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--dsw-radius-xs,4px);font-size:11px;
@@ -405,13 +406,6 @@ window.__ModuleLoader__.load({
 .fde-attn-group+.fde-attn-group{margin-top:8px;padding-top:6px;border-top:1px dashed var(--fde-border)}
 .fde-attn-group-head{display:flex;align-items:center;gap:8px;padding:0 2px 2px;min-width:0}
 .fde-attn-group .fde-li{padding:8px 2px}
-.fde-more{position:relative;flex:0 0 auto}
-.fde-more-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:8;min-width:124px;padding:4px;
-  display:flex;flex-direction:column;gap:2px;background:var(--fde-surface);
-  border-radius:var(--dsw-radius-md,12px);box-shadow:var(--dsw-elevation-prominent)}
-.fde-more-item{height:28px;padding:0 10px;border:0;border-radius:var(--dsw-radius-sm,8px);background:transparent;color:var(--fde-text);
-  font:inherit;font-size:12px;text-align:left;cursor:pointer}
-
 
 /* ---- 招采雷达（v1.1）：结果行 / 关系徽章 / 链接 / 未就绪提示 ---- */
 .fde-bid-form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
@@ -461,9 +455,7 @@ window.__ModuleLoader__.load({
 .fde-flow-step.on{background:var(--fde-surface);border-color:var(--fde-accent)}
 .fde-flow-step-top{display:flex;align-items:center;gap:6px}
 .fde-flow-num{font-size:11px;color:var(--fde-text-3);font-variant-numeric:tabular-nums}
-.fde-flow-gate-dot{width:7px;height:7px;border-radius:50%;margin-left:auto;flex:0 0 auto;corner-shape:round}
-.fde-flow-gate-dot.ok{background:var(--fde-success)}
-.fde-flow-gate-dot.warn{background:var(--fde-warn)}
+
 .fde-flow-name{font-size:13px;font-weight:650;line-height:1.3}
 .fde-flow-count{font-size:11px;color:var(--fde-text-3);white-space:nowrap}
 .fde-flow-detail{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
@@ -471,7 +463,7 @@ window.__ModuleLoader__.load({
   border-radius:var(--dsw-radius-md,12px);background:var(--fde-surface-2);border:0.5px solid var(--fde-border)}
 .fde-flow-wide{grid-column:1/-1}
 .fde-flow-block-title{font-size:12px;font-weight:650;letter-spacing:.8px;color:var(--fde-text-2)}
-.fde-flow-sub{font-size:12px;font-weight:600;color:var(--fde-text-2);margin-bottom:4px}
+
 .fde-flow-goal{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:10px 12px;border-radius:var(--dsw-radius-md,12px);
   background:color-mix(in srgb,var(--fde-accent) 7%,transparent);
   border:1px solid color-mix(in srgb,var(--fde-accent) 24%,transparent);font-size:13px;line-height:1.6}
@@ -490,16 +482,7 @@ window.__ModuleLoader__.load({
   background:var(--fde-surface);border:1px dashed var(--fde-border-2);max-width:560px}
 .fde-flow-example-label{font-size:11px;font-weight:650;letter-spacing:.6px;color:var(--fde-accent)}
 .fde-flow-example-text{font-size:12px;line-height:1.6;color:var(--fde-text-2);word-break:break-word}
-.fde-flow-gate-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
-.fde-matrix-wrap{overflow:auto;max-height:56vh;border:0.5px solid var(--fde-border);border-radius:var(--dsw-radius-md,12px)}
-.fde-matrix{border-collapse:collapse;font-size:12px;min-width:100%}
-.fde-matrix th,.fde-matrix td{border-bottom:0.5px solid var(--fde-border);padding:6px 9px;
-  text-align:left;white-space:nowrap;color:var(--fde-text-2)}
-.fde-matrix thead th{position:sticky;top:0;z-index:1;background:var(--fde-surface);
-  color:var(--fde-text-2);font-weight:650}
-.fde-matrix tbody th{position:sticky;left:0;z-index:1;background:var(--fde-surface);
-  color:var(--fde-text);font-weight:600;border-right:0.5px solid var(--fde-border)}
-.fde-matrix td.on{color:var(--fde-success);font-weight:700;text-align:center}
+
 @media (max-width:720px){.fde-flow-step{min-width:92px}}
 
 /* ---- 资料库（v1.3，spec §19.6）：信息条 / 重点推荐 / 筛选 / 卡片网格 ---- */
@@ -551,11 +534,10 @@ window.__ModuleLoader__.load({
 .fde-board{display:flex;gap:10px;align-items:flex-start;overflow-x:auto;padding:2px 2px 12px;min-height:0;flex:1 1 auto}
 /* 看板横滚示能（§2.7）：外层容器 + 溢出提示 + 右侧渐隐（滚到末尾时取消遮罩） */
 .fde-board-wrap{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
-.fde-board-hint{display:flex;align-items:center;gap:6px;padding:0 2px 6px;font-size:12px;color:var(--fde-text-3)}
 .fde-board.mask-right{-webkit-mask-image:linear-gradient(90deg,var(--fde-text) calc(100% - 32px),transparent);
   mask-image:linear-gradient(90deg,var(--fde-text) calc(100% - 32px),transparent)}
 /* 列宽自适应（§2.7）：先不改 8 列结构；窄屏收窄、宽屏最多 258px */
-.fde-col{flex:1 1 clamp(180px,17vw,258px);min-width:180px;display:flex;flex-direction:column;gap:8px;min-height:120px;
+.fde-col{flex:1 1 0;min-width:132px;display:flex;flex-direction:column;gap:8px;min-height:120px;
   border-radius:var(--dsw-radius-lg,16px);padding:8px;border:1px solid transparent;transition:background .15s,border-color .15s}
 .fde-col.over{background:color-mix(in srgb,var(--fde-accent) 7%,transparent);border-color:color-mix(in srgb,var(--fde-accent) 34%,transparent)}
 .fde-col-head{display:flex;align-items:center;gap:6px;padding:2px 4px;min-height:26px}
@@ -564,13 +546,14 @@ window.__ModuleLoader__.load({
 .fde-col-wip{font-size:11px;color:var(--fde-warn-text);font-variant-numeric:tabular-nums}
 .fde-col.over-wip .fde-col-wip{color:var(--fde-danger)}
 .fde-col-body{display:flex;flex-direction:column;gap:8px;min-height:60px}
-.fde-col-empty{font-size:12px;color:var(--fde-text-3);text-align:center;padding:14px 4px;border:1px dashed var(--fde-border);border-radius:var(--dsw-radius-md,12px)}
+.fde-col-empty{min-height:44px;border:1px dashed var(--fde-border);border-radius:var(--dsw-radius-md,12px);opacity:.6}
 .fde-card.draggable{cursor:grab;transition:border-color .15s,box-shadow .15s,opacity .15s}
 .fde-card.dragging{opacity:.45;cursor:grabbing}
 .fde-card.paused{opacity:.72}
-.fde-card-title-row{display:flex;align-items:flex-start;gap:6px;min-width:0}
-.fde-card-name{font-size:13px;font-weight:650;line-height:1.4;flex:1 1 auto;min-width:0;word-break:break-word}
+.fde-card-title-row{display:flex;align-items:flex-start;gap:2px 6px;min-width:0;flex-wrap:wrap}
+.fde-card-name{font-size:13px;font-weight:650;line-height:1.4;flex:1 1 4em;min-width:0;word-break:break-word}
 .fde-card-days{font-size:11px;color:var(--fde-text-3);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.fde-card-next.missing{color:var(--fde-warn-text)}
 .fde-card-next{margin-top:6px;font-size:12px;color:var(--fde-text-2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .fde-card-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}
 .fde-card-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
@@ -594,7 +577,7 @@ window.__ModuleLoader__.load({
 .fde-table .fde-cell-name{font-weight:600;min-width:160px}
 .fde-table .fde-cell-now{max-width:300px;color:var(--fde-text-2)}
 .fde-table .fde-cell-num{font-variant-numeric:tabular-nums;white-space:nowrap}
-.fde-table .fde-cell-actions{text-align:right;white-space:nowrap}
+
 .fde-table tbody tr.archived td{opacity:.6}
 .fde-prio{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--fde-text-2)}
 .fde-attn-cell{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--fde-danger)}
@@ -613,24 +596,14 @@ window.__ModuleLoader__.load({
 /* ---- 工件 ---- */
 .fde-files{display:flex;flex-direction:column;gap:6px}
 .fde-file{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-radius:var(--dsw-radius-sm,8px);background:var(--fde-surface-2);min-width:0}
-.fde-file .fde-file-rel{flex:1 1 220px;min-width:0;font-size:12px;color:var(--fde-text);word-break:break-all;font-family:ui-monospace,Menlo,monospace}
-.fde-file .fde-file-meta{font-size:11px;color:var(--fde-text-3);font-variant-numeric:tabular-nums;white-space:nowrap}
-.fde-file-actions{display:flex;gap:4px;flex-wrap:wrap}
-.fde-group{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-.fde-group-title{font-size:12px;font-weight:650;color:var(--fde-text-2);letter-spacing:.6px;display:flex;align-items:center;gap:8px}
+.fde-file .fde-file-rel{flex:1 1 220px;min-width:0;font-size:12px;color:var(--fde-text);word-break:break-all}
+
 .fde-drop{margin:2px 0;padding:16px;border:1px dashed var(--fde-border-2);border-radius:var(--dsw-radius-md,12px);
   background:var(--fde-surface-2);cursor:pointer;text-align:center;transition:border-color .15s,background .15s}
 .fde-drop.on{border-color:var(--fde-accent);background:color-mix(in srgb,var(--fde-accent) 8%,transparent)}
-.fde-loc{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:7px 10px;border-radius:var(--dsw-radius-sm,8px);background:var(--fde-surface-2);margin-bottom:8px}
-.fde-loc .fde-code{flex:1 1 240px}
-.fde-acc{display:flex;flex-direction:column;gap:8px}
-.fde-acc-item{border:0.5px solid var(--fde-border);border-radius:var(--dsw-radius-md,12px);background:var(--fde-surface);overflow:hidden}
-.fde-acc-head{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;background:transparent;border:0;width:100%;text-align:left;color:inherit;font-size:13px}
+
 /* 手风琴头改为 div[role=button]（§2.4）：Finder 按钮移到头外，避免 button 嵌套 button */
-.fde-acc-row{display:flex;align-items:center;gap:4px;padding-right:8px}
-.fde-acc-row .fde-acc-head{flex:1 1 auto;width:auto}
-.fde-acc-tools{flex:0 0 auto;display:flex;align-items:center;gap:4px}
-.fde-acc-body{padding:4px 12px 12px;border-top:1px dashed var(--fde-border)}
+
 .fde-caret{display:inline-block;width:12px;color:var(--fde-text-3);transition:transform .15s}
 .fde-caret.open{transform:rotate(90deg)}
 
@@ -638,8 +611,7 @@ window.__ModuleLoader__.load({
 .fde-mth{display:flex;flex-wrap:wrap;gap:6px}
 .fde-mth button{font-size:12px;padding:6px 10px;border-radius:var(--dsw-radius-sm,8px);background:var(--fde-surface-2);
   border:0.5px solid var(--fde-border);color:var(--fde-text);cursor:pointer;text-align:left}
-.fde-pre{white-space:pre-wrap;font-size:12px;line-height:1.75;max-height:58vh;overflow:auto;
-  background:var(--fde-surface-2);border:0.5px solid var(--fde-border);border-radius:var(--dsw-radius-md,12px);padding:14px;margin:0;color:var(--fde-text)}
+
 .fde-skill{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:var(--dsw-radius-sm,8px);background:var(--fde-surface-2);border:0.5px solid var(--fde-border)}
 .fde-skill-name{font-size:12px;font-weight:650;font-family:ui-monospace,Menlo,monospace;color:var(--fde-text)}
 .fde-skill-desc{font-size:12px;color:var(--fde-text-2);line-height:1.55}
@@ -651,13 +623,16 @@ window.__ModuleLoader__.load({
 .fde-set-name{font-size:13px;font-weight:600}
 .fde-set-desc{font-size:12px;color:var(--fde-text-2);line-height:1.55}
 .fde-set-ctl{flex:0 0 auto;display:flex;align-items:center;gap:8px}
+.fde-settings{max-width:860px}
+.fde-set-modes{display:flex;flex-direction:column;gap:8px}
+.fde-set-mode{padding:10px 12px;border-radius:var(--dsw-radius-md,12px);border:0.5px solid var(--fde-border);background:var(--fde-surface-2)}
+.fde-set-mode.on{border-color:var(--fde-accent);background:color-mix(in srgb,var(--fde-accent) 8%,transparent)}
+.fde-set-form{padding:2px 0 10px}
 .fde-health{display:flex;flex-direction:column;gap:6px}
 .fde-health-item{display:flex;align-items:flex-start;gap:8px;font-size:12px;padding:6px 0;border-bottom:1px dashed var(--fde-border)}
 .fde-health-item:last-child{border-bottom:0}
 .fde-health-name{font-weight:600;min-width:110px;flex:0 0 auto}
 .fde-health-detail{color:var(--fde-text-2);word-break:break-word}
-.fde-redline{margin:8px 0 0;padding-left:18px;font-size:12px;color:var(--fde-text-2);line-height:1.7}
-.fde-redline li::marker{color:var(--fde-danger)}
 
 /* ---- 抽屉 ---- */
 .fde-mask{position:fixed;inset:0;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,.28));z-index:60;
@@ -693,13 +668,29 @@ window.__ModuleLoader__.load({
 
 /* ---- 门禁清单 ---- */
 .fde-gate-list{display:flex;flex-direction:column;gap:8px}
-.fde-gate-item{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:var(--dsw-radius-md,12px);background:var(--fde-surface-2);border:0.5px solid var(--fde-border)}
+.fde-gate-item{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:var(--dsw-radius-md,12px);background:var(--fde-surface-2);border:0.5px solid var(--fde-border)}
 .fde-gate-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
-.fde-gate-line .fde-gate-key{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--fde-text-3)}
-.fde-gate-auto{display:flex;flex-wrap:wrap;gap:6px}
-.fde-gate-item.missing{border-color:color-mix(in srgb,var(--fde-danger) 30%,transparent);background:color-mix(in srgb,var(--fde-danger) 5%,transparent)}
+
+.fde-gate-item.missing{border-color:color-mix(in srgb,var(--fde-warn) 34%,transparent)}
 .fde-gate-item.pass{border-color:color-mix(in srgb,var(--fde-success) 28%,transparent)}
 .fde-gate-evidence{height:28px;font-size:12px}
+/* 推进条件：材料与确认项合成一张清单（ADR 0010 D7） */
+.fde-gate{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--fde-border)}
+.fde-gate-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fde-gate-title{font-size:13px;font-weight:650;color:var(--fde-text)}
+.fde-gate-title.ok{color:var(--fde-success)}
+.fde-gate-mark{width:16px;height:16px;border-radius:50%;corner-shape:round;display:inline-flex;align-items:center;justify-content:center;
+  font-size:11px;flex:0 0 auto;background:var(--fde-surface-3);color:var(--fde-text-3)}
+.fde-gate-mark.pass{background:color-mix(in srgb,var(--fde-success) 18%,transparent);color:var(--fde-success)}
+.fde-gate-mark.missing{background:color-mix(in srgb,var(--fde-warn) 22%,transparent);color:var(--fde-warn-text)}
+.fde-gate-label{flex:1 1 auto;min-width:0;line-height:1.5}
+.fde-gate-note{font-size:12px;color:var(--fde-text-3);padding-left:24px;word-break:break-all}
+.fde-textbtn{background:transparent;border:0;padding:2px 4px;font:inherit;font-size:12px;color:var(--fde-text-2);cursor:pointer;border-radius:var(--dsw-radius-sm,8px)}
+.fde-textbtn:disabled{opacity:.5;cursor:default}
+.fde-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.fde-stake-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 96px auto 28px;gap:6px;align-items:center}
+.fde-attn-question{font-size:13px;line-height:1.6;color:var(--fde-text);word-break:break-word}
+.fde-report-form{display:flex;flex-direction:column;gap:6px}
 
 /* ---- 时间线 / 回报 ---- */
 .fde-timeline{display:flex;flex-direction:column;gap:2px}
@@ -743,7 +734,6 @@ window.__ModuleLoader__.load({
 .fde-compat-body code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--fde-surface-2);
   padding:1px 5px;border-radius:var(--dsw-radius-xs,4px);color:var(--fde-text)}
 .fde-compat-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
-.fde-tip{border-left:0.5px solid var(--fde-border-2);padding-left:10px;font-size:12px;color:var(--fde-text-3);line-height:1.6}
 
 @media (max-width:720px){
   .fde-top{padding:12px 12px 8px}
@@ -759,16 +749,15 @@ window.__ModuleLoader__.load({
   .fde-root *{animation-duration:.001ms !important;transition-duration:.001ms !important}
 }
 
-
 /* ---- 资料页（v1.7；ADR 0008）：列表 + 内嵌预览 ---- */
 .fde-materials{display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0;position:relative}
 .fde-mat-head{display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
 .fde-mat-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .fde-mat-title{font-size:14px;font-weight:650;color:var(--fde-text)}
-.fde-mat-search{width:220px;height:28px;font-size:12px;border-radius:999px}
+.fde-mat-search{width:220px;height:28px;font-size:12px;border-radius:999px;corner-shape:round}
 .fde-mat-filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .fde-mat-pills{display:inline-flex;align-items:center;gap:2px;flex-wrap:wrap}
-.fde-pill{height:24px;padding:0 9px;border-radius:999px;border:0.5px solid transparent;background:transparent;color:var(--fde-text-2);font-size:12px;cursor:pointer;white-space:nowrap}
+.fde-pill{height:24px;padding:0 9px;border-radius:999px;corner-shape:round;border:0.5px solid transparent;background:transparent;color:var(--fde-text-2);font-size:12px;cursor:pointer;white-space:nowrap}
 .fde-pill.on{background:var(--fde-surface);border-color:var(--fde-border-2);color:var(--fde-text);font-weight:600}
 .fde-mat-body{display:flex;gap:10px;flex:1 1 auto;min-height:0}
 .fde-mat-list{flex:0 0 380px;min-width:300px;display:flex;flex-direction:column;gap:2px;overflow:auto;padding-right:4px;border-right:0.5px solid var(--fde-border)}
@@ -784,8 +773,8 @@ window.__ModuleLoader__.load({
 .fde-mat-file-name{font-size:12px;color:var(--fde-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;word-break:break-all}
 .fde-mat-file-cust{font-size:11px;color:var(--fde-text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fde-mat-file-meta{font-size:11px;color:var(--fde-text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
-.fde-mat-raw{flex:0 0 auto;font-size:10px;color:var(--fde-text-3);border:0.5px solid var(--fde-border);border-radius:999px;padding:0 5px;line-height:16px}
-.fde-mat-more{flex:0 0 auto;width:22px;height:22px;border-radius:6px;line-height:1}
+.fde-mat-raw{flex:0 0 auto;font-size:11px;color:var(--fde-text-3);border:0.5px solid var(--fde-border);border-radius:999px;corner-shape:round;padding:0 5px;line-height:16px}
+.fde-mat-more{flex:0 0 auto;width:22px;height:22px;border-radius:var(--dsw-radius-sm,8px);line-height:1}
 .fde-mat-menu-wrap{position:relative;display:inline-flex;flex:0 0 auto}
 .fde-mat-menu{position:absolute;right:0;top:24px;z-index:40;min-width:132px;padding:4px;border-radius:var(--dsw-radius-md,12px);background:var(--fde-surface);border:0.5px solid var(--fde-border);box-shadow:0 8px 24px color-mix(in srgb,var(--dsw-alias-label-primary,#000) 16%,transparent)}
 .fde-mat-menu-item{display:block;width:100%;text-align:left;padding:6px 9px;border:0;background:transparent;color:var(--fde-text);font-size:12px;border-radius:var(--dsw-radius-sm,8px);cursor:pointer;white-space:nowrap}
@@ -793,7 +782,7 @@ window.__ModuleLoader__.load({
 .fde-mat-drop{padding:10px}
 .fde-mat-materials{margin-top:6px;border-top:0.5px solid var(--fde-border);padding-top:4px}
 .fde-mat-subfiles{display:flex;flex-direction:column;gap:1px;padding:2px 0 6px 12px;max-height:240px;overflow:auto}
-.fde-mat-subfile{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px}
+.fde-mat-subfile{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:var(--dsw-radius-sm,8px)}
 .fde-mat-preview{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--fde-surface);border:0.5px solid var(--fde-border);border-radius:var(--dsw-radius-xl,20px);overflow:hidden}
 .fde-mat-preview.full{position:absolute;inset:0;z-index:35;box-shadow:0 18px 48px color-mix(in srgb,var(--dsw-alias-label-primary,#000) 22%,transparent)}
 .fde-pv-head{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-bottom:0.5px solid var(--fde-border);flex:0 0 auto;flex-wrap:wrap}
@@ -810,19 +799,20 @@ window.__ModuleLoader__.load({
 .fde-pv-html{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
 .fde-pv-subbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:0.5px solid var(--fde-border);flex:0 0 auto}
 .fde-pv-note{padding:8px 14px;font-size:11px;color:var(--fde-text-3);border-top:0.5px solid var(--fde-border)}
+.fde-method-body{max-width:820px}
 .fde-pv-md{padding:16px 20px;max-width:860px;font-size:13px;line-height:1.75;color:var(--fde-text)}
 .fde-md-block{margin:0 0 10px}
 .fde-md-p{margin:0 0 8px}
 .fde-md-h{margin:14px 0 8px;line-height:1.4;color:var(--fde-text);font-weight:650}
-.fde-md-h1{font-size:19px}.fde-md-h2{font-size:17px}.fde-md-h3{font-size:15px}.fde-md-h4,.fde-md-h5,.fde-md-h6{font-size:13px}
+.fde-md-h1{font-size:20px}.fde-md-h2{font-size:18px}.fde-md-h3{font-size:16px}.fde-md-h4,.fde-md-h5,.fde-md-h6{font-size:13px}
 .fde-md-hr{border:0;border-top:0.5px solid var(--fde-border);margin:12px 0}
-.fde-md-quote{margin:0 0 10px;padding:2px 12px;border-left:2px solid var(--fde-border-2);color:var(--fde-text-2)}
+.fde-md-quote{margin:0 0 10px;padding:2px 12px;border-left:2px solid color-mix(in srgb,var(--fde-accent) 36%,transparent);color:var(--fde-text-2)}
 .fde-md-list{margin:0 0 10px;padding-left:20px}
 .fde-md-list li{margin:2px 0}
 .fde-md-task{list-style:none;margin-left:-18px;display:flex;align-items:flex-start;gap:6px}
 .fde-md-task input{margin-top:4px}
 .fde-md-pre{margin:0 0 10px;padding:10px 12px;background:var(--fde-surface-2);border-radius:var(--dsw-radius-sm,8px);overflow:auto;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.6}
-.fde-md-code{padding:1px 5px;border-radius:5px;background:var(--fde-surface-2);font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.fde-md-code{padding:1px 5px;border-radius:4px;background:var(--fde-surface-2);font-family:ui-monospace,Menlo,monospace;font-size:12px}
 .fde-md-link{color:var(--fde-accent);text-decoration:none}
 .fde-md-img{display:block;max-width:100%;height:auto;margin:8px 0;border-radius:var(--dsw-radius-sm,8px)}
 .fde-md-table-wrap{overflow:auto;margin:0 0 10px}
@@ -846,7 +836,6 @@ window.__ModuleLoader__.load({
 
 /* ---- hover 交互（官方 web-styling：:hover 必须位于 @media (hover:hover) 内） ---- */
 @media (hover: hover){
-  .fde-root ::-webkit-scrollbar-thumb:hover{background:var(--fde-scroll-hover)}
   .fde-iconbtn:hover{border-color:var(--fde-border-2)}
   .fde-nav button:hover{background:var(--fde-hover);color:var(--fde-text)}
   .fde-btn:hover{border-color:var(--fde-border-2);background:var(--fde-surface-3)}
@@ -854,7 +843,7 @@ window.__ModuleLoader__.load({
   .fde-btn.danger:hover{background:color-mix(in srgb,var(--fde-danger) 14%,transparent)}
   .fde-btn.ghost:hover{background:var(--fde-hover)}
   .fde-li-title.clickable:hover{color:var(--fde-accent)}
-  .fde-more-item:hover{background:var(--fde-hover)}
+
   .fde-link:hover{text-decoration:underline}
   .fde-flow-step:hover{border-color:var(--fde-border-2)}
   .fde-flow-tool:hover{border-color:var(--fde-border-2)}
@@ -864,7 +853,7 @@ window.__ModuleLoader__.load({
   .fde-card.draggable:hover{border-color:var(--fde-border-2);box-shadow:0 2px 8px color-mix(in srgb,var(--dsw-alias-label-primary,#000) 8%,transparent)}
   .fde-table tbody tr:hover{background:var(--fde-hover)}
   .fde-drop:hover{border-color:var(--fde-accent)}
-  .fde-acc-head:hover{background:var(--fde-hover)}
+
   .fde-pill:hover{color:var(--fde-text);background:var(--fde-hover)}
   .fde-mat-file:hover{background:var(--fde-hover)}
   .fde-mat-cust:hover{background:var(--fde-hover)}
@@ -874,6 +863,7 @@ window.__ModuleLoader__.load({
   .fde-mat-splitter:hover::after{background:var(--fde-accent);opacity:1}
   .fde-mth button:hover{border-color:var(--fde-border-2);background:var(--fde-surface-3)}
   .fde-drawer-close:hover{background:var(--fde-hover);color:var(--fde-text)}
+  .fde-textbtn:hover:not(:disabled){color:var(--fde-accent)}
   .fde-step:hover{border-color:var(--fde-border-2)}
 }
 
@@ -881,257 +871,277 @@ window.__ModuleLoader__.load({
 
     /* ============================================================
      * 三、字典与工具
-     * DICT 只放 UI 文案（含经典模式旧文案）；阶段/泳道/门禁的
+     * DICT 只放界面文案，用词以 ADR 0010 D1 为准；阶段、任务状态、推进条件的
      * 名称与顺序一律来自 GET /fde/meta，不在客户端硬编码。
+     * 缺 key 时 node build.mjs 会失败（不会把 key 名显示到界面上）。
      * ============================================================ */
     const DICT = {
       /* 品牌与页签 */
       fdeBrand: 'FDE 工作站',
-      fdeTagline: '客户经营 · 注意力 · 会话派发',
       tabToday: '今日', tabCustomers: '客户', tabKnowledge: '情报', tabNavFiles: '资料',
       /* Phase 2 IA（layout.md §7）：5 页签 + 页内子页签 */
-      customersViewBoardCustomer: '看板 · 客户', customersViewBoardTask: '看板 · 任务', customersViewList: '客户清单',
-      customersViews: '客户视图', knowledgeTabs: '资料子页签', settingsBack: '返回主视图',
-      processTabFlow: '8 阶段流程', processTabMethods: '方法库', processTabSkills: '技能与模板', processTabs: '流程子页签',
-      compatTitle: '宿主需要重启 DSH 后启用 FDE 看板',
-      compatBody: '当前 DSH 宿主还没有提供 FDE 路由（GET /research-workbench/api/fde/meta 不可用）。重启 DSH 后再打开此面板即可使用。',
-      compatRetry: '重试探测',
-      probing: '正在探测 FDE 宿主能力…',
+      customersViewBoardCustomer: '看板', customersViewBoardTask: '任务', customersViewList: '列表',
+      customersViews: '客户视图', knowledgeTabs: '情报分类', settingsBack: '返回',
+      processTabFlow: '阶段指南', processTabMethods: '方法库', processTabSkills: '技能与模板', processTabs: '流程分类',
+      compatTitle: '需要重启 DSH',
+      compatBody: 'FDE 工作站刚安装或刚升级，重启 DSH 后才能使用。',
+      compatRetry: '重试',
+      probing: '正在打开 FDE 工作站…',
       /* 通用 */
-      loading: '加载中…', refresh: '刷新', refetch: '重新读取',
-      empty: '暂无数据', retry: '重试', cancel: '取消', save: '保存', saving: '保存中…',
-      confirm: '确认', close: '关闭', edit: '编辑', done: '完成', open: '打开',
+      loading: '加载中…', refresh: '刷新',
+      empty: '暂无内容', retry: '重试', cancel: '取消', save: '保存', saving: '保存中…',
+      confirm: '确认', close: '关闭',done: '完成', open: '打开',
       search: '搜索', all: '全部', unknown: '未知',
-      handoffFail: '会话创建失败，任务文本已复制到剪贴板，粘贴到对话框即可继续。',
-      copied: '已复制任务文本 ✓', pathCopied: '路径已复制', noPath: '拿不到绝对路径，请先点「刷新」',
-      revealFail: '系统打开失败', revealOk: '已在 Finder 中显示', openOk: '已在 Finder 中打开',
+      handoffFail: '没能自动新开会话。任务说明已复制，粘贴到任意会话里就能继续。',
+      noPath: '还拿不到文件位置，刷新后再试',
+      revealFail: '没能打开', revealOk: '已在文件夹中显示', openOk: '已用系统应用打开',
       /* 今日 */
       todayGreetingMorning: '早上好', todayGreetingNoon: '下午好', todayGreetingEvening: '晚上好',
-      todayAttention: '待我处理', todayProposals: '建议', todayFocus: '今日焦点', todayActivity: '最近活动',
-      todayEmptyTitle: '今天没有需要你处理的事', todayEmptyBody: '可以推进「今日焦点」里的客户，或看看最近活动。',
+      todayAttention: '待我处理', todayProposals: '提醒', todayFocus: '今天跟进', todayActivity: '最近动态',
+      todayEmptyTitle: '没有等你处理的事',
       /* Phase 3（v1.5.0）只读演示模式（ADR 0006 / spec §8.8） */
-      demoBadge: '演示模式',
-      demoBannerText: '演示模式：以下为示例数据，不会写入真实看板',
-      demoStart: '开始使用（清除示例）',
-      demoLearn: '了解功能（去流程页）',
-      demoLocked: '示例模式不可操作；点「开始使用」后即可使用真实数据',
-      demoCleared: '已开始使用，示例数据已隐藏',
-      demoClearFail: '清除示例失败',
-      demoClearing: '正在清除示例…',
-      demoCardTitle: '演示数据',
-      demoStatusOn: '示例显示中',
-      demoStatusOff: '已清除',
-      demoCardDesc: '示例数据只读，不会写入看板、也不会创建客户卷；清除后若真实看板仍为空，可从这里重新查看。',
-      demoRestore: '重新查看示例数据',
-      demoRestoring: '正在恢复示例…',
-      demoRestoreBlocked: '有真实数据时不显示示例',
-      demoRestored: '已恢复示例数据（只读）',
-      demoOnboardTitle: '开始使用 FDE 工作站',
-      demoStepRestore: '重新查看示例',
-      scanNow: '扫描现有项目',
-      actOpen: '打开', actResolve: '解决', actAnswer: '回答', actReview: '审阅', actPass: '通过',
-      actReschedule: '改期', actFinish: '完成', actNudge: '跟进', actPause: '暂停',
-      actAccept: '采纳', actDismiss: '忽略', actConfirmGate: '去确认',
+      demoBadge: '示例数据',
+      demoBannerText: '这是示例数据，只能看，不会保存。',
+      demoStart: '开始使用',
+      demoLearn: '看看流程怎么走',
+      demoLocked: '示例数据不能改。点「开始使用」换成你自己的客户。',
+      demoCleared: '示例已隐藏，可以开始了',
+      demoClearFail: '没能隐藏示例',
+      demoClearing: '正在准备…',
+      demoCardTitle: '示例数据',
+      demoStatusOn: '显示中',
+      demoStatusOff: '已隐藏',
+      demoCardDesc: '还没有客户时，可以用示例看看各页面的样子。示例只能看，不会保存。',
+      demoRestore: '显示示例',
+      demoRestoring: '正在显示…',
+      demoRestoreBlocked: '已经有客户了，不再显示示例',
+      demoRestored: '已显示示例',
+      demoOnboardTitle: '从第一个客户开始',
+      demoStepRestore: '看示例',
+      scanNow: '导入已有文件夹',
+      actOpen: '查看', actResolve: '已解决', actAnswer: '回复',actPass: '通过',
+      actReschedule: '改期', actFinish: '完成', actNudge: '去跟进', actPause: '暂停跟进',
+actDismiss: '知道了', actConfirmGate: '去确认',
       /* 招采雷达（v1.1） */
       tabBids: '招采',
-      bidTitle: '招采雷达',
-      bidNotReady: '招采雷达未就绪（bid-intel 未装载或未升级）',
-      bidSearchTitle: '招采检索',
-      bidStatsRecords: '入库公告', bidStatsRange: '日期区间', bidStatsSources: '来源', bidStatsUpdated: '索引更新',
-      bidSearchPh: '搜索公司 / 采购单位 / 标题 / 全文…', bidSearching: '检索中…', bidSearch: '检索',
-      bidModeLabel: '检索模式', bidModeAny: '全文', bidModeCompany: '公司', bidModeBuyer: '采购单位', bidModeTitle: '标题',
-      bidFrom: '起始日期', bidTo: '结束日期', bidSource: '来源',
-      bidNoResult: '没有命中记录', bidNoResultHint: '换个关键词或日期区间，或先刷新招采索引。',
-      bidTotalPrefix: '共 ', bidTotalSuffix: ' 条', bidLoadMore: '加载更多',
+      bidTitle: '招采',
+      bidNotReady: '招采数据暂时用不了：需要安装并启用「招采雷达」插件。',
+      bidSearchTitle: '查公告',
+      bidStatsRecords: '公告总数', bidStatsRange: '时间范围', bidStatsSources: '来源', bidStatsUpdated: '数据更新',
+      bidSearchPh: '公司、采购单位、标题或正文里的词', bidSearching: '查询中…', bidSearch: '查询',
+      bidModeLabel: '查哪里', bidModeAny: '全文', bidModeCompany: '公司', bidModeBuyer: '采购单位', bidModeTitle: '标题',
+      bidFrom: '开始日期', bidTo: '结束日期', bidSource: '来源',
+      bidNoResult: '没有查到公告', bidNoResultHint: '换个词，或放宽时间范围。',
+      bidTotalPrefix: '共 ', bidTotalSuffix: ' 条', bidLoadMore: '再看一些',
       bidBuyer: '采购单位', bidWinner: '中标人', bidAmount: '金额',
-      bidAmountTip: '金额为公告原文，不做换算/求和',
-      bidCandidatesNote: '候选人 ≠ 中标人：名次只代表评标排序。',
-      bidNoCandidates: '公告未解析出候选人。', bidNoUrl: '未提供原文链接。',
-      bidOpenSource: '查看原文', bidExpand: '展开', bidCollapse: '收起',
-      bidByCustomer: '按客户匹配',
-      bidByCustomerHint: '基于客户名称/简称/目录做确定性匹配；点击打开客户抽屉。',
-      bidNoCustomerBids: '暂无客户匹配到招采记录。',
-      bidImportTitle: '导入公告链接',
-      bidImportHint: '仅当 bid-intel 路由可用时显示；导入后写入招采索引。',
-      bidImportPh: '公告原文链接（https://…）', bidImport: '导入', bidImporting: '导入中…',
-      bidImportOk: '已导入', bidImportFail: '导入失败', bidImportNeedUrl: '请填写公告链接',
-      bidRefresh: '刷新招采',
-      bidWatchLabel: '招采雷达', bidWatchHint: '关闭后不生成招采信号（bid_signal），不影响看板其它功能',
+      bidAmountTip: '金额是公告原文，没有换算',
+      bidCandidatesNote: '候选人只是评标排序，不等于中标。',
+      bidNoCandidates: '公告里没有列出候选人。', bidNoUrl: '这条公告没有原文链接。',
+      bidOpenSource: '看原文', bidExpand: '展开', bidCollapse: '收起',
+      bidByCustomer: '我的客户',
+
+      bidNoCustomerBids: '还没有客户查到相关公告。',
+      bidImportTitle: '添加一条公告',
+      bidImportPh: '粘贴公告链接（https://…）', bidImport: '添加', bidImporting: '添加中…',
+      bidImportOk: '已添加', bidImportFail: '没能添加', bidImportNeedUrl: '先粘贴公告链接',
+      bidRefresh: '刷新',
+      bidWatchLabel: '有新公告时提醒我', bidWatchHint: '关掉后，这家客户有新公告不再提醒',
       bidRelated: '相关', bidTender: '招标', bidAward: '中标', bidCandidateCount: '候选', bidLatest: '最近',
       /* 采样口径：match 只返回采样条数，approxTotal 才是量级（缺失时回退 total） */
-      bidRelatedApproxPrefix: '相关 ≈', bidCardTitlePrefix: '招采匹配 ≈',
-      bidSamplePrefix: '（采样 ', bidSampleSuffix: ' 条）',
-      bidMatchTop: '匹配公告 Top5', bidNoMatch: '未匹配到公告（可检查客户名称/关键词，或点刷新）。',
-      bidLinksTitle: '已关联公告', bidNoLinked: '还没有关联公告。', bidNote: '备注',
-      bidAddFollowup: '加入跟进', bidLink: '关联', bidLinked: '已关联', bidUnlink: '取消关联',
-      bidIdle: '尚未读取招采匹配，点「刷新招采」读取。',
-      bidQueries: '查询词',
-      bidPageHint: '候选人 ≠ 中标人；金额为公告原文不换算；批次/匹配为推断口径。',
-      bidPromoteOk: '已创建跟进任务', bidLinkOk: '已关联公告', bidUnlinkOk: '已取消关联', bidRefreshOk: '招采匹配已刷新',
-      bidSettingsLabel: '招标雷达',
-      bidSettingsDesc: '开启后生成招采信号建议（bid_signal）；关闭后不生成信号，不影响看板其它功能。',
-      bidServiceStatus: '招采索引', bidServiceReady: '可用', bidServiceNotReady: '未就绪',
+      bidRelatedApproxPrefix: '相关约 ', bidCardTitlePrefix: '相关公告约 ',
+      bidSamplePrefix: '（已取 ', bidSampleSuffix: ' 条）',
+bidNoMatch: '没有找到相关公告。',
+      bidLinksTitle: '已关联的公告',bidNote: '备注',
+      bidAddFollowup: '建跟进任务', bidLink: '关联', bidLinked: '已关联', bidUnlink: '取消关联',
+      bidIdle: '还没有查过这家客户的公告。',
+      bidQueries: '按这些名称查',
+      bidPageHint: '候选人不等于中标人；金额是公告原文，没有换算；按名称查到的结果需要人工核对。',
+      bidPromoteOk: '已建跟进任务', bidLinkOk: '已关联', bidUnlinkOk: '已取消关联', bidRefreshOk: '已刷新',
+      bidSettingsLabel: '客户有新招采公告时提醒我',
+      bidSettingsDesc: '需要安装「招采雷达」插件。',
+      bidServiceStatus: '招采数据', bidServiceReady: '可用', bidServiceNotReady: '不可用',
       /* 流程（v1.3，spec §20.5） */
       tabProcess: '流程',
-      processTitle: 'FDE 流程',
-      processSubtitle: '从线索到采用的阶段地图：目标 / 输入 / 关键动作 / 交付物 / 工具 / 常见坑 / 门禁，全部从宿主 /fde/meta 读取',
+      processTitle: '阶段指南',
       processClientCountSuffix: ' 个客户',
-      processGate: '门禁',
-      processGateAuto: '自动检查',
-      processGateManual: '人工确认',
-      processGateItemSuffix: ' 项门禁（自动/人工）',
-      processGoal: '阶段目标',
-      processInputs: '输入',
-      processActivities: '关键动作',
-      processOutputs: '交付物',
-      processTools: '工具（点 chips 使用）',
-      processPitfalls: '常见坑',
-      processNoGate: '该阶段未定义门禁项。',
-      processNoPlaybook: '宿主未升级：/fde/meta 未返回阶段 playbook。重启或重载插件后生效；页面其它视图不受影响。',
-      processNoMeta: '宿主未返回阶段定义',
-      processNoMetaBody: '检查 GET /fde/meta 是否可用；重启 DSH 后刷新页面即可。',
-      processHowTo: '在会话中这样用',
-      processCopy: '复制',
-      processCopied: '已复制 ✓',
-      processOpenMethod: '在「方法」页打开',
-      processOpenLibrary: '打开资料库',
-      processSkillUse: '在会话中这样说：请加载技能「',
-      processSkillUseEnd: '」，按本阶段步骤执行，完成后用 fde_item report 回报（≤300 字摘要 + 产物路径）。',
-      processToolUse: '在会话中这样说：请调用工具「',
-      processToolUseEnd: '」完成本阶段计算/评估，数字以工具输出为准，不要自行估算。',
-      processMatrixTitle: '阶段 × 工具矩阵',
-      processMatrixHint: '只读；✓ 表示该阶段 playbook 列出的工具。方法/模板 chips 可直接打开文件。',
-      processColStage: '阶段',
+      processGate: '进入这个阶段的条件',
+
+      processGateManual: '需要你确认',
+
+      processGoal: '这个阶段要达成',
+      processInputs: '开始前要有',
+      processActivities: '要做的事',
+      processOutputs: '要交出来的',
+      processTools: '可以用的',
+      processPitfalls: '容易踩的坑',
+      processNoGate: '进入这个阶段没有额外条件。',
+      processNoPlaybook: '阶段指南还没加载出来，重启 DSH 后再看。',
+      processNoMeta: '阶段指南还没加载出来',
+      processNoMetaBody: '重启 DSH 后再打开。',
+      processHowTo: '粘贴到会话里就能用',
+
+      processCopied: '已复制',
+      processOpenMethod: '打开方法',
+      processOpenLibrary: '去资料库看',
+      processSkillUse: '请加载技能「',
+      processSkillUseEnd: '」，按这个阶段的做法推进；做完后告诉我结果和文件位置。',
+      processToolUse: '请用工具「',
+      processToolUseEnd: '」来算，数字以工具结果为准，不要自己估。',
+
       processToolSkill: '技能', processToolMethod: '方法', processToolTemplate: '模板',
       processToolTool: '工具', processToolLibrary: '资料库',
       /* 资料库（v1.3，spec §19.6） */
       tabLibrary: '资料库',
-      libTitle: 'FDE 资料库',
-      libSubtitle: '权威资料 · 开源工具 · 方法模板 · 社区动态；目录人工策展，GitHub 指标与社区每日更新',
+      libTitle: '资料库',
       libRefresh: '刷新', libRefreshAria: '刷新资料库', libRefreshing: '刷新中…', libLoading: '正在读取资料库…',
       libToday: '今天',
       libUpdated: '更新于', libVerifiedAt: '核实于',
       libTotalPrefix: '共 ', libTotalSuffix: ' 条',
-      libGroupLabel: '来源组',
+      libGroupLabel: '来源',
       libGroupAll: '全部', libGroupIntl: '国外官方', libGroupCn: '国内官方',
       libGroupOpen: '开源工具', libGroupMethod: '方法与模板', libGroupCommunity: '社区动态',
       libKindLabel: '类型', libKindAll: '全部类型',
       libStageLabel: '适用阶段', libStageAll: '全部阶段', libStageAllChip: '全流程',
-      libSearchPh: '搜索标题 / 摘要 / 发布方 / 主题…',
-      libFeaturedOnly: '仅看重点推荐',
+      libSearchPh: '搜标题、摘要或发布方',
+      libFeaturedOnly: '只看重点推荐',
       libSortLabel: '排序', libSortRecommend: '推荐', libSortLatest: '最新', libSortHot: '热度',
-      libFeaturedTitle: '本期重点推荐', libFeaturedHint: '按推荐等级与来源组挑出的前 6 条',
+      libFeaturedTitle: '重点推荐',
       libFeaturedBadge: '★ 重点推荐',
       libNewTag: '新', libUpdatedTag: '更新',
-      libAuthA: 'A 官方一手', libAuthB: 'B 二手/媒体', libAuthC: 'C 社区/未核实',
+      libAuthA: 'A 官方一手', libAuthB: 'B 二手或媒体', libAuthC: 'C 社区或未核实',
       libWhyPrefix: '为什么看：',
-      libStarsPrefix: '★ ', libLicenseLabel: 'license', libPushedLabel: '推送',
-      libOpen: '查看原文', libNoUrl: '该条没有可用 https 链接',
-      libEmptyTitle: '还没有资料缓存',
-      libEmptyBody: '点刷新立即生成；宿主每天也会自动更新（GitHub 指标 + 社区摘要）。',
-      libEmptyItems: '资料目录为空',
-      libEmptyItemsBody: 'catalog 尚未收录条目；刷新后仍为空请检查宿主日志。',
-      libFilterEmpty: '当前筛选下没有资料',
-      libFilterEmptyHint: '换个来源组 / 类型 / 阶段或关键词试试，或点「清空筛选」。',
+      libStarsPrefix: '★ ', libLicenseLabel: '许可', libPushedLabel: '最近更新',
+      libOpen: '看原文', libNoUrl: '这条没有可用链接',
+      libEmptyTitle: '资料库还没有内容',
+      libEmptyBody: '点「刷新」读取一次，之后每天自动更新。',
+      libEmptyItems: '资料库是空的',
+      libEmptyItemsBody: '刷新后还是空的话，重启 DSH 再试。',
+      libFilterEmpty: '没有符合条件的资料',
+      libFilterEmptyHint: '换个条件试试。',
       libResetFilters: '清空筛选',
-      libCatalogMissing: '资料目录缺失',
-      libCatalogMissingBody: 'catalog 缺失或不可读；资料库主体降级，其它视图不受影响。',
-      libStaleWarn: '上次刷新未成功，当前展示旧数据',
-      libStaleHint: '缓存不是今天的数据（宿主每日刷新一次）。',
+      libCatalogMissing: '资料库打不开',
+      libCatalogMissingBody: '插件自带的资料目录读不到，重新安装插件可以恢复。其它页面不受影响。',
+      libStaleWarn: '上次更新没成功，现在看到的是旧内容',
+      libStaleHint: '今天还没更新。',
       libLastOk: '上次成功',
-      libRefreshOk: '资料库已刷新',
-      libRefreshFail: '刷新失败',
-      libFootnote: '来源：人工策展目录 + GitHub 每日指标 + 生财社区摘要（只读）；A/B/C 为权威性分级，摘要非全文，以原文为准。',
+      libRefreshOk: '资料库已更新',
+      libRefreshFail: '没能更新',
+      libFootnote: '资料由人工挑选；开源项目的数字和社区内容每天更新。A / B / C 表示来源的可靠程度；摘要不是全文，以原文为准。',
       /* 看板 */
-      boardSearchPh: '搜索客户 / 任务…', boardPriority: '优先级', boardCustomer: '客户',
-      boardNoResult: '没有匹配的卡片', boardEmpty: '看板还是空的。先到「客户」导入现有项目。',
-      boardDragHint: '拖拽卡片换列；Tab 聚焦后 Enter 打开，Alt+←/→ 换列',
+      boardSearchPh: '搜客户或任务', boardPriority: '优先级', boardCustomer: '客户',
+      boardNoResult: '没有符合条件的', boardEmpty: '还没有客户',
       /* 客户 */
-      customersTitle: '客户', customersSearchPh: '搜索客户名 / 公司 / 标签…',
-      customersEmpty: '还没有客户。点「新建客户」手动创建，或从 research/ 目录导入现有项目。',
-      customersAdopt: '导入现有项目', customersAdoptHint: '先扫描、再人工勾选确认；只写 research/.fde/board.json，不改目录。',
-      customersScanning: '正在扫描 research/ 下的现有项目…',
-      customersScanEmpty: '没有发现可导入的目录。', customersImport: '导入选中', customersImporting: '正在导入…',
-      customersNext: '下一步', customersDue: '到期', customersStay: '停留', customersAttention: '注意力',
-      customersDays: '天', customersCount: '个客户',
-      customersAlready: '已在看板', customersConfidence: '置信度', customersEvidence: '依据',
+      customersTitle: '客户', customersSearchPh: '搜客户名、公司或标签',
+      customersEmpty: '还没有客户',
+      customersAdopt: '导入已有文件夹', customersAdoptHint: '在工作区的 research 文件夹里找到了这些。勾选要导入的；文件不会被改动。',
+      customersScanning: '正在查找…',
+      customersScanEmpty: '没有找到可以导入的文件夹。', customersImport: '导入', customersImporting: '导入中…',
+      customersNext: '下一步', customersDue: '到期', customersStay: '本阶段', customersAttention: '待处理',
+
+      customersAlready: '已导入',
       /* 工件 */
-      artifactsPick: '选择客户', artifactsNoCustomer: '还没有客户，先导入或新建客户。',
-      artifactsUploadTitle: '上传文件到客户卷', artifactsUploadHint: '拖拽文件到此，或点击选择；文件保存到该客户的 raw/uploads/。',
-      artifactsUploading: '上传中…', artifactsUploaded: '已上传', artifactsPicker: '选择文件',
-      artifactsLoose: '散落文件（research/ 顶层）', artifactsViewFiles: '查看文件', artifactsHideFiles: '收起',
-      artifactsExported: '已导出', artifactsNotExported: '未导出', artifactsFiles: '个文件',
-      artifactsToProject: '转为项目', artifactsRefresh: '重扫工件',
+      artifactsPick: '选择客户', artifactsNoCustomer: '还没有客户。',
+      artifactsUploadTitle: '上传到客户文件夹', artifactsUploadHint: '把文件拖到这里，或点击选择。',
+      artifactsUploading: '上传中…', artifactsUploaded: '已上传',
+      artifactsLoose: '还没归到客户的文件', artifactsViewFiles: '看文件',
+artifactsFiles: '个文件',
+      artifactsToProject: '转成客户', artifactsRefresh: '重新读取',
       /* 资料页（v1.7；ADR 0008） */
-      matTitle: '客户资料', matRecent: '最近资料', matByCustomer: '按客户',
-      matSearchPh: '搜索文件名 / 客户 / 路径…',
+      matTitle: '客户资料', matRecent: '最近', matByCustomer: '按客户',
+      matSearchPh: '搜文件名或客户',
       matAll: '全部', matDoc: '文档', matPdf: 'PDF', matOffice: 'Office', matImage: '图片', matWeb: '网页', matOther: '其他',
-      matRawToggle: '原始素材', matRawCount: '原始', matKeyCount: '关键', matRawBadge: '原始',
-      matSortRecent: '按最近更新', matSortName: '按名称',
-      matUpload: '上传', matReloadOne: '重新加载', matFull: '全屏', matExitFull: '退出全屏',
-      matEmpty: '还没有资料', matEmptyHint: '客户卷里出现文件后会自动列在这里；也可以点「上传」放进 raw/uploads/。',
-      matNoMatch: '没有匹配的资料', matNoMatchHint: '换个关键词、切换类型，或打开「原始素材」。',
+      matRawToggle: '原始素材', matRawCount: '原始', matKeyCount: '资料', matRawBadge: '原始',
+      matSortRecent: '最近更新在前', matSortName: '按名称',
+      matUpload: '上传', matReloadOne: '重新读取', matFull: '全屏', matExitFull: '退出全屏',
+      matEmpty: '还没有资料', matEmptyHint: '客户文件夹里有了文件，会自动出现在这里。',
+      matNoMatch: '没有符合条件的资料', matNoMatchHint: '换个词，或打开「原始素材」。',
       matBackList: '返回列表',
-      matSplitHint: '拖动调整列表宽度（← / → 也可）',
-      matPick: '从左侧选择一份资料', matPickHint: '支持 md / txt / PDF / 图片 / 网页快照 / Word / Excel / PPT。',
-      matUnsupported: '该格式暂不支持内嵌预览', matUnsupportedHint: '可以用系统应用打开，或在 Finder 中定位。',
-      matTextTruncated: '内容较长，已截断显示；完整内容请用系统应用打开。',
-      matHtmlSnapshot: '网页快照', matHtmlSource: '源文本',
-      matLoadFail: '资料读取失败', matMore: '更多操作', matCopyPath: '复制路径', matSystemOpen: '用系统应用打开',
-      matOpenDir: '打开目录', matExport: '导出 PDF', matQa: '质检',
-      matOfficeLoading: '正在用 DSH 转换 Office 文档…（首次可能较慢）',
-      matOfficeNoSession: 'Office 预览需要本工作区至少有一个会话；请先用系统应用打开。',
-      matOfficeFail: 'Office 转换失败',
-      matMaterials: '未关联素材', matMaterialsHint: 'research/ 下尚未建客户卷的素材目录与散落文件（只读盘点）。',
+      matSplitHint: '拖动调整宽度',
+      matPick: '选一份资料查看',
+      matUnsupported: '这种文件不能在这里预览', matUnsupportedHint: '可以用系统应用打开。',
+      matTextTruncated: '内容太长，只显示了前面一部分；用系统应用可以看全文。',
+      matHtmlSnapshot: '网页快照', matHtmlSource: '源码',
+      matLoadFail: '没能读取这份资料', matMore: '更多', matCopyPath: '复制位置', matSystemOpen: '用系统应用打开',
+      matOpenDir: '打开所在文件夹', matExport: '导出 PDF', matQa: '检查 PDF 版面',
+      matOfficeLoading: '正在转换文档，第一次会慢一些…',
+      matOfficeNoSession: '预览 Office 文档需要这个工作区里至少有一个会话。可以先用系统应用打开。',
+      matOfficeFail: '没能转换这份文档',
+      matMaterials: '还没归到客户的文件',
       /* 方法 */
-      methodsEmpty: '宿主未返回方法清单。', methodsReadFail: '读取失败',
-      methodsSkillsHint: '技能由宿主在启动时注册（需重启 DSH 后生效）。',
-      skillsEmpty: '宿主未返回技能清单（技能注册需重启 DSH 后生效）。',
+      methodsEmpty: '方法库还没加载出来。', methodsReadFail: '没能读取',
+      skillsEmpty: '技能还没加载出来，重启 DSH 后再看。',
       /* 设置 */
-      settingsStall: '停滞天数', settingsStallDesc: '活跃阶段停留超过该天数且无近期活动，判定为停滞。',
-      settingsWip: 'WIP 上限（进行中）', settingsWipDesc: '进行中任务超过该数量时看板列头提示。',
-      settingsSources: '数据源开关', settingsSave: '保存设置', settingsSaved: '设置已保存',
-      settingsHealth: '健康检查', settingsHealthRun: '运行健康检查', settingsHealthRunning: '检查中…',
-      settingsHealthEmpty: '尚未运行检查。', settingsHealthOk: '全部通过', settingsHealthFail: '存在失败项',
-      settingsRestart: '宿主重启提示', settingsRestartBody: 'FDE 宿主路由与技能注册需要重启 DSH 才生效；客户端面板刷新页面即可更新。',
-      settingsRules: '规则清单', settingsRedLines: '硬红线（任何模式都不会自动执行）',
+      settingsStall: '多少天没有进展要提醒我', settingsStallDesc: '超过后出现在「待我处理」里。',
+      settingsWip: '同时进行的任务上限', settingsWipDesc: '超过时在任务看板上标出来。',
+settingsSaved: '已保存',
+      settingsHealth: '运行状态', settingsHealthRun: '检查一下', settingsHealthRunning: '检查中…', settingsHealthOk: '一切正常', settingsHealthFail: '有问题需要处理',
+settingsRestartBody: '安装或升级插件后，要重启 DSH 才会生效。',
+settingsRedLines: '不管选哪一档，这些事只能由你来做',
       /* 抽屉：客户 */
-      drawerEngagement: '客户', drawerItem: '任务', drawerClose: '关闭抽屉',
-      drawerStage: '阶段', drawerGate: '门禁清单', drawerGateFor: '进入阶段',
-      drawerGateAuto: '自动检查', drawerGateManual: '人工确认', drawerGateEvidencePh: '证据（如：地址锚定 + 三链验证）',
-      drawerGateSave: '保存人工确认', drawerGateEvaluate: '重新评估', drawerGateForce: '强制通过',
-      drawerGatePassed: '门禁已通过', drawerGatePending: '门禁未通过', drawerGateMissing: '缺项',
-      drawerNext: '下一步', drawerNextText: '做什么', drawerNextDue: '到期', drawerNextOwner: '负责人',
-      drawerSaveNext: '保存下一步', drawerStakeholders: '干系人', drawerAddStakeholder: '添加干系人',
+      drawerEngagement: '客户', drawerItem: '任务', drawerClose: '关闭',
+      drawerStage: '阶段',
+      drawerGateAuto: '材料',drawerGateEvidencePh: '备注（选填）',
+      drawerGateSave: '保存确认', drawerGateEvaluate: '重新核对', drawerGateForce: '破例推进',
+
+      drawerNext: '下一步', drawerNextText: '做什么', drawerNextDue: '什么时候', drawerNextOwner: '谁来做',
+      drawerSaveNext: '保存', drawerStakeholders: '关键人', drawerAddStakeholder: '添加',
       drawerName: '姓名', drawerRole: '职务', drawerLevel: '层级', drawerVerified: '已核实',
-      drawerArtifacts: '工件', drawerTimeline: '时间线', drawerSession: '关联会话',
-      drawerStartSession: '启动会话', drawerPause: '暂停', drawerResume: '恢复', drawerArchive: '归档',
-      drawerArchiveConfirm: '归档客户', drawerArchiveBody: '归档只改看板状态，不删除目录与文件。确认归档？',
-      drawerForceTitle: '强制推进阶段', drawerForceBody: '门禁未通过。强制推进需要填写理由，并会记录为人工覆盖。',
-      drawerForceReason: '强制理由',
-      drawerGateMissingTitle: '门禁未通过，暂不能推进', drawerGateGoCheck: '去补门禁',
-      drawerNoArtifacts: '暂无工件（可到「工件」视图扫描）。', drawerNoTimeline: '暂无时间线记录。',
-      drawerNoStakeholders: '还没有干系人。', drawerPaused: '已暂停', drawerStageMoved: '已推进',
-      drawerMoveBackConfirm: '回退阶段', drawerMoveBackBody: '回退阶段会让已通过的门禁状态保留，请确认确实要回退。',
-      drawerHandoffPrompt: '已创建会话，正在跳转…',
+      drawerArtifacts: '资料', drawerTimeline: '记录',
+      drawerStartSession: '交给 AI', drawerPause: '暂停跟进', drawerResume: '恢复跟进', drawerArchive: '归档',
+      drawerArchiveConfirm: '归档这个客户？', drawerArchiveBody: '归档后不再出现在看板上。文件夹和文件都还在。',
+      drawerForceTitle: '破例推进', drawerForceBody: '条件还没满足。写下原因后可以继续，原因会留在记录里。',
+      drawerForceReason: '原因',
+      drawerGateMissingTitle: '还不能进入下一阶段',
+      drawerNoArtifacts: '还没有资料。', drawerNoTimeline: '还没有记录。',
+      drawerNoStakeholders: '还没有登记关键人。', drawerPaused: '已暂停',
+      drawerMoveBackConfirm: '退回上一阶段？', drawerMoveBackBody: '已经确认过的条件会保留。',
+      drawerHandoffPrompt: '会话已创建，正在打开…',
       /* 抽屉：任务 */
-      drawerItemTitle: '任务标题', drawerItemType: '类型', drawerItemLane: '泳道',
-      drawerItemPriority: '优先级', drawerItemDue: '到期', drawerItemOwner: '归属',
-      drawerItemOwnerHuman: '我', drawerItemOwnerAgent: 'agent', drawerItemOwnerBoth: '协作',
-      drawerItemEngagement: '关联客户', drawerItemIndependent: '独立任务',
-      drawerSaveItem: '保存任务', drawerReports: '回报历史', drawerReportNow: '人工回报',
-      drawerReportKind: '回报类型', drawerReportText: '回报内容', drawerReportSubmit: '提交回报',
-      drawerNoReports: '还没有回报。', drawerReportRequired: '回报内容不能为空。',
-      drawerDelete: '删除任务', drawerDeleteConfirm: '删除任务', drawerDeleteBody: '删除任务只改看板状态，不影响客户目录。确认删除？',
-      drawerEvidenceTitle: '移入「已完成」需要证据', drawerEvidenceBody: '至少提供一条回报或证据文本，写清结果与可检查的产物路径。',
-      drawerEvidenceLabel: '证据 / 结果',
-      drawerAttention: '待处理问题', drawerAnswerPh: '回答内容（可留空）', drawerResolve: '标记已解决',
+      drawerItemTitle: '标题', drawerItemType: '类型', drawerItemLane: '状态',
+      drawerItemPriority: '优先级', drawerItemDue: '截止', drawerItemOwner: '负责人',
+      drawerItemOwnerHuman: '我', drawerItemOwnerAgent: 'AI', drawerItemOwnerBoth: '我和 AI',
+      drawerItemEngagement: '客户', drawerItemIndependent: '不属于某个客户',
+      drawerSaveItem: '保存', drawerReports: '进展', drawerReportNow: '记一笔进展',
+      drawerReportKind: '情况', drawerReportText: '说明', drawerReportSubmit: '记下',
+      drawerNoReports: '还没有进展。', drawerReportRequired: '写一句说明再提交。',
+      drawerDelete: '删除', drawerDeleteConfirm: '删除这个任务？', drawerDeleteBody: '删除后不能恢复。客户的文件不受影响。',
+      drawerEvidenceTitle: '写一句结果再标记完成', drawerEvidenceBody: '写清做成了什么、文件在哪。',
+      drawerEvidenceLabel: '结果',
+drawerAnswerPh: '你的回复（可以不填）', drawerResolve: '已处理',
       /* 通用错误 / 降级 */
-      loadFail: '读取失败', boardLoadFail: '看板读取失败', briefLoadFail: '今日简报读取失败',
-      actionFail: '操作失败', retryHint: '可以点「刷新」重试；若持续失败，请重启 DSH 后刷新页面。',
+      loadFail: '没能读取', boardLoadFail: '没能读取看板', briefLoadFail: '没能读取今日内容',
+      actionFail: '没成功', retryHint: '点「刷新」再试一次；还不行就重启 DSH。',
       /* 兼容页/经典模式旧文案 */
-      exporting: '已下发导出任务，正在跳转…', methods: '方法 / 参考', back: '返回列表',
-      reveal: 'Finder 显示', revealDir: '在 Finder 中打开', openInApp: '打开', copyPath: '复制路径',
+      exporting: '已开始导出，正在打开会话…', methods: '方法', back: '返回',
+      reveal: '在文件夹中显示',
+          /* v2.0 补齐（ADR 0010 D2）：v1.7 误删但仍在使用的 key，以及动态映射的 key */
+      tabSettings: '设置',
+      settingsAutonomy: 'AI 权限',
+      boardNoNext: '还没定下一步',
+      board: '看板',
+      customersStage: '阶段',
+      customersPriority: '优先级',
+      methodsSkills: '技能',
+      converted: '已转成客户',
+      noSession: '没能新开会话',
+      bidRelBuyer: '采购方',
+      bidRelWinner: '中标',
+      bidRelCandidate: '候选人',
+      bidRelMention: '提及',
+      bidRelTender: '招标',
+      bidRelNotice: '公告',
+      libKindDoc: '文档',
+      libKindWhitepaper: '白皮书',
+      libKindGuide: '指南',
+      libKindPlaybook: '手册',
+      libKindBlog: '文章',
+      libKindCourse: '课程',
+      libKindReport: '报告',
+      libKindCase: '案例',
+      libKindJob: '岗位',
+      libKindRepo: '开源项目',
+      libKindTemplate: '模板',
+      libKindPost: '帖子',
     };
     const t = (k) => DICT[k] || k;
 
@@ -1191,14 +1201,6 @@ window.__ModuleLoader__.load({
       const d = parseDay(due);
       return !!d && localDate(d) < todayStr();
     }
-    function overdueDays(due) {
-      const n = daysBetween(due, todayStr());
-      return n === null ? 0 : Math.max(0, n);
-    }
-    function dueInDays(due) {
-      const n = daysBetween(todayStr(), due);
-      return n;
-    }
     function daysInStage(eng) {
       const since = eng && (eng.stageSince || eng.updatedAt || eng.createdAt);
       if (!since) return null;
@@ -1212,10 +1214,108 @@ window.__ModuleLoader__.load({
       if (hr < 18) return t('todayGreetingNoon');
       return t('todayGreetingEvening');
     }
-    function fmtMoney(v) {
-      const n = Number(v && v.amount);
-      if (!v || !n) return '';
-      try { return '¥' + n.toLocaleString('zh-CN'); } catch (e) { return '¥' + n; }
+    /* 今天的日期行：「11月19日 周四」。 */
+    function todayLine() {
+      const d = new Date();
+      return (d.getMonth() + 1) + '月' + d.getDate() + '日 周' + '日一二三四五六'.charAt(d.getDay());
+    }
+    /* 到期的口语说法：今天到期 / 明天到期 / 逾期 N 天 / M月D日（跨年带年份）。 */
+    function dueText(due) {
+      const d = parseDay(due);
+      if (!d) return '';
+      const n = daysBetween(todayStr(), due);
+      if (n === 0) return '今天到期';
+      if (n === 1) return '明天到期';
+      if (n !== null && n < 0) return '逾期 ' + (-n) + ' 天';
+      const sameYear = d.getFullYear() === new Date().getFullYear();
+      return (sameYear ? '' : d.getFullYear() + '年') + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    }
+    function dueTone(due) {
+      const n = daysBetween(todayStr(), due);
+      if (n === null) return 'muted';
+      if (n < 0) return 'danger';
+      return n <= 1 ? 'warn' : 'muted';
+    }
+    /* 本阶段第几天（进入当天算第 1 天）。 */
+    function stayText(days) {
+      return days === null || days === undefined ? '' : '第 ' + (Number(days) + 1) + ' 天';
+    }
+
+    /* 存量记录的显示替换（ADR 0010 D11 / spec §22.6）：只影响显示，不改写看板文件。
+       新版写入的记录已经是平实说法；这里只处理旧版本留下的固定句式。
+       规则都锚定在系统写的那一段（句首前缀、固定短语、句末括号），
+       不做「见词就换」——任务标题、客户名、提问原文是用户写的，不能被改写。 */
+    const LOG_FIELD_LABELS = {
+      nextAction: '下一步', priority: '优先级', stakeholders: '关键人', owner: '负责人', tags: '标签',
+      name: '名称', company: '公司全称', shortName: '简称', source: '来源', value: '金额备注',
+      bidWatch: '招采关注', paused: '暂停状态', dir: '文件夹', stage: '阶段', due: '截止', title: '标题', type: '类型',
+      engagementId: '所属客户', notes: '备注', evidence: '结果说明', attention: '待处理',
+    };
+    const LOG_LANE_LABELS = {
+      inbox: '待整理', todo: '待开始', doing: '进行中', waiting: '等对方', review: '待验收', done: '已完成', canceled: '已取消',
+    };
+    const LOG_REPORT_WORDS = { ready: '做完了，等验收', progress: '更新了进展', blocked: '卡住了', failed: '没做成', dropped: '不做了' };
+    const LOG_ASK_WORDS = { decision: 'AI 有事等你决定', answer: 'AI 有问题等你回复', question: 'AI 有问题等你回复', blocked: 'AI 卡住了' };
+    const LOG_REPLACEMENTS = [
+      [/^规则\s*[a-z_]+\s*[:：]\s*/i, ''],
+      /* 交给 AI */
+      [/^发起会话\s*session-[\w-]+\s*(?:[（(][a-z_]+[)）])?$/i, '交给 AI 推进'],
+      [/^会话\s*session-[\w-]+\s*[:：]\s*/i, '已交给 AI：'],
+      [/^由 handoff 创建执行任务[（(]回报闭环[)）]$/, '交给 AI 时自动建的任务'],
+      [/^执行任务[:：]/, '新建任务：'],
+      /* 进展 */
+      [/^回报\s*[（(]\s*(ready|progress|blocked|failed|dropped)\s*[)）]/i, (m, k) => LOG_REPORT_WORDS[k.toLowerCase()]],
+      [/^(任务「.*」)回报[:：]\s*(ready|progress|blocked|failed|dropped)$/i, (m, head, k) => head + LOG_REPORT_WORDS[k.toLowerCase()]],
+      /* 待我处理 */
+      [/^提问\s*[（(]\s*(decision|answer|question|blocked)\s*[)）]/i, (m, k) => LOG_ASK_WORDS[k.toLowerCase()]],
+      [/^已解决\s*[（(]\s*[a-z_]+\s*[)）]/i, '已解决'],
+      [/^注意力已解决[:：]/, '已解决：'],
+      [/^注意力[:：]/, '待处理：'],
+      /* 提醒 */
+      [/^采纳建议并创建会话[:：]/, '已交给 AI 处理：'],
+      [/^采纳建议改期至\s*/, '按提醒改期到 '],
+      [/^采纳建议[:：]/, '已按提醒处理：'],
+      [/^忽略建议[:：]/, '不再提醒：'],
+      [/^按建议创建任务[:：]/, '建了跟进任务：'],
+      [/^由建议\s*[a-z_]+\s*创建$/i, '由提醒创建'],
+      [/^自动执行安全建议\s*[（(][a-z]+[)）]/i, 'AI 已直接处理'],
+      /* 推进条件 */
+      [/^历史门禁「([^」]+)」按导入处理\s*[（(]forced[)）]$/, '导入时已过「$1」阶段，推进条件视为满足'],
+      [/^门禁\s*[a-z_]+\s*人工项[:：]/i, '确认了推进条件：'],
+      [/^门禁\s*[a-z_]+\s*强制放行[:：]/i, '破例推进：'],
+      [/\s+门禁\s*[a-z_]+\s*强制放行$/i, '破例推进'],
+      [/^门禁待确认[:：]/, '等你确认：'],
+      [/[（(]force[)）]$/i, '（破例推进）'],
+      /* 导入、状态、其它 */
+      [/^从目录导入/, '从已有文件夹导入'],
+      [/[（(]建议阶段「([^」]+)」[^）)]*[)）]$/, '（放在「$1」阶段）'],
+      [/^导入客户[:：]/, '从已有文件夹导入客户：'],
+      [/^泳道[:：]/, '状态：'],
+      [/^人工证据[:：]/, '结果说明：'],
+    ];
+    const LOG_REMINDER_HEAD = /^(?:不再提醒|已按提醒处理|已交给 AI 处理|AI 已直接处理)[:：]/;
+    function humanizeLog(text) {
+      let s = str(text);
+      if (!s) return '';
+      for (let i = 0; i < LOG_REPLACEMENTS.length; i++) s = s.replace(LOG_REPLACEMENTS[i][0], LOG_REPLACEMENTS[i][1]);
+      /* 旧提醒的标题被原样抄进了处理记录：只认旧模板的原样写法（客户名 + 空格 + 固定短语）。 */
+      if (LOG_REMINDER_HEAD.test(s)) {
+        s = s.replace(/ 已停滞 (\d+) 天$/, '已 $1 天没有进展').replace(/ 门禁可确认：/, '可以确认推进条件：');
+      }
+      /* 旧版把改过的字段名直接写进记录（「更新客户字段：nextAction、priority」）：
+         整句只有字段名时才翻译，其余句子里的英文一律原样保留。 */
+      s = s.replace(/^更新(?:客户)?字段\s*[:：]\s*([\w.]+(?:\s*[,，、]\s*[\w.]+)*)$/, (m, keys) =>
+        '更新了：' + keys.split(/\s*[,，、]\s*/).map((k) => LOG_FIELD_LABELS[k] || k).join('、'));
+      s = s.replace(/^(状态[:：]\s*)([a-z]+)\s*(?:→|->|➜)\s*([a-z]+)$/i,
+        (m, a, from, to) => a + (LOG_LANE_LABELS[from.toLowerCase()] || from) + ' → ' + (LOG_LANE_LABELS[to.toLowerCase()] || to));
+      return s.replace(/\s{2,}/g, ' ').trim();
+    }
+    /* 记录是谁做的：只在不是本人时标出来。 */
+    function logActor(by) {
+      const k = str(by).toLowerCase();
+      if (k === 'agent') return 'AI';
+      if (k === 'system') return '自动';
+      return '';
     }
 
     /* ---------- 词表回退（仅用于 meta 缺字段时，不含阶段顺序） ---------- */
@@ -1225,19 +1325,19 @@ window.__ModuleLoader__.load({
       delivery: '交付', adoption: '采用', followup: '跟进', admin: '杂务',
     };
     const AUTONOMY_FALLBACK = {
-      observe: { label: '只建议', desc: '只生成建议；所有动作都需要人确认' },
-      assisted: { label: '建议 + 一键', desc: '安全动作可一键执行；门禁、对外材料、删除/归档仍需人确认' },
-      auto: { label: '自动安全动作', desc: '安全动作自动执行；阶段推进、门禁、对外、删除仍只能由人执行' },
+      observe: { label: '只提醒，由我决定', desc: 'AI 只提醒，不替你动任何东西。' },
+      assisted: { label: '小事可以直接处理', desc: 'AI 可以给没定下一步的客户补一条待确认的下一步，为新招采公告建跟进任务。其余都要你决定。' },
+      auto: { label: '小事可以直接处理', desc: 'AI 可以给没定下一步的客户补一条待确认的下一步，为新招采公告建跟进任务。其余都要你决定。' },
     };
     const ATTENTION_FALLBACK = {
-      blocked: '受阻', decision: '待决定', review: '待审阅', answer: '待回答',
-      overdue: '逾期', gate: '门禁待确认', stall: '停滞', proposal: '建议',
+      blocked: '卡住了', decision: '等你决定', review: '待验收', answer: '等你回复',
+      overdue: '已逾期', gate: '等你确认', stall: '没有进展', proposal: '提醒',
     };
     const REDLINE_FALLBACK = [
-      '推进客户阶段', '通过门禁', '标记交付/验收完成', '导出或发送对外材料',
-      '删除客户或任务', '修改客户卷定稿文件',
+      '推进客户阶段', '确认推进条件', '标记交付或验收完成', '导出或发送对外材料',
+      '删除客户或任务', '修改客户文件夹里的定稿文件',
     ];
-    const LEVEL_FALLBACK = { top: '一把手', vp: '分管', exec: '执行层', unknown: '未知' };
+    const LEVEL_FALLBACK = { top: '一把手', vp: '分管', exec: '执行层', unknown: '层级未定' };
 
     /* ---------- meta 归一化（阶段/泳道/门禁唯一来源） ---------- */
     function normCheck(x, type) {
@@ -1413,20 +1513,6 @@ window.__ModuleLoader__.load({
       const eng = findEngagement(board, id);
       return eng ? str(pick(eng.shortName, eng.name, eng.company)) : str(fallback || '');
     }
-    function autonomyKey(meta, board) {
-      const fromBoard = board && board.settings && board.settings.autonomy;
-      if (fromBoard) return str(fromBoard);
-      if (meta && meta.settingsDefaults && meta.settingsDefaults.autonomy) return str(meta.settingsDefaults.autonomy);
-      return 'observe';
-    }
-    function autonomyMeta(meta, key) {
-      const modes = (meta && meta.autonomyModes && meta.autonomyModes.length)
-        ? meta.autonomyModes
-        : Object.keys(AUTONOMY_FALLBACK).map((k) => ({ key: k, label: AUTONOMY_FALLBACK[k].label, desc: AUTONOMY_FALLBACK[k].desc }));
-      const found = modes.find((m) => m.key === key);
-      if (found) return { key, label: found.label, desc: found.desc };
-      return { key, label: key, desc: '' };
-    }
     function attentionMeta(meta, kind) {
       const def = meta && meta.attentionKinds && meta.attentionKinds[kind];
       let label = '';
@@ -1444,7 +1530,6 @@ window.__ModuleLoader__.load({
       if (x) return x.label;
       return TYPE_FALLBACK[key] || key;
     }
-    function levelLabel(meta, key) { return LEVEL_FALLBACK[key] || key || LEVEL_FALLBACK.unknown; }
     function redLinesOf(meta) {
       return (meta && meta.redLines && meta.redLines.length) ? meta.redLines : REDLINE_FALLBACK;
     }
@@ -1477,6 +1562,12 @@ window.__ModuleLoader__.load({
           proposalId,
           due: str(o.due || ''),
           days: typeof o.days === 'number' ? o.days : null,
+          /* 结构化字段：今日页用它们拼行标题，不依赖宿主文本里的「种类：」前缀（spec §22.3） */
+          itemTitle: str(o.itemTitle),
+          question: str(o.question),
+          stage: str(o.stage),
+          missing: asList(o.missing),
+          ruleId: str(o.ruleId),
           actions: asList(o.actions).map((x) => str(x)).filter(Boolean),
           raw: o,
         };
@@ -1487,7 +1578,7 @@ window.__ModuleLoader__.load({
         const o = p && typeof p === 'object' ? p : {};
         return {
           key: str(pick(o.id, 'prp-' + i)), id: str(o.id), ruleId: str(o.ruleId),
-          title: str(pick(o.title, o.text, '建议')), detail: str(o.detail),
+          title: str(pick(o.title, o.text, '提醒')), detail: str(o.detail),
           kind: str(o.kind), status: str(o.status || 'pending'),
           engagementId: str(o.engagementId), itemId: str(o.itemId),
           payload: o.payload || {}, createdAt: str(o.createdAt),
@@ -1519,7 +1610,7 @@ window.__ModuleLoader__.load({
         const o = a && typeof a === 'object' ? a : {};
         return {
           key: 'act-' + i, at: str(o.at), kind: str(o.kind || 'note'), text: str(o.text),
-          engagementId: str(o.engagementId), itemId: str(o.itemId),
+          engagementId: str(o.engagementId), itemId: str(o.itemId), by: str(o.by),
         };
       }).filter((a) => a.text);
     }
@@ -1579,28 +1670,6 @@ window.__ModuleLoader__.load({
         };
       }).sort((a, b) => a.score - b.score).slice(0, limit);
     }
-    function engagementArtifactCount(eng) {
-      const a = eng && eng.artifacts;
-      if (typeof a === 'number') return a;
-      if (Array.isArray(a)) return a.length;
-      if (a && typeof a === 'object') {
-        if (typeof a.total === 'number') return a.total;
-        const md = typeof a.md === 'number' ? a.md : null;
-        const pdf = typeof a.pdf === 'number' ? a.pdf : null;
-        if (md !== null) return md + (pdf || 0);
-        const keys = Object.keys(a).filter((k) => typeof a[k] === 'number');
-        if (keys.length) return keys.reduce((sum, k) => sum + a[k], 0);
-        return Object.keys(a).length;
-      }
-      return null;
-    }
-    function attentionCountOf(eng, items) {
-      let n = 0;
-      if (eng && eng.attention) n += 1;
-      asList(items).forEach((it) => { if (it && it.engagementId === (eng && eng.id) && it.attention) n += 1; });
-      return n;
-    }
-
 
     /* ============================================================
      * 招采雷达（v1.1）：面板只做「客户关联层」。
@@ -1609,7 +1678,7 @@ window.__ModuleLoader__.load({
      * 口径：候选人 ≠ 中标人；金额只展示公告原文（不换算/不求和）；
      *      批次/匹配是推断口径，报告里必须说明。
      * ============================================================ */
-    const BID_RELATION_KEYS = {
+    /* dict-keys */ const BID_RELATION_KEYS = {
       buyer: 'bidRelBuyer', winner: 'bidRelWinner', candidate: 'bidRelCandidate',
       mention: 'bidRelMention', tender: 'bidRelTender',
     };
@@ -1811,8 +1880,6 @@ window.__ModuleLoader__.load({
     }
 
     /* 生财情报授权来源（ADR 0004 D5 / §5）：面板只展示来源与过期时间，token 永不回显 */
-    const SCYS_SOURCE_TEXT = { link: '链接授权', env: '环境变量', compat: '兼容文件（不推荐）', none: '未授权' };
-    function scysSourceText(src) { return SCYS_SOURCE_TEXT[str(src)] || '未授权'; }
 
     function BidUnavailable(props) {
       const p = props || {};
@@ -1820,7 +1887,7 @@ window.__ModuleLoader__.load({
         h('span', { className: 'fde-bid-unavailable-mark', 'aria-hidden': 'true' }, '!'),
         h('div', { style: { flex: '1 1 auto', minWidth: 0 } },
           h('div', { style: { fontWeight: 600 } }, t('bidNotReady')),
-          p.reason ? h('div', { className: 'fde-hint' }, '原因：' + p.reason) : null),
+          p.reason && p.reason !== t('bidNotReady') ? h('div', { className: 'fde-hint' }, p.reason) : null),
         p.onRetry ? h(Btn, { small: true, onClick: p.onRetry }, t('retry')) : null);
     }
 
@@ -1887,11 +1954,6 @@ window.__ModuleLoader__.load({
       const p = props || {};
       const cls = 'fde-chip' + (p.tone ? ' ' + p.tone : '') + (p.className ? ' ' + p.className : '');
       return h('span', { className: cls, title: p.title || undefined }, p.children);
-    }
-
-    function Card(props) {
-      const p = props || {};
-      return h('div', { className: 'fde-card' + (p.className ? ' ' + p.className : ''), style: p.style || undefined }, p.children);
     }
 
     function Section(props) {
@@ -1963,6 +2025,7 @@ window.__ModuleLoader__.load({
         readOnly: !!p.readOnly,
         onChange: p.onChange || undefined,
         onKeyDown: p.onKeyDown || undefined,
+        onBlur: p.onBlur || undefined,
         style: p.style || undefined,
       });
     }
@@ -2016,31 +2079,6 @@ window.__ModuleLoader__.load({
       return h('span', { className: 'fde-dot' + (p.tone ? ' ' + p.tone : ''), 'aria-hidden': 'true' });
     }
 
-    function AutonomyBadge(props) {
-      const p = props || {};
-      const info = autonomyMeta(p.meta, p.mode);
-      return h('span', {
-        className: 'fde-autonomy ' + (p.mode || 'observe'),
-        title: info.desc || '',
-      }, h('span', null, '自主性'), h('b', null, info.label));
-    }
-
-    function Stat(props) {
-      const p = props || {};
-      return h('div', { className: 'fde-stat' + (p.tone ? ' ' + p.tone : '') },
-        h('div', { className: 'fde-stat-num' }, p.num === undefined || p.num === null ? '—' : String(p.num)),
-        h('div', { className: 'fde-stat-label' }, p.label));
-    }
-
-    function KeyValue(props) {
-      const p = props || {};
-      const rows = asList(p.rows).filter((r) => r && r[1] !== undefined && r[1] !== null && r[1] !== '');
-      return h('div', { className: 'fde-kv' },
-        rows.map((r, i) => h('div', { key: 'kv-' + i, style: { display: 'contents' } },
-          h('div', { className: 'fde-kv-k' }, r[0]),
-          h('div', { className: 'fde-kv-v' }, r[1]))));
-    }
-
     function MissingList(props) {
       const p = props || {};
       const items = asList(p.items).map((m, i) => {
@@ -2062,6 +2100,8 @@ window.__ModuleLoader__.load({
       const [err, setErr] = useState('');
       const input = p.input || null;
       const titleId = 'fde-modal-title';
+      /* 换了一个弹层（标题或预填内容变了）就重新取初值：上一个弹层里写的字不能带到下一个 */
+      useEffect(() => { setValue(p.initialValue || ''); setErr(''); }, [p.title, p.initialValue]);
       const submit = () => {
         const v = input ? str(value).trim() : '';
         if (input && input.required && !v) { setErr(input.requiredHint || '请填写后再确认'); return; }
@@ -2129,10 +2169,10 @@ window.__ModuleLoader__.load({
       const [priority, setPriority] = useState('normal');
       const [title, setTitle] = useState('');
       const [itemType, setItemType] = useState(itemTypes[0] ? itemTypes[0].key : 'research');
-      const [owner, setOwner] = useState('');
+      const [owner, setOwner] = useState('human');
       const [due, setDue] = useState('');
-      const [engagementId, setEngagementId] = useState('');
-      const [lane, setLane] = useState(lanes[0] ? lanes[0].key : 'inbox');
+      const [engagementId, setEngagementId] = useState(str(p.engagementId));
+      const [lane, setLane] = useState(lanes[0] ? lanes[0].key : 'todo');
       const [busy, setBusy] = useState(false);
       const [err, setErr] = useState('');
 
@@ -2141,7 +2181,7 @@ window.__ModuleLoader__.load({
         let payload;
         if (kind === 'engagement') {
           const nm = str(name).trim();
-          if (!nm) { setErr('请填写公司全称'); return; }
+          if (!nm) { setErr('先填公司全称'); return; }
           payload = {
             name: nm,
             company: nm,
@@ -2151,58 +2191,58 @@ window.__ModuleLoader__.load({
           };
         } else {
           const ti = str(title).trim();
-          if (!ti) { setErr('请填写任务标题'); return; }
+          if (!ti) { setErr('先填任务标题'); return; }
           payload = {
             title: ti,
             type: itemType || 'research',
             priority: priority || 'normal',
-            owner: str(owner).trim(),
+            owner: owner || 'human',
             due: str(due).trim(),
             engagementId: engagementId || '',
-            stage: lane || 'inbox',
+            stage: lane || 'todo',
           };
         }
         setBusy(true); setErr('');
         let r;
         try {
-          r = p.onSubmit ? await p.onSubmit(payload) : { ok: false, reason: '面板未接线' };
+          r = p.onSubmit ? await p.onSubmit(payload) : { ok: false, reason: t('actionFail') };
         } catch (e) {
           r = { ok: false, reason: errText(e) };
         }
         setBusy(false);
-        if (!r || r.ok === false) { setErr((r && r.reason) || '创建失败'); return; }
+        if (!r || r.ok === false) { setErr((r && r.reason) || '没能创建'); return; }
         if (p.onCreated) p.onCreated(r);
       };
 
       const fields = kind === 'engagement' ? [
         h(Field, { key: 'name', full: true, label: '公司全称（必填）' },
           h(TextInput, {
-            value: name, placeholder: '如：某集团有限公司', ariaLabel: '公司全称',
+            value: name, placeholder: '例如：某集团有限公司', ariaLabel: '公司全称',
             onChange: (e) => { setErr(''); setName(e.target.value); },
           })),
         h(Field, { key: 'source', label: '来源' },
           h(TextInput, {
-            value: source, placeholder: '行业展会 / 老客户介绍 / 招标公告…', ariaLabel: '来源',
+            value: source, placeholder: '例如：老客户介绍、招标公告', ariaLabel: '来源',
             onChange: (e) => setSource(e.target.value),
           })),
         h(Field, { key: 'prio', label: '优先级' },
           h(Select, { value: priority, ariaLabel: '优先级', options: prioOptions, onChange: (e) => setPriority(e.target.value) })),
-        h(Field, { key: 'next', full: true, label: '下一步：做什么' },
+        h(Field, { key: 'next', full: true, label: '下一步做什么' },
           h(TextInput, {
-            value: nextText, placeholder: '如：约分管副总做 30 分钟需求访谈', ariaLabel: '下一步',
+            value: nextText, placeholder: '例如：约分管副总做 30 分钟需求访谈', ariaLabel: '下一步',
             onChange: (e) => setNextText(e.target.value),
           })),
-        h(Field, { key: 'nextOwner', label: '下一步负责人' },
+        h(Field, { key: 'nextOwner', label: '谁来做' },
           h(TextInput, {
-            value: nextOwner, placeholder: '如：张三', ariaLabel: '下一步负责人',
+            value: nextOwner, ariaLabel: '谁来做',
             onChange: (e) => setNextOwner(e.target.value),
           })),
-        h(Field, { key: 'nextDue', label: '下一步何时（到期日）' },
-          h(TextInput, { type: 'date', value: nextDue, ariaLabel: '下一步到期日', onChange: (e) => setNextDue(e.target.value) })),
+        h(Field, { key: 'nextDue', label: '什么时候' },
+          h(TextInput, { type: 'date', value: nextDue, ariaLabel: '什么时候', onChange: (e) => setNextDue(e.target.value) })),
       ] : [
         h(Field, { key: 'title', full: true, label: '任务标题（必填）' },
           h(TextInput, {
-            value: title, placeholder: '如：整理会后跟进清单', ariaLabel: '任务标题',
+            value: title, placeholder: '例如：整理会后跟进清单', ariaLabel: '任务标题',
             onChange: (e) => { setErr(''); setTitle(e.target.value); },
           })),
         h(Field, { key: 'type', label: '类型' },
@@ -2214,23 +2254,28 @@ window.__ModuleLoader__.load({
         h(Field, { key: 'prio', label: '优先级' },
           h(Select, { value: priority, ariaLabel: '优先级', options: prioOptions, onChange: (e) => setPriority(e.target.value) })),
         h(Field, { key: 'owner', label: '负责人' },
-          h(TextInput, {
-            value: owner, placeholder: '如：张三（留空=我）', ariaLabel: '负责人',
+          h(Select, {
+            value: owner, ariaLabel: '负责人',
+            options: [
+              { value: 'human', label: t('drawerItemOwnerHuman') },
+              { value: 'agent', label: t('drawerItemOwnerAgent') },
+              { value: 'both', label: t('drawerItemOwnerBoth') },
+            ],
             onChange: (e) => setOwner(e.target.value),
           })),
         h(Field, { key: 'due', label: '截止日期' },
           h(TextInput, { type: 'date', value: due, ariaLabel: '截止日期', onChange: (e) => setDue(e.target.value) })),
-        h(Field, { key: 'eng', label: '关联客户' },
+        h(Field, { key: 'eng', label: '客户' },
           h(Select, {
-            value: engagementId, ariaLabel: '关联客户',
-            options: [{ value: '', label: '（不关联）' }].concat(
+            value: engagementId, ariaLabel: '客户',
+            options: [{ value: '', label: t('drawerItemIndependent') }].concat(
               engs.map((e) => ({ value: e.id, label: e.shortName || e.name || e.dir || e.id }))),
             onChange: (e) => setEngagementId(e.target.value),
           })),
-        h(Field, { key: 'lane', label: '初始泳道' },
+        h(Field, { key: 'lane', label: '状态' },
           h(Select, {
-            value: lane, ariaLabel: '初始泳道',
-            options: (lanes.length ? lanes : [{ key: 'inbox', label: '收件箱' }]).map((x) => ({ value: x.key, label: x.label || x.key })),
+            value: lane, ariaLabel: '状态',
+            options: (lanes.length ? lanes : [{ key: 'todo', label: '待开始' }]).map((x) => ({ value: x.key, label: x.label || x.key })),
             onChange: (e) => setLane(e.target.value),
           })),
       ];
@@ -2252,24 +2297,10 @@ window.__ModuleLoader__.load({
             h('div', { className: 'fde-modal-title' }, kind === 'item' ? '新建任务' : '新建客户')),
           h('div', { className: 'fde-modal-body' },
             h('div', { className: 'fde-form-grid' }, fields),
-            kind === 'engagement'
-              ? h('div', { className: 'fde-hint' }, '新建后进入「线索」阶段；阶段推进与门禁仍需人工确认。')
-              : h('div', { className: 'fde-hint' }, '任务只写入 research/.fde/board.json，不改动客户目录。'),
             err ? h('div', { className: 'fde-msg err', role: 'alert' }, err) : null),
           h('div', { className: 'fde-modal-foot' },
             h(Btn, { onClick: p.onClose }, t('cancel')),
             h(Btn, { kind: 'primary', busy, onClick: submit }, busy ? '创建中…' : '创建'))));
-    }
-
-    /* 行内编辑的小提示：键盘操作说明 */
-    function KeyHint(props) {
-      const p = props || {};
-      return h('span', { className: 'fde-hint' },
-        p.children || [
-          h('span', { key: 'tab', className: 'fde-kbd' }, 'Tab'), ' 聚焦 · ',
-          h('span', { key: 'enter', className: 'fde-kbd' }, 'Enter'), ' 打开 · ',
-          h('span', { key: 'alt', className: 'fde-kbd' }, 'Alt+←/→'), ' 换列',
-        ]);
     }
 
     /* 优先级小点 + 文本 */
@@ -2296,8 +2327,8 @@ window.__ModuleLoader__.load({
     }
 
     /* ============================================================
-     * Phase 3（v1.5.0）只读演示模式（ADR 0006 / spec §8.8）
-     * - DEMO_* 是纯客户端合成数据：不写 board、不建客户卷（只读覆盖层）；
+     * 示例数据（只读；ADR 0006 / spec §8.8）
+     * - DEMO_* 是纯客户端合成数据：不写看板、不建客户文件夹（只读覆盖层）；
      * - 触发：真实看板为空且 settings.demoDismissed !== true；
      * - 写操作由 demoGuard() 在“传输层”统一拦截（postJSON/fdePost + runAction），
      *   并给行内提示，避免任何一处漏拦截写脏真实看板。
@@ -2307,7 +2338,7 @@ window.__ModuleLoader__.load({
       return function demoGuarded() {
         const opts = arguments.length > 3 ? arguments[3] : null;
         if (demoRuntime.active && !(opts && opts.demoBypass)) {
-          const reason = str(DICT.demoLocked || '示例模式不可操作；点「开始使用」后即可使用真实数据');
+          const reason = str(DICT.demoLocked);
           try { if (typeof demoRuntime.notify === 'function') demoRuntime.notify('warn', reason); } catch (e) { /* ignore */ }
           return Promise.resolve({ ok: false, demoBlocked: true, reason });
         }
@@ -2331,8 +2362,8 @@ window.__ModuleLoader__.load({
     function demoEngagement(spec) {
       return Object.assign({
         paused: false, owner: '示例', tags: ['示例'], stakeholders: [],
-        source: { kind: 'demo', ref: '内置示例（不写入看板）', at: demoIso(-1, 9) },
-        value: { amount: 0, currency: 'CNY', note: '示例数字，不构成报价' },
+        source: { kind: 'demo', ref: '示例', at: demoIso(-1, 9) },
+        value: { amount: 0, currency: 'CNY', note: '' },
         gateState: {},
         timeline: [],
         bidWatch: false,
@@ -2348,64 +2379,58 @@ window.__ModuleLoader__.load({
     const DEMO_ENGAGEMENTS = [
       demoEngagement({
         id: 'demo-eng-1', name: '某集团（示例）', shortName: '某集团', stageIndex: 0, priority: 'high', stayDays: 1,
-        nextAction: { text: '补齐客户来源与可检查的下一步', due: demoDate(2), owner: '示例' },
+        nextAction: { text: '确认线索来源，约一次 30 分钟的初次沟通', due: demoDate(2), owner: '示例' },
       }),
       demoEngagement({
         id: 'demo-eng-2', name: '某研究院（示例）', shortName: '某研究院', stageIndex: 1, priority: 'normal', stayDays: 5,
-        nextAction: { text: '完成主体锁定与三链验证', due: demoDate(0), owner: '示例' },
+        nextAction: { text: '核实公司主体，整理事实核查清单', due: demoDate(0), owner: '示例' },
         attention: { kind: 'decision' },
-        timeline: [{ at: demoIso(-2, 10), kind: 'note', text: '（示例）线索转研判' }],
+        timeline: [{ at: demoIso(-2, 10), kind: 'note', text: '从「线索」进入「研判」' }],
       }),
       demoEngagement({
         id: 'demo-eng-3', name: '某材料（示例）', shortName: '某材料', stageIndex: 2, priority: 'high', stayDays: 9,
-        nextAction: { text: '准备会面 Brief 与合作地图', due: demoDate(-1), owner: '示例' },
+        nextAction: { text: '准备会面 Brief 和合作地图', due: demoDate(-1), owner: '示例' },
         attention: { kind: 'review' },
-        timeline: [{ at: demoIso(-1, 15), kind: 'report', text: '（示例）会面 Brief 初稿已生成' }],
+        timeline: [{ at: demoIso(-1, 15), kind: 'report', text: '会面 Brief 初稿写好了', by: 'agent' }],
       }),
       demoEngagement({
         id: 'demo-eng-4', name: '某能源（示例）', shortName: '某能源', stageIndex: 3, priority: 'normal', stayDays: 12,
-        nextAction: { text: '确认一期场景与数据可得性', due: demoDate(3), owner: '示例' },
-        timeline: [{ at: demoIso(-3, 11), kind: 'note', text: '（示例）需求池收敛到 1 个场景' }],
+        nextAction: { text: '确认一期做哪个场景、数据能不能拿到', due: demoDate(3), owner: '示例' },
+        timeline: [{ at: demoIso(-3, 11), kind: 'note', text: '候选需求收窄到 1 个场景' }],
       }),
     ];
 
     const DEMO_ITEMS = [
-      { id: 'demo-itm-scoping', engagementId: 'demo-eng-4', title: '整理场景评估表 12 维评分（示例）', type: 'scoping', stage: 'todo', priority: 'high', due: demoDate(2), owner: 'agent', reports: [], attention: null, createdAt: demoIso(-1, 9) },
-      { id: 'demo-itm-discovery', engagementId: 'demo-eng-2', title: '补齐数据源清单与接口人（示例）', type: 'research', stage: 'doing', priority: 'normal', due: demoDate(-1), owner: 'agent', reports: [], attention: null, createdAt: demoIso(-2, 9) },
+      { id: 'demo-itm-scoping', engagementId: 'demo-eng-4', title: '整理场景评估表（示例）', type: 'scoping', stage: 'todo', priority: 'high', due: demoDate(2), owner: 'agent', reports: [], attention: null, createdAt: demoIso(-1, 9) },
+      { id: 'demo-itm-discovery', engagementId: 'demo-eng-2', title: '补齐数据来源清单和对接人（示例）', type: 'research', stage: 'doing', priority: 'normal', due: demoDate(-1), owner: 'agent', reports: [], attention: null, createdAt: demoIso(-2, 9) },
       { id: 'demo-itm-meeting', engagementId: 'demo-eng-3', title: '等待客户确认会面时间（示例）', type: 'meeting', stage: 'waiting', priority: 'normal', due: demoDate(4), owner: '示例', reports: [], attention: null, createdAt: demoIso(-3, 9) },
     ];
 
     const DEMO_ACTIVITY = [
-      { at: demoIso(-1, 16), kind: 'report', text: '（示例）任务「补齐数据源清单」回报 progress', engagementId: 'demo-eng-2', itemId: 'demo-itm-discovery', by: 'agent' },
-      { at: demoIso(-1, 11), kind: 'note', text: '（示例）某材料：会面 Brief 初稿已生成', engagementId: 'demo-eng-3', by: 'agent' },
-      { at: demoIso(-2, 15), kind: 'stage', text: '（示例）某研究院：线索推进到研判', engagementId: 'demo-eng-2', by: 'human' },
-      { at: demoIso(-3, 10), kind: 'created', text: '（示例）某能源：纳入看板', engagementId: 'demo-eng-4', by: 'human' },
+      { at: demoIso(-1, 16), kind: 'report', text: '任务「补齐数据来源清单和对接人」有进展', engagementId: 'demo-eng-2', itemId: 'demo-itm-discovery', by: 'agent' },
+      { at: demoIso(-1, 11), kind: 'note', text: '某材料：会面 Brief 初稿写好了', engagementId: 'demo-eng-3', by: 'agent' },
+      { at: demoIso(-2, 15), kind: 'stage', text: '某研究院：从「线索」进入「研判」', engagementId: 'demo-eng-2', by: 'human' },
+      { at: demoIso(-3, 10), kind: 'created', text: '某能源：新建客户', engagementId: 'demo-eng-4', by: 'human' },
     ];
 
-    const DEMO_BOARD = {
-      version: 1, revision: 0, updatedAt: demoIso(0, 9), demo: true,
-      settings: { autonomy: 'observe', demoDismissed: false, stallDays: 14, wipLimits: { doing: 5 }, sources: { folderWatch: true, briefOnOpen: true, bidWatch: true } },
-      engagements: DEMO_ENGAGEMENTS, items: DEMO_ITEMS, proposals: [], activity: DEMO_ACTIVITY,
-    };
-
     const DEMO_BRIEF = {
-      headline: '演示数据：4 个示例客户 · 3 个示例任务 · 2 条注意力',
-      greeting: '（示例数据）先看它跑起来长什么样；点顶部「开始使用（清除示例）」即可换成你的真实客户。',
+      headline: '示例数据',
+      greeting: '',
       attention: [
         {
           key: 'demo-attn-decision', kind: 'decision', engagementId: 'demo-eng-2', engagementName: '某研究院（示例）',
-          text: '需要决定：某研究院（示例）｜一期场景选「采购比价」还是「合同审查」？', due: demoDate(1), days: 5,
-          detail: '（示例）点「开始使用」后即可处理真实注意力',
+          text: '某研究院（示例）等你决定：一期场景选「采购比价」还是「合同审查」？', due: demoDate(1), days: 5,
+          question: '一期场景选「采购比价」还是「合同审查」？', detail: '一期场景选「采购比价」还是「合同审查」？',
         },
         {
           key: 'demo-attn-review', kind: 'review', engagementId: 'demo-eng-3', engagementName: '某材料（示例）',
-          text: '待审阅：某材料（示例）会面 Brief 初稿', due: demoDate(2), days: 9,
-          detail: '（示例数据，只读）',
+          text: '任务「会面 Brief 初稿」做完了，等你验收', due: demoDate(2), days: 2,
+          itemTitle: '会面 Brief 初稿', detail: '某材料（示例）',
         },
       ],
       proposals: [],
       focus: [],
-      activity: DEMO_ACTIVITY.map((a, i) => ({ key: 'demo-act-' + i, at: a.at, kind: a.kind, text: a.text, engagementId: a.engagementId, itemId: a.itemId })),
+      activity: DEMO_ACTIVITY.map((a, i) => ({ key: 'demo-act-' + i, at: a.at, kind: a.kind, text: a.text, engagementId: a.engagementId, itemId: a.itemId, by: a.by })),
       stats: { active: 4, dueToday: 1, overdue: 1 },
     };
 
@@ -2437,43 +2462,51 @@ window.__ModuleLoader__.load({
 
     /* ============================================================
      * 五、今日视图
-     * 注意力列表（blocked/decision/review/answer/overdue/gate/stall/proposal）
-     * + 建议（采纳/忽略）+ 今日焦点 + 最近活动 + 战况统计。
+     * 一屏四块：待我处理 / 提醒 / 今天跟进 / 最近动态（ADR 0007、ADR 0010 D5）。
+     * 待我处理只放必须有人动作的事；提醒单独一块，按钮说的是结果。
      * ============================================================ */
-    const ATTENTION_ORDER = ['blocked', 'decision', 'review', 'answer', 'overdue', 'gate', 'stall', 'proposal'];
+    /* 待我处理的分类顺序。提醒（proposal）不在其中：它们在「提醒」一块单独出现（spec §22.3）。 */
+    const ATTENTION_ORDER = ['blocked', 'decision', 'review', 'answer', 'overdue', 'gate', 'stall'];
+    /* 这四类情形已由「待我处理」覆盖（spec §22.2 的 derived 规则）；旧数据里遗留的同类提醒不显示。 */
+    const DERIVED_RULE_IDS = { stall: true, overdue: true, gate_ready: true, review_lag: true };
 
     function attnTone(kind) {
-      const idx = ATTENTION_ORDER.indexOf(kind);
-      if (idx === -1) return 'default';
-      return kind;
+      return ATTENTION_ORDER.indexOf(kind) === -1 ? 'default' : kind;
+    }
+    /* 「待我处理」只算必须有人动作的事。 */
+    function todoAttention(list) {
+      return asList(list).filter((a) => a && a.kind !== 'proposal');
+    }
+    function visibleProposals(list) {
+      return asList(list).filter((pr) => pr && pr.status !== 'accepted' && pr.status !== 'dismissed' && !DERIVED_RULE_IDS[pr.ruleId]);
     }
 
     function builtinAttentionActions(kind) {
-      if (kind === 'proposal') return [{ key: 'accept', label: t('actAccept'), kind: 'primary' }, { key: 'dismiss', label: t('actDismiss') }];
-      if (kind === 'blocked') return [{ key: 'resolve', label: t('actResolve'), kind: 'primary' }, { key: 'open', label: t('actOpen') }];
-      if (kind === 'decision' || kind === 'answer') return [{ key: 'resolve', label: t('actAnswer'), kind: 'primary' }, { key: 'open', label: t('actOpen') }];
-      if (kind === 'review') return [{ key: 'open', label: t('actReview'), kind: 'primary' }, { key: 'finish', label: t('actPass') }];
-      if (kind === 'overdue') return [{ key: 'open', label: t('actReschedule'), kind: 'primary' }, { key: 'finish', label: t('actFinish') }];
-      if (kind === 'gate') return [{ key: 'open', label: t('actConfirmGate'), kind: 'primary' }];
-      if (kind === 'stall') return [{ key: 'open', label: t('actNudge'), kind: 'primary' }, { key: 'pause', label: t('actPause') }];
+      if (kind === 'blocked') return [{ key: 'open', label: t('actOpen'), kind: 'primary' }, { key: 'resolve', label: t('actResolve') }];
+      if (kind === 'decision') return [{ key: 'answer', label: t('actAnswer'), kind: 'primary' }, { key: 'accept', label: '已决定' }];
+      if (kind === 'answer') return [{ key: 'answer', label: t('actAnswer'), kind: 'primary' }];
+      if (kind === 'review') return [{ key: 'pass', label: t('actPass'), kind: 'primary' }, { key: 'return', label: '退回' }];
+      if (kind === 'overdue') return [{ key: 'reschedule', label: t('actReschedule'), kind: 'primary' }, { key: 'finish', label: t('actFinish') }];
+      if (kind === 'gate') return [{ key: 'confirm', label: t('actConfirmGate'), kind: 'primary' }];
+      if (kind === 'stall') return [{ key: 'followup', label: t('actNudge'), kind: 'primary' }, { key: 'pause', label: t('actPause') }];
       return [{ key: 'open', label: t('actOpen'), kind: 'primary' }];
     }
 
-    /* 宿主 attention actions 是语义 key（open/resolve/answer/accept/pass/...），
-       这里翻译成中文按钮，并把处理动作交给根组件统一分发。 */
+    /* 待处理条目自带的动作是语义 key（open/resolve/answer/…），这里翻成按钮文字，
+       处理逻辑交给根组件统一分发。 */
     const ATTENTION_ACTION_MAP = {
-      open: { key: 'open', label: '打开' },
-      resolve: { key: 'resolve', label: '解决' },
-      answer: { key: 'answer', label: '回答' },
-      accept: { key: 'accept', label: '采纳' },
-      dismiss: { key: 'dismiss', label: '忽略' },
+      open: { key: 'open', label: '查看' },
+      resolve: { key: 'resolve', label: '已解决' },
+      answer: { key: 'answer', label: '回复' },
+      accept: { key: 'accept', label: '已决定' },
+      dismiss: { key: 'dismiss', label: '知道了' },
       pass: { key: 'pass', label: '通过' },
       return: { key: 'return', label: '退回' },
       reschedule: { key: 'reschedule', label: '改期' },
       done: { key: 'done', label: '完成' },
       confirm: { key: 'confirm', label: '去确认' },
-      followup: { key: 'followup', label: '跟进' },
-      pause: { key: 'pause', label: '暂停' },
+      followup: { key: 'followup', label: '去跟进' },
+      pause: { key: 'pause', label: '暂停跟进' },
       finish: { key: 'finish', label: '完成' },
     };
 
@@ -2482,31 +2515,60 @@ window.__ModuleLoader__.load({
       if (!raw.length) return builtinAttentionActions(a.kind);
       return raw.map((x, i) => {
         const rawKey = typeof x === 'string' ? x : str(x && (x.key || x.action));
-        const mapped = ATTENTION_ACTION_MAP[rawKey] || { key: rawKey, label: rawKey };
-        return {
-          key: mapped.key,
-          label: mapped.label,
-          kind: (i === 0 || mapped.key === 'accept' || mapped.key === 'pass') ? 'primary' : '',
-        };
+        const mapped = ATTENTION_ACTION_MAP[rawKey] || { key: rawKey, label: t('actOpen') };
+        return { key: mapped.key, label: mapped.label, kind: i === 0 ? 'primary' : '' };
       });
+    }
+
+    /* 旧版宿主文本带「种类：」前缀；分组头已经说明种类，行里去掉。 */
+    function stripKindPrefix(text) {
+      return str(text).replace(/^(受阻|需要决定|需要回答|待审阅|门禁待确认|待决定|待回答)\s*[:：]\s*/, '')
+        .replace(/^(逾期|停滞)\s*\d+\s*天\s*[:：]\s*/, '');
+    }
+
+    /* 用结构化字段拼出一行：标题说「什么事」，客户名只出现一次（spec §22.3）。 */
+    function attentionRowText(a, meta, board) {
+      const customer = a.engagementName || engagementNameOf(board, a.engagementId, '');
+      const item = a.itemId ? findItem(board, a.itemId) : null;
+      const itemTitle = a.itemTitle || str(item && item.title);
+      const asksUser = a.kind === 'blocked' || a.kind === 'decision' || a.kind === 'answer';
+      const question = a.question || (asksUser ? a.detail : '');
+      let title = '';
+      if (asksUser) title = question || humanizeLog(stripKindPrefix(a.text)) || itemTitle;
+      else if (a.kind === 'review') title = itemTitle;
+      else if (a.kind === 'overdue') title = itemTitle || a.detail;
+      else if (a.kind === 'gate') {
+        const next = a.stage ? stageLabel(meta, a.stage) : '';
+        const n = asList(a.missing).length;
+        title = next ? '可以进入「' + next + '」了' + (n ? '，还有 ' + n + ' 项等你确认' : '') : '';
+      } else if (a.kind === 'stall') title = a.days ? a.days + ' 天没有进展' : '';
+      if (!title) title = humanizeLog(stripKindPrefix(a.text)) || customer;
+      /* 标题是问题时，把任务名放到下面一行做上下文 */
+      const context = asksUser && question && itemTitle && itemTitle !== title ? itemTitle : '';
+      return { title, customer: customer && title.indexOf(customer) === -1 ? customer : '', context };
+    }
+
+    /* 提醒的按钮说的是结果（spec §22.2）：建任务 / 交给 AI / 去处理，都可以「知道了」。 */
+    function proposalActions(pr) {
+      const dismiss = { key: 'dismiss', label: t('actDismiss') };
+      if (pr.kind === 'create_item') return [{ key: 'accept', label: t('bidAddFollowup'), kind: 'primary' }, dismiss];
+      if (pr.kind === 'start_session') return [{ key: 'accept', label: '交给 AI 准备', kind: 'primary' }, dismiss];
+      return [{ key: 'open', label: '去处理', kind: 'primary' }, dismiss];
     }
 
     function TodayView(props) {
       const p = props || {};
       const meta = p.meta;
       const board = p.board;
-      /* 待处理按 kind 分组折叠（§2.6）：默认每组 top-2；行操作最多 2 个（多余进「⋯」） */
+      /* 每类默认显示前 2 条，多的点开看 */
       const [expandedKinds, setExpandedKinds] = useState({});
-      const [openMenu, setOpenMenu] = useState('');
       const brief = p.brief || { attention: [], proposals: [], focus: [], activity: [], stats: {} };
       const stats = p.stats || {};
-      const autonomy = autonomyKey(meta, board);
-      const attention = asList(brief.attention);
-      const proposals = asList(brief.proposals);
+      const attention = todoAttention(brief.attention);
+      const proposals = visibleProposals(brief.proposals);
       const focus = asList(brief.focus).length ? brief.focus : buildFocus(board, meta, 3);
       const activity = asList(brief.activity).slice(0, 10);
       const boardEmpty = asList(board && board.engagements).length === 0;
-      /* 统计数字只在下方统计条出现一次（§2.6 今日去重），这里不再拼重复数字 */
       const groups = (() => {
         const map = {};
         attention.forEach((a) => {
@@ -2518,73 +2580,58 @@ window.__ModuleLoader__.load({
         return ordered.map((k) => ({ kind: k, rows: map[k] }));
       })();
 
-      /* 注意力行：kind 已提到分组头，行内只放标题/元信息/动作；
-         动作最多 2 个（主操作 + 次操作），超过 2 个折叠进「⋯」菜单（§2.6）。 */
+      const titleButton = (text, onClick) => h('button', {
+        type: 'button',
+        className: 'fde-li-title clickable fde-linklike',
+        onClick,
+      }, text);
+
       const attentionRow = (a) => {
-        const name = a.engagementName || engagementNameOf(board, a.engagementId, '');
-        const actions = normalizeAttnActions(a);
-        const visible = actions.slice(0, 2);
-        const overflow = actions.slice(2);
-        const fire = (act) => { setOpenMenu(''); if (p.onAttentionAction) p.onAttentionAction(a, act.key); };
+        const row = attentionRowText(a, meta, board);
+        const actions = normalizeAttnActions(a).slice(0, 2);
+        const waited = a.kind === 'review' && a.days ? '等了 ' + a.days + ' 天' : '';
         return h('div', { className: 'fde-li', key: a.key },
           h('div', { className: 'fde-li-main' },
-            h('button', {
-              type: 'button',
-              className: 'fde-li-title clickable',
-              style: { background: 'transparent', border: 0, padding: 0, textAlign: 'left', font: 'inherit', color: 'inherit' },
-              onClick: () => p.onAttentionOpen && p.onAttentionOpen(a),
-            }, a.text),
-            h('div', { className: 'fde-li-meta' },
-              name ? Chip({ children: name }) : null,
-              a.due ? h('span', { className: isOverdue(a.due) ? 'fde-warn' : '' }, '到期 ' + fmtDay(a.due)) : null,
-              a.days ? h('span', null, '停 ' + a.days + ' 天') : null,
-              a.detail ? h('span', { className: 'fde-dim', style: { wordBreak: 'break-all' } }, a.detail) : null)),
+            titleButton(row.title, () => p.onAttentionOpen && p.onAttentionOpen(a)),
+            (row.customer || row.context || a.due || waited)
+              ? h('div', { className: 'fde-li-meta' },
+                row.customer ? Chip({ children: row.customer }) : null,
+                row.context ? h('span', null, row.context) : null,
+                a.due ? h('span', { className: isOverdue(a.due) ? 'fde-warn' : '' }, dueText(a.due)) : null,
+                waited ? h('span', null, waited) : null)
+              : null),
           h('div', { className: 'fde-li-actions' },
-            visible.map((act) => h(Btn, {
+            actions.map((act) => h(Btn, {
               key: a.key + '-' + act.key,
               small: true,
               kind: act.kind || '',
-              onClick: () => fire(act),
-            }, act.label)),
-            overflow.length
-              ? h('div', { className: 'fde-more' },
-                h(Btn, {
-                  small: true,
-                  ariaLabel: '更多操作',
-                  busy: false,
-                  onClick: () => setOpenMenu((cur) => (cur === a.key ? '' : a.key)),
-                }, '⋯'),
-                openMenu === a.key
-                  ? h('div', { className: 'fde-more-menu', role: 'menu' },
-                    overflow.map((act) => h('button', {
-                      key: a.key + '-more-' + act.key,
-                      type: 'button',
-                      role: 'menuitem',
-                      className: 'fde-more-item',
-                      onClick: () => fire(act),
-                    }, act.label)))
-                  : null)
-              : null));
+              onClick: () => p.onAttentionAction && p.onAttentionAction(a, act.key),
+            }, act.label))));
       };
 
       const proposalRow = (pr) => {
         const engName = engagementNameOf(board, pr.engagementId, '');
+        const title = humanizeLog(pr.title);
+        const detail = str(pr.detail).replace(/^建议\s*[:：]\s*/, '');
+        const pending = p.busy === 'prp:' + pr.id;
+        const fire = (key) => {
+          if (key === 'open') { if (p.onProposalOpen) p.onProposalOpen(pr); return; }
+          if (p.onProposalAction) p.onProposalAction(pr, key);
+        };
         return h('div', { className: 'fde-li', key: pr.key },
           h('div', { className: 'fde-li-main' },
-            h('div', { className: 'fde-li-title' }, pr.title),
-            h('div', { className: 'fde-li-meta' },
-              pr.ruleId ? Chip({ children: pr.ruleId }) : null,
-              engName ? Chip({ children: engName }) : null,
-              pr.detail ? h('span', { className: 'fde-dim', style: { wordBreak: 'break-all' } }, pr.detail) : null)),
+            titleButton(title, () => p.onProposalOpen && p.onProposalOpen(pr)),
+            (detail || (engName && title.indexOf(engName) === -1))
+              ? h('div', { className: 'fde-li-meta' },
+                engName && title.indexOf(engName) === -1 ? Chip({ children: engName }) : null,
+                detail ? h('span', { className: 'fde-dim' }, humanizeLog(detail)) : null)
+              : null),
           h('div', { className: 'fde-li-actions' },
-            h(Btn, {
-              small: true, kind: 'primary', disabled: p.busy === 'prp:' + pr.id,
-              onClick: () => p.onProposalAction && p.onProposalAction(pr, 'accept'),
-            }, t('actAccept')),
-            h(Btn, {
-              small: true, disabled: p.busy === 'prp:' + pr.id,
-              onClick: () => p.onProposalAction && p.onProposalAction(pr, 'dismiss'),
-            }, t('actDismiss'))));
+            proposalActions(pr).map((act) => h(Btn, {
+              key: pr.key + '-' + act.key,
+              small: true, kind: act.kind || '', disabled: pending,
+              onClick: () => fire(act.key),
+            }, act.label))));
       };
 
       const focusRow = (f) => {
@@ -2594,54 +2641,42 @@ window.__ModuleLoader__.load({
             h('div', { className: 'fde-li-main' }, h('div', { className: 'fde-li-title' }, f.name || '—')));
         }
         const next = eng.nextAction || {};
-        const stay = daysInStage(eng);
         return h('button', {
           type: 'button',
-          className: 'fde-li',
+          className: 'fde-li fde-li-button',
           key: f.key,
-          style: { background: 'transparent', border: 0, width: '100%', textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer' },
           onClick: () => p.onOpenEngagement && p.onOpenEngagement(eng.id),
         },
           h('div', { className: 'fde-li-main' },
             h('div', { className: 'fde-li-title' }, eng.name || eng.company || eng.dir || '—'),
+            h('div', { className: next.text ? 'fde-li-sub' : 'fde-li-sub fde-warn' }, next.text || t('boardNoNext')),
             h('div', { className: 'fde-li-meta' },
               Chip({ tone: 'on', children: stageLabel(meta, eng.stage) }),
-              PriorityTag({ value: eng.priority, label: priorityLabel(meta, eng.priority), meta }),
-              next.text ? h('span', { style: { wordBreak: 'break-all' } }, next.text) : h('span', { className: 'fde-dim' }, t('boardNoNext')),
-              next.due ? h('span', { className: isOverdue(next.due) ? 'fde-warn' : '' }, fmtDay(next.due)) : null,
-              stay !== null ? h('span', { className: 'fde-dim' }, '停留 ' + stay + ' 天') : null,
-              f.reason ? h('span', { className: 'fde-dim' }, f.reason) : null)));
+              next.due ? h('span', { className: isOverdue(next.due) ? 'fde-warn' : '' }, dueText(next.due)) : null)));
       };
 
       const activityRow = (a) => {
         const eng = findEngagement(board, a.engagementId);
-        const clickable = !!eng;
+        const open = eng ? () => p.onOpenEngagement && p.onOpenEngagement(eng.id) : null;
+        const text = humanizeLog(a.text);
+        const who = logActor(a.by);
         return h('div', { className: 'fde-li', key: a.key },
           h('div', { className: 'fde-li-main' },
-            h('div', {
-              className: 'fde-li-title' + (clickable ? ' clickable' : ''),
-              style: { fontWeight: 500, fontSize: 13 },
-              role: clickable ? 'button' : undefined,
-              tabIndex: clickable ? 0 : undefined,
-              onClick: clickable ? () => p.onOpenEngagement && p.onOpenEngagement(eng.id) : undefined,
-              onKeyDown: clickable ? (e) => { if (e && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); p.onOpenEngagement && p.onOpenEngagement(eng.id); } } : undefined,
-            }, a.text),
+            open
+              ? h('button', { type: 'button', className: 'fde-li-title clickable fde-linklike fde-li-quiet', onClick: open }, text)
+              : h('div', { className: 'fde-li-title fde-li-quiet' }, text),
             h('div', { className: 'fde-li-meta' },
-              eng ? Chip({ children: eng.shortName || eng.name }) : null,
+              eng && text.indexOf(eng.name) === -1 && text.indexOf(str(eng.shortName) || '\u0000') === -1
+                ? Chip({ children: eng.shortName || eng.name }) : null,
+              who ? h('span', null, who) : null,
               h('span', { className: 'fde-dim' }, relTime(a.at)))));
       };
 
-      /* 一句战况：示例态用 DEMO_BRIEF.greeting；真实态用定性描述（数字只在 KPI 出现一次，§2.6） */
-      const battleLine = str(brief.greeting)
-        || (attention.length
-          ? '先处理要你拍板的事；建议与焦点用于判断下一步。'
-          : '今天没有待你处理的事；可以推进焦点客户或看看最近变化。');
-
-      /* 一屏四宫格（ADR 0007 / spec §8.1）：每块 = 卡片 + 固定标题条 + 块内滚动 body */
+      /* 一屏四块（ADR 0007）：每块 = 卡片 + 固定标题条 + 块内滚动 */
       const panel = (key, title, count, body) => h('div', { className: 'fde-card fde-today-panel', key },
         h('div', { className: 'fde-today-panel-head' },
           h('span', { className: 'fde-today-panel-title' }, title),
-          h('span', { className: 'fde-today-panel-count' }, String(typeof count === 'number' ? count : 0)),
+          count ? h('span', { className: 'fde-today-panel-count' }, String(count)) : null,
           h('div', { className: 'fde-spacer' })),
         h('div', { className: 'fde-today-panel-body' }, body));
 
@@ -2650,11 +2685,18 @@ window.__ModuleLoader__.load({
           String(typeof num === 'number' ? num : (num || 0))),
         h('span', { className: 'fde-kpi-label' }, label));
 
-      /* 待我处理：错误/加载/空态/分组列表（§2.6 去重与折叠规则不变） */
+      const onboarding = h(Empty, {
+        title: t('demoOnboardTitle'),
+        actions: h('div', { className: 'fde-row', style: { marginTop: 8, justifyContent: 'center' } },
+          h(Btn, { small: true, kind: 'primary', onClick: p.onCreate }, '新建客户'),
+          h(Btn, { small: true, onClick: p.onScanNow }, t('scanNow')),
+          h(Btn, { small: true, onClick: p.onOpenSettings }, t('demoStepRestore'))),
+      });
+
       const attentionBody = p.briefError
         ? h(ErrorLine, { title: t('briefLoadFail'), text: p.briefError, onRetry: p.onRefreshBrief })
-        : (p.briefLoading && !attention.length
-          ? h(Loading, { text: '正在读取今日简报…' })
+        : (p.briefLoading && !attention.length && !proposals.length
+          ? h(Loading, {})
           : (attention.length
             ? h('div', { className: 'fde-list' }, groups.map((g) => {
               const expanded = !!expandedKinds[g.kind];
@@ -2663,65 +2705,44 @@ window.__ModuleLoader__.load({
               return h('div', { key: 'g-' + g.kind, className: 'fde-attn-group' },
                 h('div', { className: 'fde-attn-group-head' },
                   h('span', { className: 'fde-attn-kind fde-attn-' + attnTone(g.kind) }, attentionMeta(meta, g.kind).label),
-                  h('span', { className: 'fde-hint' }, g.rows.length + ' 条'),
+                  g.rows.length > 1 ? h('span', { className: 'fde-hint' }, String(g.rows.length)) : null,
                   h('div', { className: 'fde-spacer' }),
                   hidden > 0
-                    ? h(Btn, { small: true, onClick: () => setExpandedKinds((cur) => Object.assign({}, cur, { [g.kind]: true })) }, '展开 ' + hidden + ' 条')
+                    ? h(Btn, { small: true, onClick: () => setExpandedKinds((cur) => Object.assign({}, cur, { [g.kind]: true })) }, '还有 ' + hidden + ' 条')
                     : null,
                   expanded && g.rows.length > 2
                     ? h(Btn, { small: true, onClick: () => setExpandedKinds((cur) => Object.assign({}, cur, { [g.kind]: false })) }, '收起')
                     : null),
                 shown.map(attentionRow));
             }))
-            : h(Empty, {
-              title: boardEmpty ? t('demoOnboardTitle') : t('todayEmptyTitle'),
-              children: boardEmpty
-                ? h('div', { className: 'fde-onboard' },
-                  h('div', { className: 'fde-onboard-step' },
-                    h('span', { className: 'fde-onboard-no' }, '1'),
-                    h('span', null, '新建客户：登记一个值得跟进的客户机会')),
-                  h('div', { className: 'fde-onboard-step' },
-                    h('span', { className: 'fde-onboard-no' }, '2'),
-                    h('span', null, '导入现有项目：扫描 research/ 目录，确认后再写入')),
-                  h('div', { className: 'fde-onboard-step' },
-                    h('span', { className: 'fde-onboard-no' }, '3'),
-                    h('span', null, '想看示例？设置 → 演示数据 → 重新查看示例')))
-                : t('todayEmptyBody'),
-              actions: boardEmpty
-                ? h('div', { className: 'fde-row', style: { marginTop: 8, justifyContent: 'center' } },
-                  h(Btn, { small: true, kind: 'primary', onClick: p.onCreate }, '新建客户'),
-                  h(Btn, { small: true, onClick: p.onScanNow }, t('scanNow')),
-                  h(Btn, { small: true, onClick: p.onOpenSettings }, t('demoStepRestore')))
-                : null,
-            })));
+            : (boardEmpty ? onboarding : h(Empty, { mark: '✓', title: t('todayEmptyTitle') }))));
 
       return h('div', { className: 'fde-view fde-view-fill fde-today' },
-        /* 顶部一行 KPI（固定，不滚动）：统计数字全页只出现这一次（§2.6） */
+        /* 顶部一行：问候 + 日期；四个数字全页只出现这一次 */
         h('div', { className: 'fde-today-head' },
           h('div', { className: 'fde-today-greet' },
             h('div', { className: 'fde-today-greet-title' }, greeting()),
-            h('div', { className: 'fde-today-greet-sub', title: battleLine },
-              battleLine)),
+            h('div', { className: 'fde-today-greet-sub' }, todayLine())),
           h('div', { className: 'fde-today-kpis' },
-            kpi('active', stats.active, '活跃客户'),
-            kpi('attention', attention.length, '待我处理', attention.length ? 'warn' : ''),
-            kpi('due', stats.dueToday, '今日到期'),
-            kpi('overdue', stats.overdue, '逾期', (stats.overdue || 0) > 0 ? 'alert' : ''))),
+            kpi('active', stats.active, '在跟客户'),
+            kpi('attention', attention.length, t('todayAttention'), attention.length ? 'warn' : ''),
+            kpi('due', stats.dueToday, '今天到期'),
+            kpi('overdue', stats.overdue, '已逾期', (stats.overdue || 0) > 0 ? 'alert' : ''))),
 
         h('div', { className: 'fde-today-grid' },
           panel('attention', t('todayAttention'), attention.length, attentionBody),
           panel('proposals', t('todayProposals'), proposals.length,
             proposals.length
               ? h('div', { className: 'fde-list' }, proposals.map(proposalRow))
-              : h(Empty, { mark: '✓', title: '没有待采纳的建议', body: '规则引擎会在读取时生成，采纳或忽略后即消失。' })),
-          panel('focus', t('todayFocus'), focus.length,
+              : h(Empty, { mark: '✓', title: '暂时没有提醒' })),
+          panel('focus', t('todayFocus'), 0,
             focus.length
               ? h('div', { className: 'fde-list' }, focus.map(focusRow))
-              : h(Empty, { mark: '◎', title: '暂无焦点客户', body: '看板还是空的。先导入现有项目或新建客户。' })),
-          panel('activity', t('todayActivity'), activity.length,
+              : h(Empty, { mark: '◎', title: t('boardEmpty') })),
+          panel('activity', t('todayActivity'), 0,
             activity.length
               ? h('div', { className: 'fde-list' }, activity.map(activityRow))
-              : h(Empty, { mark: '·', title: '还没有活动记录' }))));
+              : h(Empty, { mark: '·', title: '还没有动态' }))));
     }
 
     /* ============================================================
@@ -2837,13 +2858,17 @@ window.__ModuleLoader__.load({
       const engagementCard = (eng) => {
         const next = eng.nextAction || {};
         const stay = daysInStage(eng);
-        const attn = eng.attention ? 1 : 0;
-        const gate = manualProgress(eng, meta, eng.stage);
-        const artCount = engagementArtifactCount(eng);
+        /* 和抽屉读同一组条件：要进入的那个阶段（spec §22.9）；已在最后一个阶段就不显示 */
+        const stageList = asList(meta && meta.stages);
+        const nextStageOfCard = stageList[stageIndex(meta, eng.stage) + 1] || null;
+        const gate = nextStageOfCard ? manualProgress(eng, meta, nextStageOfCard.key) : null;
         const bids = engagementBids(eng);
         const prio = str(eng.priority || 'normal');
-        const label = (eng.name || eng.company || eng.dir) + '，' + stageLabel(meta, eng.stage)
-          + '，优先级' + priorityLabel(meta, prio) + (next.text ? '，下一步：' + next.text : '');
+        const name = eng.name || eng.company || eng.dir || '—';
+        const label = name + '，' + stageLabel(meta, eng.stage) + stayText(stay)
+          + '，优先级' + priorityLabel(meta, prio)
+          + '，' + (next.text ? '下一步：' + next.text : t('boardNoNext'))
+          + (next.due ? '，' + dueText(next.due) : '');
         const isDragging = dragging && dragging.kind === 'engagement' && dragging.id === eng.id;
         return h('div', {
           key: eng.id,
@@ -2852,7 +2877,6 @@ window.__ModuleLoader__.load({
           tabIndex: 0,
           draggable: 'true',
           'aria-label': label,
-          title: label,
           onClick: () => p.onOpenEngagement && p.onOpenEngagement(eng.id),
           onKeyDown: (e) => keyNav(e, 'engagement', eng.id, eng.stage),
           onDragStart: (e) => beginDrag(e, { kind: 'engagement', id: eng.id, from: eng.stage }),
@@ -2860,39 +2884,33 @@ window.__ModuleLoader__.load({
         },
           h('div', { className: 'fde-card-title-row' },
             Dot({ tone: prio === 'high' ? 'high' : (prio === 'low' ? 'low' : 'normal') }),
-            h('div', { className: 'fde-card-name' }, eng.name || eng.company || eng.dir || '—'),
-            stay !== null ? h('span', { className: 'fde-card-days', title: '停留天数' }, stay + '天') : null),
-          h('div', { className: 'fde-card-next' }, next.text || t('boardNoNext')),
+            h('div', { className: 'fde-card-name' }, name),
+            stay !== null ? h('span', { className: 'fde-card-days', title: '在本阶段的天数' }, stayText(stay)) : null),
+          h('div', { className: 'fde-card-next' + (next.text ? '' : ' missing') }, next.text || t('boardNoNext')),
           h('div', { className: 'fde-card-meta' },
-            next.due
-              ? Chip({ tone: isOverdue(next.due) ? 'danger' : 'muted', children: fmtDay(next.due) })
-              : null,
             eng.paused ? Chip({ tone: 'warn', children: t('drawerPaused') }) : null,
-            attn ? h('span', { className: 'fde-dotline', title: '有注意力' }, Dot({ tone: 'alert' }), attn) : null,
+            next.due ? Chip({ tone: dueTone(next.due), children: dueText(next.due) }) : null,
+            eng.attention ? Chip({ tone: 'danger', children: attentionMeta(meta, str(eng.attention.kind)).label }) : null,
             gate
               ? h('span', {
                 className: 'fde-dotline',
-                title: '当前阶段人工门禁 ' + gate.pass + '/' + gate.total,
-              }, Dot({ tone: gate.pass >= gate.total ? 'ok' : 'warn' }), gate.pass + '/' + gate.total)
+                title: '进入「' + nextStageOfCard.label + '」需要你确认的事：已确认 ' + gate.pass + ' 项，共 ' + gate.total + ' 项',
+              }, Dot({ tone: gate.pass >= gate.total ? 'ok' : 'warn' }),
+              gate.pass >= gate.total ? '已确认' : '待确认 ' + (gate.total - gate.pass))
               : null,
-            artCount !== null ? h('span', { className: 'fde-dotline', title: '工件数' }, '工 ' + artCount) : null,
             (bids.available && bids.total > 0)
-              ? h('span', {
-                className: 'fde-dotline',
-                title: bidCardBadgeTitle(bids),
-              }, Chip({ tone: 'accent', children: '招采 ' + bids.total }))
+              ? h('span', { className: 'fde-dotline', title: bidCardBadgeTitle(bids) }, Chip({ tone: 'accent', children: '招采 ' + bids.total }))
               : null),
           asList(eng.tags).length
-            ? h('div', { className: 'fde-card-tags' }, asList(eng.tags).slice(0, 3).map((tg) => h('span', { key: 'tag-' + tg, className: 'fde-chip muted' }, tg)))
+            ? h('div', { className: 'fde-card-tags' }, asList(eng.tags).slice(0, 2).map((tg) => h('span', { key: 'tag-' + tg, className: 'fde-chip muted' }, tg)))
             : null);
       };
 
       const itemCard = (it) => {
         const eng = it.engagementId ? engById(it.engagementId) : null;
         const prio = str(it.priority || 'normal');
-        const lane = laneOf(meta, it.stage);
-        const label = it.title + '，' + (eng ? eng.shortName || eng.name : t('drawerItemIndependent'))
-          + '，优先级' + priorityLabel(meta, prio);
+        const label = it.title + (eng ? '，' + (eng.shortName || eng.name) : '')
+          + '，优先级' + priorityLabel(meta, prio) + (it.due ? '，' + dueText(it.due) : '');
         const isDragging = dragging && dragging.kind === 'item' && dragging.id === it.id;
         const reports = asList(it.reports);
         return h('div', {
@@ -2902,7 +2920,6 @@ window.__ModuleLoader__.load({
           tabIndex: 0,
           draggable: 'true',
           'aria-label': label,
-          title: label,
           onClick: () => p.onOpenItem && p.onOpenItem(it.id),
           onKeyDown: (e) => keyNav(e, 'item', it.id, it.stage),
           onDragStart: (e) => beginDrag(e, { kind: 'item', id: it.id, from: it.stage }),
@@ -2914,10 +2931,9 @@ window.__ModuleLoader__.load({
           h('div', { className: 'fde-card-meta' },
             Chip({ tone: 'muted', children: typeLabel(meta, it.type) }),
             eng ? Chip({ tone: '', children: eng.shortName || eng.name }) : null,
-            it.due ? Chip({ tone: isOverdue(it.due) ? 'danger' : 'muted', children: fmtDay(it.due) }) : null,
-            it.attention ? h('span', { className: 'fde-dotline', title: '有注意力' }, Dot({ tone: 'alert' })) : null,
-            reports.length ? h('span', { className: 'fde-dotline', title: '回报数' }, '回报 ' + reports.length) : null),
-          lane && lane.definition ? h('div', { className: 'fde-hint', style: { marginTop: 6 } }, lane.definition) : null);
+            it.due ? Chip({ tone: dueTone(it.due), children: dueText(it.due) }) : null,
+            it.attention ? Chip({ tone: 'danger', children: attentionMeta(meta, str(it.attention.kind)).label }) : null,
+            reports.length ? h('span', { className: 'fde-dotline' }, '进展 ' + reports.length) : null));
       };
 
       const renderColumn = (col) => {
@@ -2929,7 +2945,8 @@ window.__ModuleLoader__.load({
             ? col.wip
             : (board.settings && board.settings.wipLimits ? board.settings.wipLimits[col.key] : null))
           : null;
-        const overWip = wipLimit !== null && wipLimit !== undefined && cards.length > Number(wipLimit);
+        const hasWip = wipLimit !== null && wipLimit !== undefined && Number(wipLimit) > 0;
+        const overWip = hasWip && cards.length > Number(wipLimit);
         return h('div', {
           key: col.key,
           className: 'fde-col' + (over === col.key ? ' over' : '') + (overWip ? ' over-wip' : ''),
@@ -2941,14 +2958,16 @@ window.__ModuleLoader__.load({
         },
           h('div', { className: 'fde-col-head' },
             h('span', { className: 'fde-col-title', title: col.definition || '' }, col.label),
-            h('span', { className: 'fde-col-count' }, String(cards.length)),
-            wipLimit !== null && wipLimit !== undefined
-              ? h('span', { className: 'fde-col-wip', title: 'WIP 上限 ' + wipLimit }, 'WIP ' + cards.length + '/' + wipLimit)
-              : null),
+            hasWip
+              ? h('span', {
+                className: 'fde-col-wip',
+                title: '同时进行最多 ' + wipLimit + ' 个' + (overWip ? '，现在超了' : ''),
+              }, cards.length + '/' + wipLimit)
+              : (cards.length ? h('span', { className: 'fde-col-count' }, String(cards.length)) : null)),
           h('div', { className: 'fde-col-body' },
             cards.length
               ? cards.map(mode === 'customer' ? engagementCard : itemCard)
-              : h('div', { className: 'fde-col-empty' }, '（空）')));
+              : h('div', { className: 'fde-col-empty', 'aria-hidden': 'true' })));
       };
 
       const emptyBoard = mode === 'customer' && engagements.length === 0;
@@ -2967,7 +2986,7 @@ window.__ModuleLoader__.load({
             onChange: (e) => p.onPriority && p.onPriority(e.target.value),
           },
             [{ value: 'all', label: t('all') + '优先级' }].concat(
-              asList(meta && meta.priorities).map((x) => ({ value: x.key, label: x.label }))
+              asList(meta && meta.priorities).map((x) => ({ value: x.key, label: '优先级' + x.label }))
             ).map((o) => h('option', { key: o.value, value: o.value }, o.label))),
           mode === 'task'
             ? h('select', {
@@ -2980,22 +2999,17 @@ window.__ModuleLoader__.load({
               ).map((o) => h('option', { key: o.value, value: o.value }, o.label)))
             : null,
           h('div', { className: 'fde-spacer' }),
-          mode === 'task' ? h(Btn, { small: true, kind: 'primary', onClick: p.onCreateItem }, '新建任务') : null),
-        h('div', { className: 'fde-row', style: { justifyContent: 'space-between' } },
-          h('span', { className: 'fde-hint' }, t('boardDragHint')),
-          h(KeyHint, {})),
+          mode === 'task'
+            ? h(Btn, { small: true, kind: 'primary', onClick: p.onCreateItem }, '新建任务')
+            : h(Btn, { small: true, kind: 'primary', onClick: p.onCreateEngagement }, '新建客户')),
         emptyBoard
           ? h(Empty, {
             title: t('boardEmpty'),
             actions: h('div', { className: 'fde-row', style: { justifyContent: 'center', marginTop: 8 } },
-              h(Btn, { small: true, kind: 'primary', onClick: p.onScanNow }, t('scanNow')),
-              h(Btn, { small: true, onClick: p.onOpenCustomers }, t('customersTitle'))),
+              h(Btn, { small: true, kind: 'primary', onClick: p.onCreateEngagement }, '新建客户'),
+              h(Btn, { small: true, onClick: p.onScanNow }, t('scanNow'))),
           })
           : h('div', { className: 'fde-board-wrap' },
-            scrollState.can
-              ? h('div', { className: 'fde-board-hint' },
-                '← 横向滚动查看全部 ' + columns.length + ' 个' + (mode === 'customer' ? '阶段' : '泳道'))
-              : null,
             h('div', {
               className: 'fde-board' + (scrollState.can && !scrollState.atEnd ? ' mask-right' : ''),
               role: 'group',
@@ -3059,12 +3073,14 @@ window.__ModuleLoader__.load({
 
       useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
-      const runScan = useCallback(async () => {
-        setScanning(true); setAdoptErr(''); setAdoptMsg(''); setShowAdopt(true);
+      const runScan = useCallback(async (keepMsg) => {
+        setScanning(true); setAdoptErr(''); setShowAdopt(true);
+        /* 导入后的重新查找要留着「已导入 N 个客户」这句结果 */
+        if (keepMsg !== true) setAdoptMsg('');
         const r = await fdePost('/adopt', { action: 'scan' });
         if (!alive.current) return;
         setScanning(false);
-        if (!r || r.ok === false) { setAdoptErr((r && r.reason) || '扫描失败'); setCandidates([]); return; }
+        if (!r || r.ok === false) { setAdoptErr((r && r.reason) || '没能查找文件夹'); setCandidates([]); return; }
         setCandidates(normalizeCandidates(r.candidates || r.items || r.list || []));
         setSelected({});
       }, []);
@@ -3090,10 +3106,15 @@ window.__ModuleLoader__.load({
         const r = await fdePost('/adopt', { action: 'apply', dirs });
         if (!alive.current) return;
         setApplying(false);
-        if (!r || r.ok === false) { setAdoptErr((r && r.reason) || '导入失败'); return; }
-        setAdoptMsg('已导入 ' + dirs.length + ' 个目录');
+        if (!r || r.ok === false) { setAdoptErr((r && r.reason) || '没能导入'); return; }
+        /* 报实际导入的数量，不是勾选的数量 */
+        const added = Array.isArray(r.added) ? r.added.length : dirs.length;
+        const missed = dirs.length - added;
         if (p.onRefresh) await p.onRefresh();
-        await runScan();
+        await runScan(true);
+        if (!alive.current) return;
+        if (added > 0) setAdoptMsg('已导入 ' + added + ' 个客户' + (missed > 0 ? '，另有 ' + missed + ' 个没导入（已经在看板里，或文件夹不可用）' : ''));
+        else setAdoptErr('没有导入：选中的文件夹已经在看板里，或文件夹不可用');
       };
 
       const engs = asList(board.engagements);
@@ -3115,7 +3136,7 @@ window.__ModuleLoader__.load({
           h('div', { className: 'fde-card-title' },
             h('span', null, t('customersAdopt')),
             h('div', { className: 'fde-spacer' }),
-            h(Btn, { small: true, onClick: runScan, disabled: scanning || applying, busy: scanning }, scanning ? t('customersScanning') : '重新扫描'),
+            h(Btn, { small: true, onClick: runScan, disabled: scanning || applying, busy: scanning }, scanning ? t('customersScanning') : '重新查找'),
             h(Btn, { small: true, onClick: () => setShowAdopt(false) }, t('close'))),
           h('div', { className: 'fde-hint', style: { marginBottom: 8 } }, t('customersAdoptHint')),
           adoptErr ? h(MsgLine, { kind: 'err', text: adoptErr }) : null,
@@ -3138,26 +3159,21 @@ window.__ModuleLoader__.load({
                     h('div', { className: 'fde-cand-main' },
                       h('div', { className: 'fde-cand-title' }, c.title || c.dir),
                       h('div', { className: 'fde-row tight' },
-                        c.kind ? Chip({ tone: 'muted', children: c.kind }) : null,
-                        c.adopted ? Chip({ tone: 'muted', children: '已建档' }) : null,
                         c.already ? Chip({ tone: 'ok', children: t('customersAlready') }) : null,
-                        !c.importable ? Chip({ tone: 'warn', children: '目录名不可用' }) : null,
-                        stageTxt ? Chip({ tone: 'on', children: t('customersStage') + '：' + stageTxt }) : null,
-                        c.confidence ? Chip({ tone: 'muted', children: t('customersConfidence') + '：' + c.confidence }) : null,
-                        c.mdCount !== null ? h('span', { className: 'fde-hint' }, c.mdCount + ' 个 md') : null,
-                        c.mtime ? h('span', { className: 'fde-hint' }, '最近 ' + relTime(c.mtime)) : null),
-                      h('div', { className: 'fde-code' }, c.dir),
-                      c.evidence.length
-                        ? h('div', { className: 'fde-hint' }, t('customersEvidence') + '：' + c.evidence.slice(0, 3).join('；'))
-                        : null,
+                        !c.importable ? Chip({ tone: 'warn', children: '文件夹名里有不能用的字符' }) : null,
+                        stageTxt && !c.already ? Chip({ tone: 'on', children: '放在「' + stageTxt + '」阶段' }) : null,
+                        h('span', { className: 'fde-hint' }, [
+                          c.dir !== c.title ? c.dir : '',
+                          c.mdCount !== null ? c.mdCount + ' 份文档' : '',
+                          c.mtime ? relTime(c.mtime) + '更新' : '',
+                        ].filter(Boolean).join(' · '))),
                       c.reason ? h('div', { className: 'fde-hint' }, c.reason) : null));
                 }),
                 h('div', { className: 'fde-row', style: { marginTop: 4 } },
                   h(Btn, {
                     small: true, kind: 'primary', disabled: !chosen || applying, busy: applying,
                     onClick: applyImport,
-                  }, applying ? t('customersImporting') : t('customersImport') + (chosen ? '（' + chosen + '）' : '')),
-                  h('span', { className: 'fde-hint' }, '只写 research/.fde/board.json，不改动客户目录。')))));
+                  }, applying ? t('customersImporting') : t('customersImport') + (chosen ? '（' + chosen + '）' : ''))))));
       };
 
       return h('div', { className: 'fde-view' },
@@ -3179,7 +3195,7 @@ window.__ModuleLoader__.load({
           h(Select, {
             value: prioFilter, ariaLabel: t('customersPriority'),
             options: [{ value: 'all', label: t('all') + '优先级' }].concat(
-              asList(meta && meta.priorities).map((x) => ({ value: x.key, label: x.label }))
+              asList(meta && meta.priorities).map((x) => ({ value: x.key, label: '优先级' + x.label }))
             ),
             onChange: (e) => setPrioFilter(e.target.value),
           }),
@@ -3192,14 +3208,10 @@ window.__ModuleLoader__.load({
             title: engs.length ? t('boardNoResult') : t('customersEmpty'),
             mark: '◎',
             actions: h('div', { className: 'fde-row', style: { justifyContent: 'center', marginTop: 8 } },
-              h(Btn, { small: true, kind: 'primary', onClick: p.onCreate }, '新建客户'),
-              h(Btn, { small: true, onClick: () => { if (candidates === null) runScan(); else setShowAdopt(true); } }, t('customersAdopt')),
-              p.onOpenSettings ? h(Btn, { small: true, onClick: p.onOpenSettings }, t('demoStepRestore')) : null),
+              engs.length ? null : h(Btn, { small: true, kind: 'primary', onClick: p.onCreate }, '新建客户'),
+              engs.length ? null : h(Btn, { small: true, onClick: () => { if (candidates === null) runScan(); else setShowAdopt(true); } }, t('customersAdopt'))),
           })
           : h('div', { className: 'fde-table-wrap' },
-            h('div', { className: 'fde-row', style: { padding: '8px 12px', borderBottom: '0.5px solid var(--fde-border)' } },
-              h('span', { className: 'fde-section-title' }, t('customersTitle')),
-              h('span', { className: 'fde-hint' }, rows.length + ' / ' + engs.length + ' ' + t('customersCount'))),
             h('div', { style: { overflowX: 'auto' } },
               h('table', { className: 'fde-table' },
                 h('thead', null,
@@ -3214,7 +3226,7 @@ window.__ModuleLoader__.load({
                 h('tbody', null, rows.map((e) => {
                   const next = e.nextAction || {};
                   const stay = daysInStage(e);
-                  const attn = e.attention ? str(pick(e.attention.kind, '待处理')) : '';
+                  const attn = e.attention ? str(pick(e.attention.kind, 'decision')) : '';
                   const archived = meta && meta.terminalStages && meta.terminalStages.indexOf(e.stage) !== -1;
                   return h('tr', {
                     key: e.id,
@@ -3226,14 +3238,14 @@ window.__ModuleLoader__.load({
                   },
                     h('td', { className: 'fde-cell-name' },
                       h('div', null, e.name || e.company || e.dir || '—'),
-                      e.dir && e.dir !== e.name ? h('div', { className: 'fde-code' }, e.dir) : null),
+                      e.paused ? h('div', { className: 'fde-hint' }, t('drawerPaused')) : null),
                     h('td', null, Chip({ tone: archived ? 'muted' : 'on', children: stageLabel(meta, e.stage) })),
                     h('td', null, PriorityTag({ value: e.priority, label: priorityLabel(meta, e.priority), meta })),
-                    h('td', { className: 'fde-cell-now' }, next.text || h('span', { className: 'fde-dim' }, t('boardNoNext'))),
+                    h('td', { className: 'fde-cell-now' }, next.text || h('span', { className: archived ? 'fde-dim' : 'fde-warn-soft' }, archived ? '—' : t('boardNoNext'))),
                     h('td', { className: 'fde-cell-num' }, next.due
-                      ? h('span', { className: isOverdue(next.due) ? 'fde-warn' : '' }, fmtDay(next.due))
+                      ? h('span', { className: isOverdue(next.due) ? 'fde-warn' : '' }, dueText(next.due))
                       : h('span', { className: 'fde-dim' }, '—')),
-                    h('td', { className: 'fde-cell-num' }, stay !== null ? stay + ' ' + t('customersDays') : '—'),
+                    h('td', { className: 'fde-cell-num' }, stay !== null && !archived ? stayText(stay) : '—'),
                     h('td', null, attn
                       ? h('span', { className: 'fde-attn-cell' }, Dot({ tone: 'alert' }), attentionMeta(meta, attn).label)
                       : h('span', { className: 'fde-attn-cell quiet' }, '—')));
@@ -3248,29 +3260,6 @@ window.__ModuleLoader__.load({
      * 预览复用宿主能力：同源鉴权路由 /api/file + remote.officeToPdf；
      * 不新增宿主路由、不引入依赖、不写任何状态。
      * ============================================================ */
-    const FILE_GROUP_ORDER = ['00-项目档案.md', 'raw', 'research', 'meeting', 'proposal', 'pilot', 'delivery', 'adoption', 'internal', 'exports'];
-
-    function groupFiles(files) {
-      const groups = {};
-      asList(files).forEach((f) => {
-        const rel = str(f && f.rel);
-        if (!rel) return;
-        const seg = rel.indexOf('/') === -1 ? '根目录' : rel.split('/')[0];
-        if (!groups[seg]) groups[seg] = [];
-        groups[seg].push(f);
-      });
-      const order = Object.keys(groups).sort((a, b) => {
-        const ia = FILE_GROUP_ORDER.indexOf(a);
-        const ib = FILE_GROUP_ORDER.indexOf(b);
-        if (a === '根目录') return -1;
-        if (b === '根目录') return 1;
-        if (ia === -1 && ib === -1) return a < b ? -1 : 1;
-        if (ia === -1) return 1;
-        if (ib === -1) return -1;
-        return ia - ib;
-      });
-      return order.map((k) => ({ key: k, files: groups[k] }));
-    }
 
     /* ---- 分类与预览工具（ADR 0008） ---- */
     const MAT_RAW_EXTS = ['html', 'htm', 'json', 'jsonl', 'xml', 'tsv', 'log', 'warc', 'eml', 'sitemap'];
@@ -3334,7 +3323,7 @@ window.__ModuleLoader__.load({
       return b && r ? b + '/' + r : (b || r);
     }
     function matFileUrl(abs) {
-      return '/api/file?path=' + encodeURIComponent(str(abs));
+      return appUrl('api/file') + '?path=' + encodeURIComponent(str(abs));
     }
     /* md 内相对图片：按文档所在目录解析（/api/file 需要绝对路径） */
     function matResolveAsset(docAbs, url) {
@@ -3528,7 +3517,7 @@ window.__ModuleLoader__.load({
         let cancelled = false;
         const fail = (e) => {
           if (cancelled) return;
-          setState({ status: 'error', err: String((e && (e.message || e.reason)) || e || '未知原因') });
+          setState({ status: 'error', err: String((e && (e.message || e.reason)) || e || '原因不明') });
         };
         const makePdf = async (blob) => {
           if (cancelled) return;
@@ -3589,15 +3578,20 @@ window.__ModuleLoader__.load({
             h('span', { className: 'fde-hint' }, [matBytes(file.size), file.mtime ? relTime(file.mtime) : ''].filter(Boolean).join(' · '))) : null),
         h('div', { className: 'fde-pv-actions' },
           file && kind === 'md' && p.onExport ? h(Btn, { small: true, onClick: () => p.onExport(file) }, t('matExport')) : null,
-          file && p.onQa && (file.pdfRel || /\.pdf$/i.test(file.rel)) ? h(Btn, { small: true, onClick: () => p.onQa(file) }, t('matQa')) : null,
           file ? h(Btn, { small: true, onClick: () => p.onOpenPath(abs, 'open', file.rel, 'file') }, t('matSystemOpen')) : null,
-          file ? h(Btn, { small: true, onClick: () => setReload((v) => v + 1) }, t('matReloadOne')) : null,
           h(Btn, { small: true, onClick: () => { if (p.onToggleFull) p.onToggleFull(!p.full); } }, p.full ? t('matExitFull') : t('matFull')),
+          /* 不常用的收进「更多」：重新读取、检查 PDF 版面 */
+          file ? h(MatMenu, {
+            items: [
+              { label: t('matReloadOne'), onSelect: () => setReload((v) => v + 1) },
+              p.onQa && (file.pdfRel || /\.pdf$/i.test(file.rel)) ? { label: t('matQa'), onSelect: () => p.onQa(file) } : null,
+            ].filter(Boolean),
+          }) : null,
           p.onClose ? h('button', { type: 'button', className: 'fde-iconbtn', title: t('close'), 'aria-label': t('close'), onClick: p.onClose }, '×') : null));
 
       let body = null;
       if (!file) {
-        body = h(Empty, { mark: '▤', title: t('matPick'), body: h('div', { className: 'fde-hint' }, t('matPickHint')) });
+        body = h(Empty, { mark: '▤', title: t('matPick') });
       } else if (state.status === 'loading') {
         body = h(Loading, { text: state.note || t('loading') });
       } else if (state.status === 'error') {
@@ -3630,7 +3624,7 @@ window.__ModuleLoader__.load({
                 h('button', { type: 'button', className: htmlMode === 'snapshot' ? 'on' : '', onClick: () => setHtmlMode('snapshot') }, t('matHtmlSnapshot')),
                 h('button', { type: 'button', className: htmlMode === 'source' ? 'on' : '', onClick: () => setHtmlMode('source') }, t('matHtmlSource'))),
               h('div', { className: 'fde-spacer' }),
-              h('span', { className: 'fde-hint' }, 'sandbox · 不执行脚本')),
+              h('span', { className: 'fde-hint' }, '静态快照，网页里的脚本不会运行')),
             htmlMode === 'source'
               ? h('pre', { className: 'fde-pv-pre' }, state.text)
               : h('iframe', { className: 'fde-pv-frame', sandbox: '', srcDoc: state.text, title: file.rel, referrerPolicy: 'no-referrer' }));
@@ -3639,7 +3633,7 @@ window.__ModuleLoader__.load({
         }
         if (state.note) body = h(React.Fragment, null, body, h('div', { className: 'fde-pv-note' }, state.note));
       } else {
-        body = h(Empty, { mark: '▤', title: t('matPick'), body: h('div', { className: 'fde-hint' }, t('matPickHint')) });
+        body = h(Empty, { mark: '▤', title: t('matPick') });
       }
 
       return h('div', { className: 'fde-mat-preview' + (p.full ? ' full' : '') },
@@ -3839,7 +3833,7 @@ window.__ModuleLoader__.load({
         if (p.openPath) {
           const r = await p.openPath(abs, mode2, kind || 'file');
           if (r && r.ok) { notify('ok', (mode2 === 'reveal' ? t('revealOk') : t('openOk')) + '：' + (label || abs)); return; }
-          notify('warn', t('revealFail') + '：' + ((r && r.reason) || '未知原因'));
+          notify('warn', t('revealFail') + (r && r.reason ? '：' + r.reason : ''));
         }
       };
       const doExport = async (file) => {
@@ -3851,7 +3845,7 @@ window.__ModuleLoader__.load({
       const doQa = async (file) => {
         const target = file.pdfRel || file.rel;
         const r = await postJSON(API + '/handoff', { action: 'qa', dir: file.engDir, pdf: target }, 60000);
-        if (r && r.ok && r.sessionId) { notify('ok', '已下发质检任务，正在跳转…'); if (p.openSession) p.openSession(r.sessionId); }
+        if (r && r.ok && r.sessionId) { notify('ok', '已开始检查，正在打开会话…'); if (p.openSession) p.openSession(r.sessionId); }
         else if (r && r.promptText) { if (p.copyText) await p.copyText(r.promptText); notify('warn', (r.reason || t('handoffFail'))); }
         else notify('warn', (r && r.reason) || t('actionFail'));
       };
@@ -3860,8 +3854,8 @@ window.__ModuleLoader__.load({
         const r = await fdePost('/sync', {});
         if (!alive.current) return;
         setSyncing(false);
-        if (!r || r.ok === false) { notify('err', '重扫失败：' + ((r && r.reason) || '未知原因')); return; }
-        setSyncMsg('已重扫工件');
+        if (!r || r.ok === false) { notify('err', '没能重新读取' + (r && r.reason ? '：' + r.reason : '')); return; }
+        setSyncMsg('已重新读取');
         await loadAllFiles();
         if (p.onRefresh) await p.onRefresh();
       };
@@ -3895,7 +3889,7 @@ window.__ModuleLoader__.load({
       const doToProject = async (dir) => {
         const r = await postJSON(API + '/toproject', { dir, company: dir }, 60000);
         if (r && r.ok) { notify('ok', t('converted') + '：' + dir); if (p.onRefresh) await p.onRefresh(); loadMaterials(); if (p.onScanNow) p.onScanNow(); }
-        else notify('warn', (r && r.reason) || '转换失败');
+        else notify('warn', (r && r.reason) || '没能转成客户');
       };
       const loadMatFiles = async (dir) => {
         if (matFiles[dir]) { const nx = Object.assign({}, matFiles); delete nx[dir]; setMatFiles(nx); return; }
@@ -4046,7 +4040,6 @@ window.__ModuleLoader__.load({
             h('span', { className: 'fde-hint' }, count ? String(count) + ' ' + t('artifactsFiles') : '')),
           showMaterials
             ? h('div', { className: 'fde-mat-cust-files' },
-              h('div', { className: 'fde-hint', style: { padding: '6px 10px' } }, t('matMaterialsHint')),
               materials === null ? h(Loading, { text: t('loading') }) : null,
               rows,
               loose.length ? h('div', { className: 'fde-hint', style: { padding: '8px 10px 2px' } }, t('artifactsLoose') + '（' + loose.length + '）') : null,
@@ -4077,7 +4070,7 @@ window.__ModuleLoader__.load({
             onChange: (e) => setQ(e.target.value),
           }),
           h(Btn, { small: true, onClick: () => setUploadOpen((v) => !v), kind: uploadOpen ? 'primary' : undefined }, t('matUpload')),
-          h(Btn, { small: true, onClick: doSync, busy: syncing }, syncing ? '重扫中…' : t('artifactsRefresh'))),
+          h(Btn, { small: true, onClick: doSync, busy: syncing }, syncing ? '读取中…' : t('artifactsRefresh'))),
         h('div', { className: 'fde-mat-filters' },
           h('div', { className: 'fde-seg' },
             h('button', { type: 'button', className: mode === 'recent' ? 'on' : '', onClick: () => setMode('recent') }, t('matRecent')),
@@ -4239,7 +4232,7 @@ window.__ModuleLoader__.load({
 
       /* 「导入链接」只在 bid-intel 同源路由可用时显示（探测失败即隐藏） */
       const probeImport = useCallback(async () => {
-        const r = await getJSON('/bidintel/api/status');
+        const r = await getJSON(appUrl('bidintel/api/status'));
         if (!alive.current) return;
         setImportReady(!!(r && r.ok !== false));
       }, []);
@@ -4260,7 +4253,7 @@ window.__ModuleLoader__.load({
         const r = await getJSON(FDE + '/bids/search?' + qs);
         if (!alive.current) return;
         setSearchLoading(false);
-        if (r && r.ok === false && r.available !== false) setSearchError(r.reason || '检索失败');
+        if (r && r.ok === false && r.available !== false) setSearchError(r.reason || '没能查询');
         if (r && r.available === false) setSearchError('');
         const n = normalizeBidSearchResp(r);
         setResults((cur) => {
@@ -4304,7 +4297,7 @@ window.__ModuleLoader__.load({
         const url = str(importUrl).trim();
         if (!url) { setImportMsg({ kind: 'warn', text: t('bidImportNeedUrl') }); return; }
         setImporting(true); setImportMsg(null);
-        const r = await postJSON('/bidintel/api/import-url', { url }, 30000);
+        const r = await postJSON(appUrl('bidintel/api/import-url'), { url }, 30000);
         if (!alive.current) return;
         setImporting(false);
         if (r && r.ok) {
@@ -4347,14 +4340,14 @@ window.__ModuleLoader__.load({
                     item.candidates.slice(0, 8).map((c) => h('span', { key: c.key, className: 'fde-chip' + (c.rank === 1 ? ' accent' : '') },
                       (c.rank ? '第 ' + c.rank + ' 名 · ' : '') + c.name)))
                   : h('div', { className: 'fde-hint' }, t('bidNoCandidates')),
-                item.url
+                isSafeUrl(item.url)
                   ? h('a', { className: 'fde-link', href: item.url, target: '_blank', rel: 'noreferrer noopener' }, t('bidOpenSource'))
                   : h('span', { className: 'fde-hint' }, t('bidNoUrl')))
               : null),
           h('div', { className: 'fde-bid-actions' },
             h(Btn, { small: true, onClick: () => toggleRow(item.key), ariaLabel: (open ? t('bidCollapse') : t('bidExpand')) + '：' + item.title },
               open ? t('bidCollapse') : t('bidExpand')),
-            item.url
+            isSafeUrl(item.url)
               ? h('a', { className: 'fde-link fde-link-btn', href: item.url, target: '_blank', rel: 'noreferrer noopener' }, t('bidOpenSource'))
               : null));
       };
@@ -4367,7 +4360,7 @@ window.__ModuleLoader__.load({
             extra: h('span', { className: 'fde-hint' }, t('bidPageHint')),
             actions: h(Btn, { small: true, onClick: doRefresh, disabled: !!p.busy || statsLoading }, t('bidRefresh')),
             children: [
-              statsLoading && !stats ? h(Loading, { key: 'l', text: '正在读取招采索引…' }) : null,
+              statsLoading && !stats ? h(Loading, { key: 'l' }) : null,
               statsError && !stats ? h(ErrorLine, { key: 'e', title: t('loadFail'), text: statsError, onRetry: loadStats }) : null,
               stats && !available
                 ? h(BidUnavailable, { key: 'u', reason: stats.reason, onRetry: loadStats })
@@ -4413,8 +4406,7 @@ window.__ModuleLoader__.load({
                   options: sourceOptions,
                   onChange: (e) => setSource(e.target.value),
                 }),
-                h(Btn, { small: true, kind: 'primary', onClick: submitSearch, busy: searchLoading }, searchLoading ? t('bidSearching') : t('bidSearch')),
-                h(Btn, { small: true, onClick: loadMore, disabled: searchLoading || !results || items.length >= total }, t('bidLoadMore'))),
+                h(Btn, { small: true, kind: 'primary', onClick: submitSearch, busy: searchLoading }, searchLoading ? t('bidSearching') : t('bidSearch'))),
               results && results.available === false
                 ? h(BidUnavailable, { key: 'u', reason: results.reason, onRetry: doRefresh })
                 : null,
@@ -4427,12 +4419,8 @@ window.__ModuleLoader__.load({
                 ? h('div', { key: 'list' },
                   h('div', { className: 'fde-row', style: { margin: '6px 0' } },
                     h('span', { className: 'fde-hint' }, t('bidTotalPrefix') + total + t('bidTotalSuffix')),
-                    results && typeof results.direct === 'number' ? h('span', { className: 'fde-hint' }, '直接命中 ' + results.direct) : null,
-                    results && typeof results.mentioned === 'number' ? h('span', { className: 'fde-hint' }, '文中提及 ' + results.mentioned) : null,
-                    h('div', { className: 'fde-spacer' }),
-                    items.length < total
-                      ? h(Btn, { small: true, onClick: loadMore, disabled: searchLoading }, t('bidLoadMore'))
-                      : null),
+                    results && typeof results.direct === 'number' ? h('span', { className: 'fde-hint' }, '直接相关 ' + results.direct) : null,
+                    results && typeof results.mentioned === 'number' && results.mentioned > 0 ? h('span', { className: 'fde-hint' }, '文中提及 ' + results.mentioned) : null),
                   h('div', { className: 'fde-bid-list' }, items.map(resultRow)),
                   items.length < total
                     ? h('div', { className: 'fde-row', style: { justifyContent: 'center', marginTop: 8 } },
@@ -4447,8 +4435,8 @@ window.__ModuleLoader__.load({
             title: t('bidByCustomer'),
             extra: h('span', { className: 'fde-hint' },
               boardStats && boardStats.available
-                ? '索引 ' + (boardStats.records === null ? '—' : boardStats.records) + ' 条 · 区间 ' + bidRangeText(boardStats.dateRange) + ' · ' + boardStats.engagedCount + ' 个客户有匹配'
-                : t('bidByCustomerHint')),
+                ? boardStats.engagedCount + ' 个客户查到了相关公告'
+                : ''),
             children: overview.length
               ? h('div', { className: 'fde-list' }, overview.map((x) => h('button', {
                 key: x.eng.id,
@@ -4472,7 +4460,6 @@ window.__ModuleLoader__.load({
           ? h('div', { key: 'import', className: 'fde-card' },
             Section({
               title: t('bidImportTitle'),
-              extra: h('span', { className: 'fde-hint' }, t('bidImportHint')),
               children: [
                 h('div', { className: 'fde-bid-form' },
                   h(TextInput, {
@@ -4496,7 +4483,7 @@ window.__ModuleLoader__.load({
      * ============================================================ */
     const LIB_GROUP_KEYS = ['all', 'intl-official', 'cn-official', 'opensource', 'method', 'community'];
     const LIB_SORT_KEYS = ['recommend', 'latest', 'hot'];
-    const LIB_KIND_LABEL_KEYS = {
+    /* dict-keys */ const LIB_KIND_LABEL_KEYS = {
       doc: 'libKindDoc', whitepaper: 'libKindWhitepaper', guide: 'libKindGuide', playbook: 'libKindPlaybook',
       blog: 'libKindBlog', course: 'libKindCourse', report: 'libKindReport', case: 'libKindCase',
       job: 'libKindJob', repo: 'libKindRepo', template: 'libKindTemplate', post: 'libKindPost',
@@ -4911,7 +4898,6 @@ window.__ModuleLoader__.load({
       const topCard = h('div', { className: 'fde-card' },
         Section({
           title: t('libTitle'),
-          extra: h('span', { className: 'fde-hint' }, t('libSubtitle')),
           children: [
             loading && !feed ? h(Loading, { key: 'loading', text: t('libLoading') }) : null,
             msg ? h(MsgLine, { key: 'msg', kind: msg.kind, text: msg.text, onClose: () => setMsg(null) }) : null,
@@ -4969,7 +4955,6 @@ window.__ModuleLoader__.load({
         ? h('div', { className: 'fde-card' },
           Section({
             title: '★ ' + t('libFeaturedTitle'),
-            extra: h('span', { className: 'fde-hint' }, t('libFeaturedHint')),
             children: h('div', { className: 'fde-lib-featured' }, featuredItems.map(featuredCard)),
           }))
         : null;
@@ -5049,12 +5034,19 @@ window.__ModuleLoader__.load({
       const meta = p.meta;
       const board = p.board || {};
       const stages = asList(meta && meta.stages);
-      const [activeKey, setActiveKey] = useState(stages[0] ? stages[0].key : '');
+      const [activeKey, setActiveKey] = useState(str(p.initialStage) || (stages[0] ? stages[0].key : ''));
       const [openTool, setOpenTool] = useState('');
       const [copied, setCopied] = useState('');
       const alive = useRef(true);
 
       useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+      /* 从客户抽屉点「这个阶段怎么做」过来：直接切到那个阶段 */
+      useEffect(() => {
+        if (!p.initialStage) return;
+        if (stageOf(meta, p.initialStage)) setActiveKey(str(p.initialStage));
+        /* 用过就清掉：下次自己点进流程页，不该还停在上次跳过来的那个阶段 */
+        if (p.onInitialStageUsed) p.onInitialStageUsed();
+      }, [p.initialStage, p.initialStageSeq]);
 
       const counts = {};
       stages.forEach((s) => { counts[s.key] = 0; });
@@ -5067,26 +5059,24 @@ window.__ModuleLoader__.load({
       const playbook = current ? current.playbook : null;
       const gate = current ? gateOfStage(meta, current.key) : null;
 
-      const copyExample = async (text, key) => {
-        let ok = false;
-        try { if (typeof p.copyText === 'function') ok = !!(await p.copyText(text)); } catch (e) { ok = false; }
-        if (!ok) {
-          try {
-            if (typeof navigator !== 'undefined' && navigator.clipboard) {
-              await navigator.clipboard.writeText(text);
-              ok = true;
-            }
-          } catch (e) { ok = false; }
-        }
-        if (ok && alive.current) {
-          setCopied(key);
-          setTimeout(() => { if (alive.current) setCopied(''); }, 1800);
-        }
-      };
-
       const toolExample = (tool) => {
         if (tool.kind === 'skill') return t('processSkillUse') + tool.name + t('processSkillUseEnd');
         return t('processToolUse') + tool.name + t('processToolUseEnd');
+      };
+
+      /* 技能与工具：点一下就复制一句能粘贴到会话里的话；复制不了时把这句话展开给人手动复制 */
+      const copyExample = async (tool) => {
+        const text = toolExample(tool);
+        let ok = false;
+        try { if (typeof p.copyText === 'function') ok = !!(await p.copyText(text)); } catch (e) { ok = false; }
+        if (!alive.current) return;
+        if (ok) {
+          setOpenTool('');
+          setCopied(tool.key);
+          setTimeout(() => { if (alive.current) setCopied(''); }, 2400);
+        } else {
+          setOpenTool(tool.key);
+        }
       };
 
       const clickTool = (tool) => {
@@ -5098,43 +5088,73 @@ window.__ModuleLoader__.load({
           if (typeof p.onOpenLibrary === 'function') p.onOpenLibrary();
           return;
         }
-        setOpenTool(openTool === tool.key ? '' : tool.key);
+        copyExample(tool);
       };
 
       const stepNode = (s) => {
-        const g = gateOfStage(meta, s.key);
-        const gateCount = asList(g.auto).length + asList(g.manual).length;
         const on = current && s.key === current.key;
-        const title = (s.label || s.key) + '：' + (counts[s.key] || 0) + t('processClientCountSuffix')
-          + (g.label ? '；' + t('processGate') + ' ' + g.label : '');
+        const n = counts[s.key] || 0;
         return h('button', {
           key: s.key,
           type: 'button',
           role: 'tab',
           'aria-selected': on ? 'true' : 'false',
           className: 'fde-flow-step' + (on ? ' on' : ''),
-          title,
-          onClick: () => setActiveKey(s.key),
+          title: s.definition || s.label,
+          onClick: () => { setActiveKey(s.key); setOpenTool(''); },
         },
           h('div', { className: 'fde-flow-step-top' },
-            h('span', { className: 'fde-flow-num' }, String(s.order || '')),
-            h('span', {
-              className: 'fde-flow-gate-dot ' + (gateCount ? 'ok' : 'warn'),
-              title: g.label + '：' + gateCount + t('processGateItemSuffix'),
-              'aria-hidden': 'true',
-            })),
+            h('span', { className: 'fde-flow-num' }, String(s.order || ''))),
           h('div', { className: 'fde-flow-name' }, s.label || s.key),
-          h('div', { className: 'fde-flow-count' }, (counts[s.key] || 0) + t('processClientCountSuffix')));
+          h('div', { className: 'fde-flow-count' }, n ? n + t('processClientCountSuffix') : ' '));
       };
 
-      const listBlock = (title, list, wide) => h('div', {
-        key: title,
-        className: 'fde-flow-block' + (wide ? ' fde-flow-wide' : ''),
-      },
-        h('div', { className: 'fde-flow-block-title' }, title),
-        list.length
-          ? h('ul', { className: 'fde-flow-list' }, list.map((x, i) => h('li', { key: 'li-' + i }, x)))
-          : h('div', { className: 'fde-hint' }, t('empty')));
+      const listBlock = (title, list, wide) => (list.length
+        ? h('div', { key: title, className: 'fde-flow-block' + (wide ? ' fde-flow-wide' : '') },
+          h('div', { className: 'fde-flow-block-title' }, title),
+          h('ul', { className: 'fde-flow-list' }, list.map((x, i) => h('li', { key: 'li-' + i }, x))))
+        : null);
+
+      const toolTitle = (tool) => {
+        if (tool.kind === 'method' || tool.kind === 'template') return t('processOpenMethod');
+        if (tool.kind === 'library') return t('processOpenLibrary');
+        return '点一下复制一句话，' + t('processHowTo');
+      };
+      const toolsBlock = playbook && playbook.tools.length
+        ? h('div', { key: 'tools', className: 'fde-flow-block fde-flow-wide' },
+          h('div', { className: 'fde-flow-block-title' }, t('processTools')),
+          h('div', { className: 'fde-flow-tools' },
+            PROCESS_TOOL_KINDS.map((kind) => {
+              const group = playbook.tools.filter((x) => x.kind === kind);
+              if (!group.length) return null;
+              return h('div', { key: 'kind-' + kind, className: 'fde-flow-tool-group' },
+                h('div', { className: 'fde-flow-tool-kind' }, processToolKindLabel(kind)),
+                group.map((tool) => h('div', { key: tool.key, className: 'fde-flow-tool-item' },
+                  h('button', {
+                    type: 'button',
+                    className: 'fde-flow-tool' + (openTool === tool.key || copied === tool.key ? ' on' : ''),
+                    title: toolTitle(tool),
+                    onClick: () => clickTool(tool),
+                  }, copied === tool.key ? tool.label + ' · ' + t('processCopied') : tool.label),
+                  openTool === tool.key
+                    ? h('div', { className: 'fde-flow-example' },
+                      h('div', { className: 'fde-flow-example-label' }, t('processHowTo')),
+                      h('div', { className: 'fde-flow-example-text' }, toolExample(tool)))
+                    : null)));
+            })),
+          copied ? h('div', { className: 'fde-hint', role: 'status' }, t('processCopied') + '，' + t('processHowTo') + '。') : null)
+        : null;
+
+      const gateItems = gate
+        ? asList(gate.auto).map((x) => ({ key: 'a-' + x.key, label: x.label, manual: false }))
+          .concat(asList(gate.manual).map((x) => ({ key: 'm-' + x.key, label: x.label, manual: true })))
+        : [];
+      const gateBlock = h('div', { key: 'gate', className: 'fde-flow-block fde-flow-wide' },
+        h('div', { className: 'fde-flow-block-title' }, t('processGate')),
+        gateItems.length
+          ? h('ul', { className: 'fde-flow-list' }, gateItems.map((x) => h('li', { key: x.key },
+            x.label, x.manual ? h('span', { className: 'fde-hint' }, '（' + t('processGateManual') + '）') : null)))
+          : h('div', { className: 'fde-hint' }, t('processNoGate')));
 
       const detailCard = current ? h('div', { className: 'fde-card' },
         Section({
@@ -5148,115 +5168,29 @@ window.__ModuleLoader__.load({
               : null,
             playbook
               ? h('div', { key: 'flow', className: 'fde-flow-detail' },
+                listBlock(t('processActivities'), playbook.activities, true),
                 listBlock(t('processInputs'), playbook.inputs),
-                listBlock(t('processActivities'), playbook.activities),
                 listBlock(t('processOutputs'), playbook.outputs),
                 listBlock(t('processPitfalls'), playbook.pitfalls),
-                h('div', { key: 'tools', className: 'fde-flow-block fde-flow-wide' },
-                  h('div', { className: 'fde-flow-block-title' }, t('processTools')),
-                  h('div', { className: 'fde-flow-tools' },
-                    PROCESS_TOOL_KINDS.map((kind) => {
-                      const group = playbook.tools.filter((x) => x.kind === kind);
-                      if (!group.length) return null;
-                      return h('div', { key: 'kind-' + kind, className: 'fde-flow-tool-group' },
-                        h('div', { className: 'fde-flow-tool-kind' }, processToolKindLabel(kind)),
-                        group.map((tool) => h('div', { key: tool.key, className: 'fde-flow-tool-item' },
-                          h('button', {
-                            type: 'button',
-                            className: 'fde-flow-tool' + (openTool === tool.key ? ' on' : ''),
-                            title: tool.kind === 'method' || tool.kind === 'template'
-                              ? t('processOpenMethod') + '：' + tool.label
-                              : (tool.kind === 'library' ? t('processOpenLibrary') : t('processHowTo')),
-                            onClick: () => clickTool(tool),
-                          }, tool.label),
-                          openTool === tool.key
-                            ? h('div', { className: 'fde-flow-example' },
-                              h('div', { className: 'fde-flow-example-label' }, t('processHowTo')),
-                              h('div', { className: 'fde-flow-example-text' }, toolExample(tool)),
-                              h(Btn, {
-                                small: true,
-                                onClick: () => copyExample(toolExample(tool), tool.key),
-                              }, copied === tool.key ? t('processCopied') : t('processCopy')))
-                            : null)));
-                    }))),
-                h('div', { key: 'gate', className: 'fde-flow-block fde-flow-wide' },
-                  h('div', { className: 'fde-flow-block-title' },
-                    t('processGate') + (gate && gate.label ? '（' + gate.label + '）' : '')),
-                  gate && (asList(gate.auto).length || asList(gate.manual).length)
-                    ? h('div', { className: 'fde-flow-gate-cols' },
-                      h('div', null,
-                        h('div', { className: 'fde-flow-sub' }, t('processGateAuto') + '（' + asList(gate.auto).length + '）'),
-                        asList(gate.auto).length
-                          ? h('ul', { className: 'fde-flow-list' }, asList(gate.auto).map((x, i) => h('li', { key: 'ga-' + i }, x.label || x.key)))
-                          : h('div', { className: 'fde-hint' }, t('empty'))),
-                      h('div', null,
-                        h('div', { className: 'fde-flow-sub' }, t('processGateManual') + '（' + asList(gate.manual).length + '）'),
-                        asList(gate.manual).length
-                          ? h('ul', { className: 'fde-flow-list' }, asList(gate.manual).map((x, i) => h('li', { key: 'gm-' + i }, x.label || x.key)))
-                          : h('div', { className: 'fde-hint' }, t('empty'))))
-                    : h('div', { className: 'fde-hint' }, t('processNoGate')))
-              )
+                gateBlock,
+                toolsBlock)
               : h(MsgLine, { key: 'noPlaybook', kind: 'warn', text: t('processNoPlaybook') }),
           ],
         })) : null;
 
-      const toolCols = (() => {
-        const map = {};
-        const list = [];
-        stages.forEach((s) => {
-          asList(s.playbook && s.playbook.tools).forEach((tool) => {
-            if (!map[tool.key]) { map[tool.key] = tool; list.push(tool); }
-          });
-        });
-        return list;
-      })();
-
-      const matrixCard = h('div', { className: 'fde-card' },
-        Section({
-          title: t('processMatrixTitle'),
-          extra: h('span', { className: 'fde-hint' }, t('processMatrixHint')),
-          children: toolCols.length
-            ? h('div', { className: 'fde-matrix-wrap' },
-              h('table', { className: 'fde-matrix' },
-                h('thead', null,
-                  h('tr', null,
-                    h('th', { key: 'stage-col' }, t('processColStage')),
-                    toolCols.map((tool) => h('th', {
-                      key: 'tc-' + tool.key,
-                      title: processToolKindLabel(tool.kind) + '：' + tool.name,
-                    }, tool.label)))),
-                h('tbody', null,
-                  stages.map((s) => h('tr', { key: 'row-' + s.key },
-                    h('th', { key: 'row-h', scope: 'row' }, (s.order ? s.order + '. ' : '') + (s.label || s.key)),
-                    toolCols.map((tool) => {
-                      const has = asList(s.playbook && s.playbook.tools).some((x) => x.key === tool.key);
-                      return h('td', { key: 'cell-' + tool.key, className: has ? 'on' : '' }, has ? '✓' : '');
-                    }))))))
-            : h('div', { className: 'fde-hint' }, t('processNoPlaybook')),
-        }));
-
       return h('div', { className: 'fde-view fde-view-fill' },
-        !hasPlaybook ? h(MsgLine, { kind: 'warn', text: t('processNoPlaybook') }) : null,
-        h('div', { className: 'fde-card' },
-          Section({
-            title: t('processTitle'),
-            extra: h('span', { className: 'fde-hint' }, t('processSubtitle')),
-            children: [
-              stages.length
-                ? h('div', { className: 'fde-flow', role: 'tablist', 'aria-label': t('processTitle') }, stages.map(stepNode))
-                : h(Empty, { key: 'noMeta', mark: '▤', title: t('processNoMeta'), body: t('processNoMetaBody') }),
-            ],
-          })),
-        detailCard,
-        matrixCard);
+        !hasPlaybook && stages.length ? h(MsgLine, { kind: 'warn', text: t('processNoPlaybook') }) : null,
+        stages.length
+          ? h('div', { className: 'fde-flow', role: 'tablist', 'aria-label': t('processTitle') }, stages.map(stepNode))
+          : h(Empty, { mark: '▤', title: t('processNoMeta'), body: t('processNoMetaBody') }),
+        detailCard);
     }
 
     /* ============================================================
      * 十二、方法视图 / 设置视图
-     * 方法：旧 methods/reference/templates 点开即读 + FDE 技能清单；
-     *       支持 initialName/initialSeq：流程页的 method/template chips
-     *       跳转过来时直接打开对应文件。
-     * 设置：自主性 / 停滞天数 / WIP / 数据源开关 / 健康检查 / 重启提示。
+     * 方法：方法、参考、模板点开即读（Markdown 渲染）+ 技能清单；
+     *       支持 initialName/initialSeq：阶段指南里点方法或模板时直接打开对应文件。
+     * 设置：AI 权限 / 提醒 / 数据来源 / 示例数据 / 运行状态（ADR 0010 D9）。
      * ============================================================ */
     function MethodsView(props) {
       const p = props || {};
@@ -5309,9 +5243,9 @@ window.__ModuleLoader__.load({
         body
           ? h('div', { className: 'fde-card' },
             h('div', { className: 'fde-row', style: { marginBottom: 8 } },
-              h(Btn, { small: true, onClick: () => setBody(null) }, t('back')),
-              h('span', { className: 'fde-subtitle' }, body.name)),
-            h('pre', { className: 'fde-pre' }, body.body))
+              h(Btn, { small: true, onClick: () => setBody(null) }, '← ' + t('back')),
+              h('span', { className: 'fde-hint' }, str(body.name).replace(/\.md$/, ''))),
+            h('div', { className: 'fde-pv-md fde-method-body' }, renderMarkdown(body.body, '')))
           : (list.length
             ? h('div', { className: 'fde-stack' },
               groups.map((g) => {
@@ -5319,26 +5253,24 @@ window.__ModuleLoader__.load({
                 if (!entries.length) return null;
                 return h('div', { key: g.kind, className: 'fde-card' },
                   Section({
-                    title: g.label + '（' + entries.length + '）',
+                    title: g.label,
                     children: h('div', { className: 'fde-mth' }, entries.map((m) => h('button', {
                       key: str(m.kind) + '-' + str(m.name),
                       type: 'button',
                       onClick: () => read(m.name),
-                      title: '点开即读',
-                    }, str(m.name).replace(/\.md$/, '')))),
+                    }, str(m.name).replace(/\.md$/, '').replace(/^\d+-/, '')))),
                   }));
               }))
             : h(Empty, { mark: '▤', title: t('methodsEmpty') })),
         section === 'skills'
           ? h('div', { className: 'fde-card' },
             Section({
-              title: t('methodsSkills') + (skills.length ? '（' + skills.length + '）' : ''),
+              title: t('methodsSkills'),
               children: skills.length
                 ? h('div', { className: 'fde-stack' }, skills.map((sk) => h('div', { key: sk.name, className: 'fde-skill' },
                   h('div', { className: 'fde-skill-name' }, sk.name),
-                  h('div', { className: 'fde-skill-desc' }, sk.description || h('span', { className: 'fde-dim' }, '（无描述）')))))
+                  sk.description ? h('div', { className: 'fde-skill-desc' }, sk.description) : null)))
                 : h('div', { className: 'fde-hint' }, t('skillsEmpty')),
-              extra: h('span', { className: 'fde-hint' }, t('methodsSkillsHint')),
             }))
           : null);
     }
@@ -5349,19 +5281,21 @@ window.__ModuleLoader__.load({
       const board = p.board || {};
       const settings = board.settings || {};
       const defaults = (meta && meta.settingsDefaults) || {};
-      const [autonomy, setAutonomy] = useState(str(settings.autonomy || defaults.autonomy || 'observe'));
-      const [stallDays, setStallDays] = useState(String(pick(settings.stallDays, defaults.stallDays, 14)));
-      const [wip, setWip] = useState(String(pick(settings.wipLimits && settings.wipLimits.doing, defaults.wipLimits && defaults.wipLimits.doing, 5)));
-      const [sources, setSources] = useState(normalizeSourceSettings(settings.sources || defaults.sources));
-      const [saving, setSaving] = useState(false);
+      const savedAutonomy = str(settings.autonomy || defaults.autonomy || 'observe');
+      const savedStall = String(pick(settings.stallDays, defaults.stallDays, 14));
+      const savedWip = String(pick(settings.wipLimits && settings.wipLimits.doing, defaults.wipLimits && defaults.wipLimits.doing, 5));
+      const savedSources = normalizeSourceSettings(settings.sources || defaults.sources);
+      const [stallDays, setStallDays] = useState(savedStall);
+      const [wip, setWip] = useState(savedWip);
+      const [saving, setSaving] = useState('');
       const [msg, setMsg] = useState(null);
       const [health, setHealth] = useState(null);
       const [healthErr, setHealthErr] = useState('');
       const [healthLoading, setHealthLoading] = useState(false);
-      /* 生财情报授权（§2.8）：token 只进请求体，不落组件外、不回显 */
+      /* 生财社区授权：令牌只进请求体，不留在组件外、保存后不再显示 */
       const [scysAuth, setScysAuth] = useState(null);
       const [scysErr, setScysErr] = useState('');
-      const [scysLoading, setScysLoading] = useState(false);
+      const [scysOpen, setScysOpen] = useState(false);
       const [scysInput, setScysInput] = useState('');
       const [scysMsg, setScysMsg] = useState(null);
       const [scysBusy, setScysBusy] = useState('');
@@ -5370,43 +5304,45 @@ window.__ModuleLoader__.load({
 
       useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
-      /* board 刷新后同步服务端值（用户尚未编辑时以服务端为准） */
-      useEffect(() => {
-        setAutonomy(str(settings.autonomy || defaults.autonomy || 'observe'));
-        setStallDays(String(pick(settings.stallDays, defaults.stallDays, 14)));
-        setWip(String(pick(settings.wipLimits && settings.wipLimits.doing, defaults.wipLimits && defaults.wipLimits.doing, 5)));
-        setSources(normalizeSourceSettings(settings.sources || defaults.sources));
-      }, [board.updatedAt]);
+      /* 看板刷新后，输入框跟随已保存的值。两个框各管各的：
+         存完一个，不能把另一个正在输入的内容冲掉。 */
+      useEffect(() => { setStallDays(savedStall); }, [savedStall]);
+      useEffect(() => { setWip(savedWip); }, [savedWip]);
 
-      /* 生财情报授权：GET /fde/scys/auth 读三路授权状态。
-         宿主未提供路由（未重启/旧宿主）时只降级提示，设置页其它功能不受影响（§2.8）。 */
       const loadScysAuth = useCallback(async () => {
-        setScysLoading(true);
         const r = await fdeGet('/scys/auth');
         if (!alive.current) return;
-        setScysLoading(false);
         if (r && r.ok !== false && r.auth) { setScysAuth(r.auth); setScysErr(''); }
-        else { setScysAuth(null); setScysErr((r && r.reason) || '授权接口不可用'); }
+        else { setScysAuth(null); setScysErr((r && r.reason) || t('loadFail')); }
       }, []);
       useEffect(() => { loadScysAuth(); }, [loadScysAuth]);
 
-      const save = async () => {
-        const patch = {
-          autonomy,
-          stallDays: Number(stallDays) || 0,
-          wipLimits: { doing: Number(wip) || 0 },
-          sources,
-        };
-        setSaving(true); setMsg(null);
+      /* 改了就存：单选与开关立即保存，数字在离开输入框或回车时保存（ADR 0010 D9） */
+      const savePatch = async (key, patch) => {
+        setSaving(key); setMsg(null);
         const r = await fdePost('/settings', { patch });
-        if (!alive.current) return;
-        setSaving(false);
+        if (!alive.current) return r;
+        setSaving('');
         if (r && r.ok !== false) {
           setMsg({ kind: 'ok', text: t('settingsSaved') });
           if (p.onRefresh) await p.onRefresh();
-        } else {
+        } else if (!(r && r.demoBlocked)) {
           setMsg({ kind: 'err', text: (r && r.reason) || t('actionFail') });
         }
+        return r;
+      };
+      const commitNumber = (key, raw, saved, min, max, toPatch, reset) => {
+        const n = Math.round(Number(raw));
+        if (!Number.isFinite(n) || n < min || n > max) {
+          reset(saved);
+          setMsg({ kind: 'warn', text: '请填 ' + min + ' 到 ' + max + ' 之间的整数' });
+          return;
+        }
+        if (String(n) === saved) { reset(saved); return; }
+        /* 没存上就退回原值：框里不留一个看起来已经生效、其实没保存的数 */
+        savePatch(key, toPatch(n)).then((r) => {
+          if (alive.current && !(r && r.ok !== false)) reset(saved);
+        });
       };
 
       const runHealth = async () => {
@@ -5414,15 +5350,14 @@ window.__ModuleLoader__.load({
         const r = await fdeGet('/health');
         if (!alive.current) return;
         setHealthLoading(false);
-        if (r && r.ok !== false && Array.isArray(r.checks)) setHealth(r.checks);
-        else if (r && Array.isArray(r.checks)) setHealth(r.checks);
+        if (r && Array.isArray(r.checks)) setHealth(r.checks);
         else setHealthErr((r && r.reason) || t('loadFail'));
       };
 
-      /* 保存链接授权：URL 走 {url}（宿主解析 token 参数），否则按 access_token 走 {token} */
+      /* 保存授权：链接交给 DSH 侧解析，其它内容按令牌处理 */
       const saveScysAuth = async () => {
         const v = str(scysInput).trim();
-        if (!v) { setScysMsg({ kind: 'warn', text: '请先粘贴授权链接或 access_token' }); return; }
+        if (!v) { setScysMsg({ kind: 'warn', text: '先粘贴授权链接或令牌' }); return; }
         setScysBusy('save'); setScysMsg(null);
         const looksLikeUrl = /^https?:\/\//i.test(v) || /[?&#](access_)?token=/.test(v);
         const r = await fdePost('/scys/auth', looksLikeUrl ? { url: v } : { token: v });
@@ -5432,9 +5367,10 @@ window.__ModuleLoader__.load({
           setScysAuth(r.auth);
           setScysInput('');
           setScysErr('');
-          setScysMsg({ kind: 'ok', text: '授权已保存（仅写入本机 research/.fde/scys-auth.json）' });
+          setScysOpen(false);
+          setScysMsg({ kind: 'ok', text: '已保存授权' });
         } else {
-          setScysMsg({ kind: 'err', text: (r && r.reason) || '保存授权失败' });
+          setScysMsg({ kind: 'err', text: (r && r.reason) || '没能保存授权' });
         }
       };
       const clearScysAuth = async () => {
@@ -5446,243 +5382,196 @@ window.__ModuleLoader__.load({
         if (r && r.ok !== false) {
           setScysAuth((r && r.auth) || null);
           setScysErr('');
-          setScysMsg({ kind: 'ok', text: (r && r.removed === false) ? '本机没有链接授权，未做改动' : '已清除链接授权' });
+          setScysMsg({ kind: 'ok', text: '已清除授权' });
         } else {
-          setScysMsg({ kind: 'err', text: (r && r.reason) || '清除授权失败' });
+          setScysMsg({ kind: 'err', text: (r && r.reason) || '没能清除授权' });
         }
       };
 
-      const modes = (meta && meta.autonomyModes && meta.autonomyModes.length)
-        ? meta.autonomyModes
-        : Object.keys(AUTONOMY_FALLBACK).map((k) => ({ key: k, label: AUTONOMY_FALLBACK[k].label, desc: AUTONOMY_FALLBACK[k].desc }));
-      const allModes = modes.concat(
-        Object.keys(AUTONOMY_FALLBACK).filter((k) => !modes.some((m) => m.key === k))
-          .map((k) => ({ key: k, label: AUTONOMY_FALLBACK[k].label, desc: AUTONOMY_FALLBACK[k].desc }))
-      );
-      const sourceDefs = [
-        ['folderWatch', '目录监听', '扫描 research/ 目录变化'],
-        ['briefOnOpen', '打开即出简报', '打开面板时生成今日简报'],
-        ['bidWatch', t('bidSettingsLabel'), t('bidSettingsDesc')],
+      /* AI 权限两档：只提醒 / 小事可以直接处理。数据里的 auto 与 assisted 行为相同，
+         界面合并为后者，且不主动改写已有的 auto（spec §22.4）。 */
+      const assistedKey = savedAutonomy === 'auto' ? 'auto' : 'assisted';
+      const modeInfo = (key) => {
+        const hit = asList(meta && meta.autonomyModes).find((m) => m.key === key);
+        const fb = AUTONOMY_FALLBACK[key] || AUTONOMY_FALLBACK.observe;
+        return { label: (hit && hit.label) || fb.label, desc: (hit && hit.desc) || fb.desc };
+      };
+      const modeOptions = [
+        { key: 'observe', value: 'observe', info: modeInfo('observe') },
+        { key: 'assisted', value: assistedKey, info: modeInfo('assisted') },
       ];
-      const bidInfo = p.bidStats || normalizeBoardBidStats(board);
-      const bidStatusText = bidInfo && bidInfo.available
-        ? '索引 ' + (bidInfo.records === null ? '—' : bidInfo.records) + ' 条 · 区间 ' + bidRangeText(bidInfo.dateRange)
-        : t('bidNotReady');
-      const bidStatusChip = Chip({
-        tone: bidInfo && bidInfo.available ? 'ok' : 'warn',
-        children: bidInfo && bidInfo.available ? t('bidServiceReady') : t('bidServiceNotReady'),
-      });
-      const healthBadge = (status) => {
-        const s = str(status || '').toLowerCase();
-        if (s === 'ok' || s === 'pass' || s === 'warn' || s === 'fail') {
-          const tone = s === 'ok' || s === 'pass' ? 'ok' : (s === 'fail' ? 'danger' : 'warn');
-          return Chip({ tone, children: s === 'ok' || s === 'pass' ? '通过' : (s === 'fail' ? '失败' : '警告') });
-        }
-        return Chip({ tone: 'muted', children: str(status) || '—' });
-      };
+      const currentMode = savedAutonomy === 'observe' ? 'observe' : 'assisted';
 
-      return h('div', { className: 'fde-view' },
+      const bidInfo = p.bidStats || normalizeBoardBidStats(board);
+      const bidReady = !!(bidInfo && bidInfo.available);
+      const bidStatusText = bidReady
+        ? (bidInfo.records === null ? '' : bidInfo.records + ' 条公告') + (bidRangeText(bidInfo.dateRange) ? ' · ' + bidRangeText(bidInfo.dateRange) : '')
+        : t('bidSettingsDesc');
+      const scysOk = !!(scysAuth && scysAuth.available);
+      const healthLabel = (status) => {
+        const s = str(status || '').toLowerCase();
+        if (s === 'ok' || s === 'pass') return Chip({ tone: 'ok', children: '正常' });
+        if (s === 'fail') return Chip({ tone: 'danger', children: '有问题' });
+        return Chip({ tone: 'warn', children: '留意' });
+      };
+      const setRow = (key, name, desc, ctl) => h('div', { key, className: 'fde-set-row' },
+        h('div', { className: 'fde-set-main' },
+          h('div', { className: 'fde-set-name' }, name),
+          desc ? h('div', { className: 'fde-set-desc' }, desc) : null),
+        h('div', { className: 'fde-set-ctl' }, ctl));
+
+      return h('div', { className: 'fde-view fde-settings' },
         msg ? h(MsgLine, { kind: msg.kind, text: msg.text, onClose: () => setMsg(null) }) : null,
+
+        /* 一、AI 权限 */
         h('div', { className: 'fde-card' },
           Section({
             title: t('settingsAutonomy'),
             children: [
-              h('div', { className: 'fde-hint', style: { marginBottom: 6 } }, t('settingsAutonomyDesc')),
-              h('div', { role: 'radiogroup', 'aria-label': t('settingsAutonomy'), style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-                allModes.map((m) => h('label', {
+              h('div', { key: 'modes', role: 'radiogroup', 'aria-label': t('settingsAutonomy'), className: 'fde-set-modes' },
+                modeOptions.map((m) => h('label', {
                   key: m.key,
-                  className: 'fde-check',
-                  style: {
-                    padding: '8px 10px', borderRadius: 'var(--dsw-radius-sm,8px)', border: (autonomy === m.key ? '1px' : '0.5px') + ' solid ' + (autonomy === m.key ? 'var(--fde-accent)' : 'var(--fde-border)'),
-                    background: autonomy === m.key ? 'color-mix(in srgb,var(--fde-accent) 8%,transparent)' : 'var(--fde-surface-2)',
-                  },
+                  className: 'fde-check fde-set-mode' + (currentMode === m.key ? ' on' : ''),
                 },
                   h('input', {
-                    type: 'radio', name: 'fde-autonomy', checked: autonomy === m.key,
-                    'aria-label': m.label,
-                    onChange: () => setAutonomy(m.key),
+                    type: 'radio', name: 'fde-ai-mode', checked: currentMode === m.key,
+                    disabled: saving === 'autonomy',
+                    'aria-label': m.info.label,
+                    onChange: () => { if (currentMode !== m.key) savePatch('autonomy', { autonomy: m.value }); },
                   }),
                   h('div', null,
-                    h('div', { style: { fontWeight: 600 } }, m.label),
-                    h('div', { className: 'fde-hint' }, m.desc || (AUTONOMY_FALLBACK[m.key] && AUTONOMY_FALLBACK[m.key].desc) || ''))))),
-              h('div', { className: 'fde-hint', style: { marginTop: 8 } }, t('settingsRedLines')),
-              h('ul', { className: 'fde-redline' }, redLinesOf(meta).map((x, i) => h('li', { key: 'rl-' + i }, x))),
+                    h('div', { className: 'fde-set-name' }, m.info.label),
+                    h('div', { className: 'fde-set-desc' }, m.info.desc))))),
+              h('div', { key: 'red', className: 'fde-set-desc', style: { marginTop: 10 } },
+                t('settingsRedLines') + '：' + redLinesOf(meta).join('、') + '。'),
             ],
           })),
+
+        /* 二、提醒 */
         h('div', { className: 'fde-card' },
           Section({
-            title: '节奏与上限',
+            title: t('todayProposals'),
             children: [
-              h('div', { className: 'fde-set-row' },
-                h('div', { className: 'fde-set-main' },
-                  h('div', { className: 'fde-set-name' }, t('settingsStall')),
-                  h('div', { className: 'fde-set-desc' }, t('settingsStallDesc'))),
-                h('div', { className: 'fde-set-ctl' },
-                  h(TextInput, {
-                    type: 'number', value: stallDays, ariaLabel: t('settingsStall'), style: { width: 96 },
-                    onChange: (e) => setStallDays(e.target.value),
-                  }),
-                  h('span', { className: 'fde-hint' }, '天'))),
-              h('div', { className: 'fde-set-row' },
-                h('div', { className: 'fde-set-main' },
-                  h('div', { className: 'fde-set-name' }, t('settingsWip')),
-                  h('div', { className: 'fde-set-desc' }, t('settingsWipDesc'))),
-                h('div', { className: 'fde-set-ctl' },
-                  h(TextInput, {
-                    type: 'number', value: wip, ariaLabel: t('settingsWip'), style: { width: 96 },
-                    onChange: (e) => setWip(e.target.value),
-                  }))),
-              h('div', { className: 'fde-set-row' },
-                h('div', { className: 'fde-set-main' },
-                  h('div', { className: 'fde-set-name' }, t('settingsSources')),
-                  h('div', { className: 'fde-set-desc' }, '默认只读；关闭后对应规则不再生成建议。')),
-                h('div', { className: 'fde-set-ctl', style: { flexDirection: 'column', alignItems: 'flex-start' } },
-                  sourceDefs.map(([key, label, desc]) => h(Checkbox, {
-                    key,
-                    checked: !!sources[key],
-                    label,
-                    title: desc,
-                    onChange: (v) => setSources(Object.assign({}, sources, { [key]: v })),
-                  })))),
-              h('div', { className: 'fde-set-row' },
-                h('div', { className: 'fde-set-main' },
-                  h('div', { className: 'fde-set-name' }, t('bidServiceStatus')),
-                  h('div', { className: 'fde-set-desc' }, bidStatusText)),
-                h('div', { className: 'fde-set-ctl' }, bidStatusChip)),
-              h('div', { className: 'fde-row', style: { marginTop: 10 } },
-                h(Btn, { kind: 'primary', onClick: save, busy: saving }, saving ? t('saving') : t('settingsSave')),
-                h('span', { className: 'fde-hint' }, '设置写入 research/.fde/board.json（宿主会先备份）。')),
-            ],
-          })),
-        /* 生财情报授权（§2.8 / §5）：链接授权 / 环境变量 / 兼容文件三路状态 + 保存/清除。
-           宿主未提供路由时 scysErr 给出降级提示，不白屏。 */
-        h('div', { className: 'fde-card' },
-          Section({
-            title: '生财情报授权',
-            extra: scysAuth && scysAuth.available
-              ? Chip({ tone: 'ok', children: scysSourceText(scysAuth.source) })
-              : Chip({ tone: 'warn', children: scysAuth ? scysSourceText(scysAuth.source) : '未授权' }),
-            actions: h(Btn, { small: true, onClick: loadScysAuth, busy: scysLoading }, scysLoading ? '读取中…' : '刷新状态'),
-            children: [
-              scysErr
-                ? h(MsgLine, {
-                  key: 'scys-err', kind: 'warn',
-                  text: '授权接口暂不可用（宿主重启后生效，不影响其它功能）：' + scysErr,
-                })
-                : null,
-              h('div', { key: 'scys-status', className: 'fde-set-row' },
-                h('div', { className: 'fde-set-main' },
-                  h('div', { className: 'fde-set-name' }, '当前来源'),
-                  h('div', { className: 'fde-set-desc' },
-                    scysAuth ? scysSourceText(scysAuth.source) : '未授权',
-                    scysAuth && scysAuth.source === 'compat'
-                      ? '：读 ~/.dsh/mcp/scys-mcp/tokens.json（DSH 官方契约之外，建议改用链接授权）'
-                      : '',
-                    scysAuth && scysAuth.expiresAt ? ' · 过期时间 ' + fmtDateTime(scysAuth.expiresAt) : '')),
-                h('div', { className: 'fde-set-ctl' },
-                  scysAuth && scysAuth.available
-                    ? Chip({ tone: 'ok', children: '可用' })
-                    : Chip({ tone: 'warn', children: '未授权' }))),
-              h(Field, { key: 'scys-input', label: '粘贴授权链接或 access_token' },
-                h(TextArea, {
-                  value: scysInput,
-                  rows: 2,
-                  placeholder: '粘贴授权链接或 access_token（保存后不回显）',
-                  ariaLabel: '生财情报授权',
-                  onChange: (e) => { setScysMsg(null); setScysInput(e.target.value); },
+              setRow('stall', t('settingsStall'), t('settingsStallDesc'), [
+                h(TextInput, {
+                  key: 'i', type: 'number', value: stallDays, ariaLabel: t('settingsStall'), style: { width: 84 },
+                  onChange: (e) => setStallDays(e.target.value),
+                  onBlur: () => commitNumber('stall', stallDays, savedStall, 1, 365, (n) => ({ stallDays: n }), setStallDays),
+                  onKeyDown: (e) => { if (e && e.key === 'Enter' && e.target && e.target.blur) e.target.blur(); },
+                }),
+                h('span', { key: 'u', className: 'fde-hint' }, '天'),
+              ]),
+              setRow('wip', t('settingsWip'), t('settingsWipDesc'), [
+                h(TextInput, {
+                  key: 'i', type: 'number', value: wip, ariaLabel: t('settingsWip'), style: { width: 84 },
+                  onChange: (e) => setWip(e.target.value),
+                  onBlur: () => commitNumber('wip', wip, savedWip, 1, 50, (n) => ({ wipLimits: { doing: n } }), setWip),
+                  onKeyDown: (e) => { if (e && e.key === 'Enter' && e.target && e.target.blur) e.target.blur(); },
+                }),
+                h('span', { key: 'u', className: 'fde-hint' }, '个'),
+              ]),
+              setRow('bid', t('bidSettingsLabel'), bidReady ? '' : t('bidSettingsDesc'),
+                Checkbox({
+                  checked: !!savedSources.bidWatch && bidReady,
+                  disabled: !bidReady || saving === 'bidWatch',
+                  ariaLabel: t('bidSettingsLabel'),
+                  onChange: (v) => savePatch('bidWatch', { sources: Object.assign({}, savedSources, { bidWatch: !!v }) }),
                 })),
-              h('div', { key: 'scys-hint', className: 'fde-hint' },
-                'token 只保存在本机 research/.fde/scys-auth.json，不上传；也可用环境变量 FDE_SCYS_TOKEN。'),
+            ],
+          })),
+
+        /* 三、数据来源 */
+        h('div', { className: 'fde-card' },
+          Section({
+            title: '数据来源',
+            children: [
+              setRow('bids', t('bidServiceStatus'), bidStatusText,
+                Chip({ tone: bidReady ? 'ok' : 'muted', children: bidReady ? t('bidServiceReady') : t('bidServiceNotReady') })),
+              setRow('scys', '生财有术社区',
+                scysErr
+                  ? '暂时读不到授权状态，重启 DSH 后再试。'
+                  : (scysOk
+                    ? '资料库的「社区动态」来自这里。' + (scysAuth.expiresAt ? '授权有效期到 ' + fmtDateTime(scysAuth.expiresAt).slice(0, 10) + '。' : '')
+                    : '授权后，资料库里会出现「社区动态」。'),
+                [
+                  h(Chip, { key: 'c', tone: scysOk ? 'ok' : 'muted' }, scysOk ? '已授权' : '未授权'),
+                  h(Btn, { key: 'b', small: true, onClick: () => { setScysOpen((v) => !v); setScysMsg(null); } }, scysOk ? '更换' : '去授权'),
+                ]),
+              scysOpen
+                ? h('div', { key: 'scys-form', className: 'fde-set-form' },
+                  h(TextArea, {
+                    value: scysInput,
+                    rows: 2,
+                    placeholder: '粘贴授权链接或令牌。保存后不再显示，只存在这台电脑上。',
+                    ariaLabel: '生财有术社区授权',
+                    onChange: (e) => { setScysMsg(null); setScysInput(e.target.value); },
+                  }),
+                  h('div', { className: 'fde-row', style: { marginTop: 6 } },
+                    h(Btn, { small: true, kind: 'primary', busy: scysBusy === 'save', onClick: saveScysAuth }, scysBusy === 'save' ? t('saving') : t('save')),
+                    h(Btn, { small: true, onClick: () => { setScysOpen(false); setScysInput(''); setScysConfirmClear(false); } }, t('cancel')),
+                    h('div', { className: 'fde-spacer' }),
+                    scysAuth && scysAuth.source === 'link'
+                      ? (scysConfirmClear
+                        ? h('span', { className: 'fde-row tight' },
+                          h(Btn, { small: true, kind: 'danger', busy: scysBusy === 'clear', onClick: clearScysAuth }, '确认清除'),
+                          h(Btn, { small: true, onClick: () => setScysConfirmClear(false) }, t('cancel')))
+                        : h(Btn, { small: true, kind: 'danger', onClick: () => setScysConfirmClear(true) }, '清除授权'))
+                      : null))
+                : null,
               scysMsg
                 ? h(MsgLine, { key: 'scys-msg', kind: scysMsg.kind, text: scysMsg.text, onClose: () => setScysMsg(null) })
                 : null,
-              h('div', { key: 'scys-actions', className: 'fde-row' },
-                h(Btn, { kind: 'primary', busy: scysBusy === 'save', onClick: saveScysAuth }, scysBusy === 'save' ? '保存中…' : '保存授权'),
-                scysConfirmClear
-                  ? h('span', { className: 'fde-row tight' },
-                    h(Btn, { small: true, kind: 'danger', busy: scysBusy === 'clear', onClick: clearScysAuth }, '确认清除'),
-                    h(Btn, { small: true, onClick: () => setScysConfirmClear(false) }, t('cancel')))
-                  : h(Btn, { small: true, kind: 'danger', onClick: () => setScysConfirmClear(true) }, '清除授权'),
-                h('a', {
-                  className: 'fde-link', href: '#scys-auth',
-                  title: '授权说明见 README「生财情报授权」一节',
-                }, '打开授权说明')),
             ],
           })),
-        h('div', { className: 'fde-card' },
+
+        /* 四、示例数据（已经有客户时不显示这一组） */
+        p.demo && !p.demo.empty ? null : h('div', { className: 'fde-card' },
           Section({
             title: t('demoCardTitle'),
-            extra: Chip({
-              tone: p.demo && p.demo.active ? 'on' : 'muted',
-              children: p.demo && p.demo.active ? t('demoStatusOn') : t('demoStatusOff'),
-            }),
             children: [
-              h('div', { className: 'fde-set-row' },
-                h('div', { className: 'fde-set-main' },
-                  h('div', { className: 'fde-set-desc' }, t('demoCardDesc')),
-                  p.demo && p.demo.active
-                    ? h('div', { className: 'fde-hint' }, '当前正在显示示例；点顶部横幅「开始使用（清除示例）」即可清除。')
-                    : (p.demo && !p.demo.empty ? h('div', { className: 'fde-hint' }, t('demoRestoreBlocked')) : null)),
-                h('div', { className: 'fde-set-ctl' },
-                  h(Btn, {
-                    small: true,
-                    kind: 'primary',
-                    busy: p.demoBusy === 'restore',
-                    disabled: !!(p.demo && p.demo.active),
-                    onClick: p.onDemoRestore,
-                  }, p.demoBusy === 'restore' ? t('demoRestoring') : t('demoRestore')))),
+              setRow('demo', p.demo && p.demo.active ? t('demoStatusOn') : t('demoStatusOff'),
+                t('demoCardDesc'),
+                h(Btn, {
+                  small: true,
+                  busy: p.demoBusy === 'restore',
+                  disabled: !!(p.demo && p.demo.active),
+                  onClick: p.onDemoRestore,
+                }, p.demoBusy === 'restore' ? t('demoRestoring') : t('demoRestore'))),
             ],
           })),
+
+        /* 五、运行状态 */
         h('div', { className: 'fde-card' },
           Section({
             title: t('settingsHealth'),
             actions: h(Btn, { small: true, onClick: runHealth, busy: healthLoading }, healthLoading ? t('settingsHealthRunning') : t('settingsHealthRun')),
             children: [
-              healthErr ? h(ErrorLine, { title: t('loadFail'), text: healthErr, onRetry: runHealth }) : null,
-              !health && !healthErr
-                ? h('div', { className: 'fde-hint' }, t('settingsHealthEmpty'))
-                : (health
-                  ? h('div', null,
-                    h('div', { className: 'fde-row', style: { marginBottom: 8 } },
-                      (function () {
-                        const hasFail = health.some((c) => str(c && c.status).toLowerCase() === 'fail');
-                        return Chip({ tone: hasFail ? 'danger' : 'ok', children: hasFail ? t('settingsHealthFail') : t('settingsHealthOk') });
-                      })()),
-                    h('div', { className: 'fde-health' }, health.map((c, i) => h('div', { key: 'hc-' + i, className: 'fde-health-item' },
-                      h('span', { className: 'fde-health-name' }, str(c && c.name)),
-                      healthBadge(c && c.status),
-                      h('span', { className: 'fde-health-detail' }, str(c && c.detail))))))
-                  : null),
-            ],
-          })),
-        h('div', { className: 'fde-card' },
-          Section({
-            title: t('settingsRules'),
-            children: asList(meta && meta.rules).length
-              ? h('div', { className: 'fde-row' }, asList(meta.rules).map((r) => h('span', {
-                key: r.key, className: 'fde-chip muted', title: r.desc || '',
-              }, r.label || r.key)))
-              : h('div', { className: 'fde-hint' }, '宿主未返回规则清单。'),
-          })),
-        h('div', { className: 'fde-card' },
-          Section({
-            title: t('settingsRestart'),
-            children: [
-              h('div', { className: 'fde-note' }, t('settingsRestartBody')),
-              h('div', { className: 'fde-tip', style: { marginTop: 8 } },
-                '重启方式：退出并重新打开 DSH（宿主半路由与技能注册在启动时加载），随后刷新此页面。'),
-              h('div', { className: 'fde-row', style: { marginTop: 10 } },
-                p.onReprobe ? h(Btn, { small: true, onClick: p.onReprobe }, '重新探测 FDE 路由') : null),
+              healthErr ? h(ErrorLine, { key: 'err', title: t('loadFail'), text: healthErr, onRetry: runHealth }) : null,
+              health
+                ? h('div', { key: 'list' },
+                  h('div', { className: 'fde-row', style: { marginBottom: 8 } },
+                    (function () {
+                      const hasFail = health.some((c) => str(c && c.status).toLowerCase() === 'fail');
+                      return Chip({ tone: hasFail ? 'danger' : 'ok', children: hasFail ? t('settingsHealthFail') : t('settingsHealthOk') });
+                    })()),
+                  h('div', { className: 'fde-health' }, health.map((c, i) => h('div', { key: 'hc-' + i, className: 'fde-health-item' },
+                    h('span', { className: 'fde-health-name' }, str(c && c.name)),
+                    healthLabel(c && c.status),
+                    h('span', { className: 'fde-health-detail' }, str(c && c.detail))))))
+                : null,
+              h('div', { key: 'restart', className: 'fde-row', style: { marginTop: health ? 10 : 0 } },
+                h('span', { className: 'fde-set-desc' }, t('settingsRestartBody')),
+                h('div', { className: 'fde-spacer' }),
+                p.onReprobe ? h(Btn, { small: true, onClick: p.onReprobe }, '重新连接') : null),
             ],
           })));
     }
 
     /* ============================================================
      * 十三、抽屉（客户 / 任务）
-     * 客户抽屉：阶段步进（受门禁）、门禁清单（自动项 + 人工勾选 + 证据）、
-     *           下一步编辑、干系人、工件、时间线、启动会话/暂停/归档。
-     * 任务抽屉：编辑字段、回报历史、关联会话、启动会话/删除。
-     * 破坏性操作由根组件弹二次确认；此处只发请求意图。
+     * 客户抽屉：下一步 → 阶段与推进条件 → 任务 → 关键人 → 资料 → 招采 → 记录（ADR 0010 D7）。
+     * 任务抽屉：等你处理的问题 → 字段 → 进展；底部「交给 AI」「打开会话」「删除」。
+     * 保存按钮只在有改动时出现；破坏性操作由根组件弹二次确认。
      * ============================================================ */
 
     function DrawerShell(props) {
@@ -5716,30 +5605,41 @@ window.__ModuleLoader__.load({
       const meta = p.meta;
       const board = p.board || {};
       const eng = p.engagement;
-      const [targetStage, setTargetStage] = useState('');
+      const origNext = eng.nextAction || {};
       const [gateChecks, setGateChecks] = useState({});
       const [dirty, setDirty] = useState(false);
-      const [nextText, setNextText] = useState(str((eng.nextAction || {}).text));
-      const [nextDue, setNextDue] = useState(normDay((eng.nextAction || {}).due));
-      const [nextOwner, setNextOwner] = useState(str((eng.nextAction || {}).owner));
+      const [noteOpen, setNoteOpen] = useState({});
+      const [nextText, setNextText] = useState(str(origNext.text));
+      const [nextDue, setNextDue] = useState(normDay(origNext.due));
+      const [nextOwner, setNextOwner] = useState(str(origNext.owner));
+      const cleanStakes = (list) => asList(list)
+        .map((s) => ({ name: str(s && s.name).trim(), role: str(s && s.role).trim(), level: str((s && s.level) || 'unknown'), stance: str(s && s.stance).trim(), verified: !!(s && s.verified) }))
+        .filter((s) => s.name);
       const [stakeholders, setStakeholders] = useState(asList(eng.stakeholders).map((s) => Object.assign({}, s)));
-      const [stakeMsg, setStakeMsg] = useState('');
       const stages = asList(meta && meta.stages);
       const stageIdx = stageIndex(meta, eng.stage);
       const nextStage = stages[stageIdx + 1] || null;
-      const chosenStage = targetStage || (nextStage ? nextStage.key : eng.stage);
-      const chosenDef = stageOf(meta, chosenStage);
+      /* 推进条件看的是「要进入的那个阶段」；已到最后一个阶段时看当前阶段 */
+      const chosenStage = nextStage ? nextStage.key : eng.stage;
       const gateDef = gateOfStage(meta, chosenStage);
       const gateInfo = p.gateInfo && p.gateInfo.stage === chosenStage ? p.gateInfo : null;
       const gateStatus = str(pick(gateInfo && gateInfo.gate && gateInfo.gate.status, ''));
-      const gateMissing = asList(gateInfo && gateInfo.missing);
       const timeline = asList(eng.timeline).slice(-30).reverse();
       const engagementItems = asList(board.items).filter((it) => it && it.engagementId === eng.id);
-      const artGroups = groupFiles(p.files);
 
+      /* 打开即核对推进条件（只评估，不写入；spec §22.5） */
       useEffect(() => { if (p.onGateEvaluate) p.onGateEvaluate(chosenStage); }, [chosenStage, eng.id]);
 
+      /* 勾到一半时，别处的更新（AI 写了记录、定时刷新）不能把勾选和备注冲掉；
+         换了客户或换了阶段才重新取。保存成功后由 saveGateNow 清掉未保存标记。 */
+      const dirtyRef = useRef(false);
+      dirtyRef.current = dirty;
+      const gateScope = str(eng.id) + '|' + str(chosenStage);
+      const gateScopeRef = useRef('');
       useEffect(() => {
+        const sameScope = gateScopeRef.current === gateScope;
+        gateScopeRef.current = gateScope;
+        if (sameScope && dirtyRef.current) return;
         setDirty(false);
         const serverChecks = manualChecksOf(eng, chosenStage);
         const next = {};
@@ -5765,6 +5665,14 @@ window.__ModuleLoader__.load({
         });
       }, [gateInfo && gateInfo.at, eng.id, chosenStage]);
 
+      /* 服务端的下一步变了（保存成功或别处修改）时同步输入框。
+         一个字段一个同步：别处改了日期，不能把正在写的那句话冲掉。 */
+      useEffect(() => { setNextText(str(origNext.text)); }, [eng.id, str(origNext.text)]);
+      useEffect(() => { setNextDue(normDay(origNext.due)); }, [eng.id, normDay(origNext.due)]);
+      useEffect(() => { setNextOwner(str(origNext.owner)); }, [eng.id, str(origNext.owner)]);
+      const stakeSig = JSON.stringify(cleanStakes(eng.stakeholders));
+      useEffect(() => { setStakeholders(asList(eng.stakeholders).map((s) => Object.assign({}, s))); }, [eng.id, stakeSig]);
+
       const toggleCheck = (key, pass) => {
         setDirty(true);
         setGateChecks((cur) => Object.assign({}, cur, { [key]: Object.assign({}, cur[key] || {}, { pass }) }));
@@ -5781,31 +5689,124 @@ window.__ModuleLoader__.load({
         return out;
       };
       const manualDefs = asList(gateDef.manual);
-      const manualPass = manualDefs.filter((c) => gateChecks[c.key] && gateChecks[c.key].pass).length;
       const autoDefs = asList(gateDef.auto);
       const gateAuto = asList(gateInfo && gateInfo.gate && gateInfo.gate.auto).length
         ? asList(gateInfo.gate.auto)
         : autoDefs.map((c) => ({ key: c.key, label: c.label, ok: null, evidence: '' }));
+      const autoKnown = gateAuto.every((c) => c.ok === true || c.ok === false);
+      const autoMissing = gateAuto.filter((c) => c.ok === false).length;
+      const manualMissing = manualDefs.filter((c) => !(gateChecks[c.key] && gateChecks[c.key].pass)).length;
+      const totalMissing = autoMissing + manualMissing;
+      const forced = gateStatus === 'forced';
+      const ready = !dirty && (forced || (autoKnown && totalMissing === 0));
+
+      /* 保存时首尾空格会被去掉，所以只多了空格不算改动 */
+      const nextDirty = str(nextText).trim() !== str(origNext.text).trim() || nextDue !== normDay(origNext.due)
+        || str(nextOwner).trim() !== str(origNext.owner).trim();
+      const stakeDirty = JSON.stringify(cleanStakes(stakeholders)) !== stakeSig;
 
       const setStake = (idx, key, val) => {
         setStakeholders((cur) => cur.map((s, i) => (i === idx ? Object.assign({}, s, { [key]: val }) : s)));
-        setStakeMsg('');
       };
       const addStake = () => setStakeholders((cur) => cur.concat([{ name: '', role: '', level: 'unknown', stance: '', verified: false }]));
       const removeStake = (idx) => setStakeholders((cur) => cur.filter((s, i) => i !== idx));
 
-      /* ---------- 区块 ---------- */
+      /* ---------- 下一步 ---------- */
+      const nextBlock = h('div', { key: 'next', className: 'fde-block' },
+        h('div', { className: 'fde-block-head' }, h('span', { className: 'fde-block-title' }, t('drawerNext'))),
+        h('div', { className: 'fde-form-grid' },
+          h(Field, { label: t('drawerNextText'), full: true },
+            h(TextInput, {
+              value: nextText, placeholder: '例如：约分管副总做 30 分钟需求访谈', ariaLabel: t('drawerNext'),
+              onChange: (e) => setNextText(e.target.value),
+            })),
+          h(Field, { label: t('drawerNextDue') },
+            h(TextInput, { type: 'date', value: nextDue, ariaLabel: t('drawerNextDue'), onChange: (e) => setNextDue(e.target.value) })),
+          h(Field, { label: t('drawerNextOwner') },
+            h(TextInput, { value: nextOwner, ariaLabel: t('drawerNextOwner'), onChange: (e) => setNextOwner(e.target.value) }))),
+        nextDirty
+          ? h('div', { className: 'fde-row', style: { marginTop: 8 } },
+            h(Btn, { small: true, kind: 'primary', onClick: () => p.onSaveNext && p.onSaveNext({ text: nextText, due: nextDue, owner: nextOwner }) }, t('drawerSaveNext')),
+            h(Btn, {
+              small: true,
+              onClick: () => { setNextText(str(origNext.text)); setNextDue(normDay(origNext.due)); setNextOwner(str(origNext.owner)); },
+            }, t('cancel')))
+          : null);
+
+      /* ---------- 阶段与推进条件 ---------- */
+      const gateAutoRow = (c) => {
+        const state = c.ok === true ? 'pass' : (c.ok === false ? 'missing' : 'unknown');
+        const hint = c.ok === true
+          ? str(asList(c.matches)[0] || '')
+          : (c.ok === false ? str(c.detail) : '');
+        return h('div', { key: 'auto-' + c.key, className: 'fde-gate-item ' + state },
+          h('div', { className: 'fde-gate-line' },
+            h('span', { className: 'fde-gate-mark ' + state, 'aria-hidden': 'true' }, c.ok === true ? '✓' : (c.ok === false ? '—' : '…')),
+            h('span', { className: 'fde-gate-label' }, c.label || t('drawerGateAuto')),
+            h('span', { className: 'fde-sr' }, c.ok === true ? '已有' : (c.ok === false ? '还没有' : '核对中'))),
+          hint ? h('div', { className: 'fde-gate-note' }, hint) : null);
+      };
+      const gateManualRow = (c) => {
+        const cur = gateChecks[c.key] || {};
+        const showNote = !!(noteOpen[c.key] || cur.evidence);
+        return h('div', { key: 'man-' + c.key, className: 'fde-gate-item' + (cur.pass ? ' pass' : '') },
+          h('div', { className: 'fde-gate-line' },
+            h('label', { className: 'fde-check' },
+              h('input', {
+                type: 'checkbox',
+                checked: !!cur.pass,
+                'aria-label': c.label,
+                onChange: (e) => toggleCheck(c.key, !!(e && e.target && e.target.checked)),
+              }),
+              h('span', { className: 'fde-gate-label' }, c.label)),
+            h('span', { className: 'fde-spacer' }),
+            showNote ? null : h('button', {
+              type: 'button', className: 'fde-textbtn',
+              onClick: () => setNoteOpen((m) => Object.assign({}, m, { [c.key]: true })),
+            }, '加备注')),
+          showNote
+            ? h('input', {
+              className: 'fde-input fde-gate-evidence',
+              type: 'text',
+              value: str(cur.evidence),
+              placeholder: t('drawerGateEvidencePh'),
+              'aria-label': c.label + ' ' + t('drawerGateEvidencePh'),
+              onChange: (e) => setEvidence(c.key, e && e.target ? e.target.value : ''),
+            })
+            : null);
+      };
+
+      const saveChecks = async () => {
+        if (!p.onGateSave) return;
+        const r = await p.onGateSave(chosenStage, checksPayload());
+        if (r && r.ok !== false) setDirty(false);
+      };
+      const gateHeadline = !nextStage
+        ? ''
+        : (forced
+          ? '已破例放行，可以进入「' + nextStage.label + '」'
+          : (ready
+            ? '进入「' + nextStage.label + '」的条件都满足了'
+            : (autoKnown
+              ? '进入「' + nextStage.label + '」还差 ' + totalMissing + ' 项'
+              : '进入「' + nextStage.label + '」的条件')));
+
       const stageBlock = h('div', { key: 'stage', className: 'fde-block' },
         h('div', { className: 'fde-block-head' },
           h('span', { className: 'fde-block-title' }, t('drawerStage')),
-          stageIdx >= 0 ? h('span', { className: 'fde-hint' }, '当前第 ' + (stageIdx + 1) + ' / ' + stages.length + ' 阶段') : null),
+          h('div', { className: 'fde-spacer' }),
+          p.onOpenGuide
+            ? h('button', { type: 'button', className: 'fde-textbtn', onClick: () => p.onOpenGuide(chosenStage) },
+              nextStage ? '「' + nextStage.label + '」怎么做' : '这个阶段怎么做')
+            : null),
         h('div', { className: 'fde-stepper', role: 'group', 'aria-label': t('drawerStage') },
           stages.map((s, i) => h('button', {
             key: s.key,
             type: 'button',
             className: 'fde-step' + (s.key === eng.stage ? ' on' : '') + (i < stageIdx ? ' done' : '') + (eng.paused ? ' paused' : ''),
             title: s.definition || s.label,
-            'aria-label': '阶段 ' + s.label + (i < stageIdx ? '（已完成）' : ''),
+            'aria-label': s.label + (s.key === eng.stage ? '（当前阶段）' : (i < stageIdx ? '（已经过）' : '')),
+            'aria-current': s.key === eng.stage ? 'step' : undefined,
             onClick: () => {
               if (s.key === eng.stage) return;
               if (i < stageIdx && p.onMoveBack) p.onMoveBack(s.key);
@@ -5815,181 +5816,136 @@ window.__ModuleLoader__.load({
             h('span', { className: 'fde-step-num' }, String(i + 1)),
             h('span', null, s.label)))),
         nextStage
-          ? h('div', { className: 'fde-row', style: { marginTop: 6 } },
-            h('span', { className: 'fde-hint' }, '推进到「' + nextStage.label + '」需要通过门禁：' + (gateOfStage(meta, nextStage.key).label || nextStage.key)),
-            h(Btn, { small: true, kind: 'primary', onClick: () => p.onMoveStage && p.onMoveStage(nextStage.key) }, '推进到' + nextStage.label))
-          : h('div', { className: 'fde-hint' }, '已是最后一个阶段'));
+          ? h('div', { className: 'fde-gate' },
+            h('div', { className: 'fde-gate-head' },
+              h('span', { className: 'fde-gate-title' + (ready ? ' ok' : '') }, gateHeadline),
+              h('div', { className: 'fde-spacer' }),
+              h('button', {
+                type: 'button', className: 'fde-textbtn',
+                title: t('drawerGateEvaluate'), 'aria-label': t('drawerGateEvaluate'),
+                disabled: !!p.gateLoading,
+                onClick: () => p.onGateEvaluate && p.onGateEvaluate(chosenStage),
+              }, p.gateLoading ? '核对中…' : t('drawerGateEvaluate'))),
+            p.gateError ? h(MsgLine, { kind: 'err', text: p.gateError }) : null,
+            (gateAuto.length || manualDefs.length)
+              ? h('div', { className: 'fde-gate-list' },
+                gateAuto.map(gateAutoRow),
+                manualDefs.map(gateManualRow))
+              : null,
+            h('div', { className: 'fde-row', style: { marginTop: 10 } },
+              dirty
+                ? h(Btn, { small: true, kind: 'primary', onClick: saveChecks }, t('drawerGateSave'))
+                : (ready
+                  ? h(Btn, { small: true, kind: 'primary', onClick: () => p.onMoveStage && p.onMoveStage(nextStage.key) }, '进入「' + nextStage.label + '」')
+                  : null),
+              h(Btn, {
+                small: true, kind: !dirty && !ready && autoMissing > 0 ? 'primary' : '',
+                title: '新开一个会话，让 AI 按这个阶段的做法准备材料；做完会回到这里等你验收',
+                onClick: p.onHandoff,
+              }, autoMissing > 0 ? '交给 AI 准备材料' : t('drawerStartSession')),
+              h('div', { className: 'fde-spacer' }),
+              ready ? null : h('button', {
+                type: 'button', className: 'fde-textbtn',
+                onClick: () => p.onForceGate && p.onForceGate(chosenStage),
+              }, t('drawerGateForce'))))
+          : h('div', { className: 'fde-row', style: { marginTop: 10 } },
+            h('span', { className: 'fde-hint' }, '已经是最后一个阶段。'),
+            h('div', { className: 'fde-spacer' }),
+            h(Btn, { small: true, onClick: p.onHandoff }, t('drawerStartSession'))));
 
-      const gateAutoRow = (c) => {
-        const okDesc = c.ok === true ? '通过' : (c.ok === false ? '未通过' : '未评估');
-        return h('div', {
-          key: 'auto-' + c.key,
-          className: 'fde-gate-item' + (c.ok === true ? ' pass' : (c.ok === false ? ' missing' : '')),
-        },
-          h('div', { className: 'fde-gate-line' },
-            Dot({ tone: c.ok === true ? 'ok' : (c.ok === false ? 'alert' : 'warn') }),
-            h('span', null, c.label || c.key),
-            h('span', { className: 'fde-gate-key' }, c.key),
-            h('span', { className: 'fde-spacer', style: { flex: '1 1 auto' } }),
-            h('span', { className: 'fde-hint' }, okDesc)),
-          c.evidence ? h('div', { className: 'fde-hint' }, '证据：' + c.evidence) : null);
-      };
-      const gateManualRow = (c) => h('div', {
-        key: 'man-' + c.key,
-        className: 'fde-gate-item' + (gateChecks[c.key] && gateChecks[c.key].pass ? ' pass' : ''),
+      /* ---------- 这个客户的任务 ---------- */
+      const relatedItemRow = (it) => h('button', {
+        key: it.id, type: 'button', className: 'fde-li fde-li-button',
+        onClick: () => p.onOpenItem && p.onOpenItem(it.id),
       },
-        h('label', { className: 'fde-check' },
-          h('input', {
-            type: 'checkbox',
-            checked: !!(gateChecks[c.key] && gateChecks[c.key].pass),
-            'aria-label': c.label,
-            onChange: (e) => toggleCheck(c.key, !!(e && e.target && e.target.checked)),
-          }),
-          h('span', null, c.label || c.key),
-          h('span', { className: 'fde-gate-key' }, c.key)),
-        h('input', {
-          className: 'fde-input fde-gate-evidence',
-          type: 'text',
-          value: str((gateChecks[c.key] || {}).evidence),
-          placeholder: t('drawerGateEvidencePh'),
-          'aria-label': (c.label || c.key) + ' 证据',
-          onChange: (e) => setEvidence(c.key, e && e.target ? e.target.value : ''),
-        }));
+        h('div', { className: 'fde-li-main' },
+          h('div', { className: 'fde-li-title' }, it.title),
+          h('div', { className: 'fde-li-meta' },
+            Chip({ tone: it.stage === 'review' ? 'warn' : 'muted', children: laneLabel(meta, it.stage) }),
+            it.due ? h('span', { className: isOverdue(it.due) ? 'fde-warn' : '' }, dueText(it.due)) : null)));
+      const openItems = engagementItems.filter((it) => it.stage !== 'done' && it.stage !== 'canceled');
+      const itemsBlock = engagementItems.length
+        ? h('div', { key: 'items', className: 'fde-block' },
+          h('div', { className: 'fde-block-head' },
+            h('span', { className: 'fde-block-title' }, '任务'),
+            h('span', { className: 'fde-hint' }, openItems.length ? openItems.length + ' 个在办' : '都办完了')),
+          h('div', { className: 'fde-list' }, (openItems.length ? openItems : engagementItems).slice(0, 8).map(relatedItemRow)))
+        : null;
 
-      const gateBlock = h('div', { key: 'gate', className: 'fde-block' },
-        h('div', { className: 'fde-block-head' },
-          h('span', { className: 'fde-block-title' }, t('drawerGate') + ' · ' + (chosenDef ? chosenDef.label : chosenStage)),
-          h('span', { className: 'fde-hint' }, t('drawerGateFor') + '「' + (chosenDef ? chosenDef.label : chosenStage) + '」'),
-          h(Btn, { small: true, onClick: () => p.onGateEvaluate && p.onGateEvaluate(chosenStage), busy: !!p.gateLoading }, t('drawerGateEvaluate'))),
-        gateStatus
-          ? Chip({ tone: gateStatus === 'pass' || gateStatus === 'forced' ? 'ok' : 'warn', children: gateStatus === 'pass' ? t('drawerGatePassed') : (gateStatus === 'forced' ? '已强制通过' : t('drawerGatePending')) })
-          : null,
-        p.gateError ? h(MsgLine, { kind: 'err', text: p.gateError }) : null,
-        autoDefs.length
-          ? h('div', { className: 'fde-gate-list' },
-            h('div', { className: 'fde-hint' }, t('drawerGateAuto') + '（宿主计算，只读）'),
-            gateAuto.map(gateAutoRow))
-          : h('div', { className: 'fde-hint' }, '该阶段没有自动检查项。'),
-        manualDefs.length
-          ? h('div', null,
-            h('div', { className: 'fde-hint', style: { margin: '10px 0 4px' } },
-              t('drawerGateManual') + '（' + manualPass + '/' + manualDefs.length + ' 已确认，需人工勾选并留证据）'),
-            h('div', { className: 'fde-gate-list' }, manualDefs.map(gateManualRow)),
-            h('div', { className: 'fde-row', style: { marginTop: 8 } },
-              h(Btn, { small: true, kind: 'primary', onClick: () => p.onGateSave && p.onGateSave(chosenStage, checksPayload()) }, t('drawerGateSave')),
-              h('span', { className: 'fde-hint' }, '保存只记录人工确认，不会自动推进阶段。')))
-          : h('div', { className: 'fde-hint' }, '该阶段没有人工确认项。'),
-        gateMissing.length
-          ? h('div', { style: { marginTop: 8 } },
-            h('div', { className: 'fde-hint', style: { color: 'var(--fde-danger)' } }, t('drawerGateMissing') + '：'),
-            h(MissingList, { items: gateMissing }))
-          : null,
-        h('div', { className: 'fde-row', style: { marginTop: 8 } },
-          h(Btn, { small: true, kind: 'warn', onClick: () => p.onForceGate && p.onForceGate(chosenStage, gateMissing) }, t('drawerGateForce')),
-          h('span', { className: 'fde-hint' }, '强制会记录理由与人工覆盖，需二次确认。')));
-
-      const nextBlock = h('div', { key: 'next', className: 'fde-block' },
-        h('div', { className: 'fde-block-head' }, h('span', { className: 'fde-block-title' }, t('drawerNext'))),
-        h('div', { className: 'fde-form-grid' },
-          h(Field, { label: t('drawerNextText'), full: true },
-            h(TextInput, { value: nextText, placeholder: '如：补 KPI 假设第三段', onChange: (e) => setNextText(e.target.value) })),
-          h(Field, { label: t('drawerNextDue') },
-            h(TextInput, { type: 'date', value: nextDue, onChange: (e) => setNextDue(e.target.value) })),
-          h(Field, { label: t('drawerNextOwner') },
-            h(TextInput, { value: nextOwner, placeholder: 'Neo', onChange: (e) => setNextOwner(e.target.value) }))),
-        h('div', { className: 'fde-row', style: { marginTop: 8 } },
-          h(Btn, { small: true, kind: 'primary', onClick: () => p.onSaveNext && p.onSaveNext({ text: nextText, due: nextDue, owner: nextOwner }) }, t('drawerSaveNext')),
-          h('span', { className: 'fde-hint' }, '下一步写入 board，用于今日/看板提醒。')));
-
-      const stakeRow = (s, i) => h('div', { key: 'st-' + i, className: 'fde-row', style: { alignItems: 'flex-end' } },
-        h(Field, { label: t('drawerName') },
-          h(TextInput, { value: str(s.name), style: { width: 110 }, onChange: (e) => setStake(i, 'name', e.target.value) })),
-        h(Field, { label: t('drawerRole') },
-          h(TextInput, { value: str(s.role), style: { width: 110 }, onChange: (e) => setStake(i, 'role', e.target.value) })),
-        h(Field, { label: t('drawerLevel') },
-          h(Select, {
-            value: str(s.level || 'unknown'),
-            options: Object.keys(LEVEL_FALLBACK).map((k) => ({ value: k, label: LEVEL_FALLBACK[k] })),
-            onChange: (e) => setStake(i, 'level', e.target.value),
-          })),
-        Checkbox({ checked: !!s.verified, label: t('drawerVerified'), onChange: (v) => setStake(i, 'verified', v) }),
-        h(Btn, { small: true, kind: 'danger', onClick: () => removeStake(i), ariaLabel: '删除干系人 ' + (s.name || i) }, '删除'));
-
+      /* ---------- 关键人 ---------- */
+      const stakeRow = (s, i) => h('div', { key: 'st-' + i, className: 'fde-stake-row' },
+        h(TextInput, { value: str(s.name), placeholder: t('drawerName'), ariaLabel: t('drawerName'), onChange: (e) => setStake(i, 'name', e.target.value) }),
+        h(TextInput, { value: str(s.role), placeholder: t('drawerRole'), ariaLabel: t('drawerRole'), onChange: (e) => setStake(i, 'role', e.target.value) }),
+        h(Select, {
+          value: str(s.level || 'unknown'), ariaLabel: t('drawerLevel'),
+          options: Object.keys(LEVEL_FALLBACK).map((k) => ({ value: k, label: LEVEL_FALLBACK[k] })),
+          onChange: (e) => setStake(i, 'level', e.target.value),
+        }),
+        Checkbox({ checked: !!s.verified, label: t('drawerVerified'), title: '身份和职务已经核实过', onChange: (v) => setStake(i, 'verified', v) }),
+        h('button', {
+          type: 'button', className: 'fde-drawer-close', 'aria-label': '删掉' + (str(s.name) || '这一行'), title: '删掉',
+          onClick: () => removeStake(i),
+        }, '×'));
       const stakeBlock = h('div', { key: 'stake', className: 'fde-block' },
         h('div', { className: 'fde-block-head' },
-          h('span', { className: 'fde-block-title' }, t('drawerStakeholders') + (stakeholders.length ? '（' + stakeholders.length + '）' : '')),
+          h('span', { className: 'fde-block-title' }, t('drawerStakeholders')),
           h('div', { className: 'fde-spacer' }),
           h(Btn, { small: true, onClick: addStake }, t('drawerAddStakeholder'))),
         stakeholders.length === 0
           ? h('div', { className: 'fde-hint' }, t('drawerNoStakeholders'))
           : h('div', { className: 'fde-stack' }, stakeholders.map(stakeRow)),
-        stakeMsg ? h(MsgLine, { kind: 'ok', text: stakeMsg }) : null,
-        h('div', { className: 'fde-row', style: { marginTop: 8 } },
-          h(Btn, {
-            small: true, kind: 'primary',
-            onClick: async () => {
-              if (!p.onSaveStakeholders) return;
-              const r = await p.onSaveStakeholders(stakeholders.filter((s) => str(s.name).trim()));
-              if (r && r.ok) setStakeMsg('干系人已保存');
-            },
-          }, '保存干系人')));
+        stakeDirty
+          ? h('div', { className: 'fde-row', style: { marginTop: 8 } },
+            h(Btn, {
+              small: true, kind: 'primary',
+              onClick: () => p.onSaveStakeholders && p.onSaveStakeholders(cleanStakes(stakeholders)),
+            }, t('save')),
+            h(Btn, { small: true, onClick: () => setStakeholders(asList(eng.stakeholders).map((s) => Object.assign({}, s))) }, t('cancel')))
+          : null);
 
+      /* ---------- 资料：最近更新的几份，原始素材不列 ---------- */
+      const docFiles = asList(p.files).filter((f) => f && f.rel && !matIsRaw(f.rel))
+        .slice().sort((a, b) => str(b.mtime).localeCompare(str(a.mtime)));
       const artFileRow = (f) => h('div', { key: f.rel, className: 'fde-file' },
-        h('span', { className: 'fde-file-rel' }, f.rel),
-        f.exported ? Chip({ tone: 'ok', children: t('artifactsExported') }) : null,
+        h('span', { className: 'fde-file-rel', title: f.rel }, f.rel),
+        f.mtime ? h('span', { className: 'fde-dim fde-num' }, relTime(f.mtime)) : null,
         p.onOpenPath
           ? h(Btn, {
             small: true,
+            title: t('reveal'),
             onClick: () => p.onOpenPath(p.filesBase ? String(p.filesBase).replace(/\/+$/, '') + '/' + f.rel : '', 'reveal', f.rel, 'file'),
-          }, t('reveal'))
+          }, '定位')
           : null);
-
       const artBlock = h('div', { key: 'art', className: 'fde-block' },
         h('div', { className: 'fde-block-head' },
           h('span', { className: 'fde-block-title' }, t('drawerArtifacts')),
+          docFiles.length ? h('span', { className: 'fde-hint' }, docFiles.length + ' 份') : null,
           h('div', { className: 'fde-spacer' }),
-          h(Btn, { small: true, onClick: p.onLoadFiles, busy: !!p.filesLoading }, '读取工件')),
-        p.files === null
-          ? h('div', { className: 'fde-hint' }, t('drawerNoArtifacts'))
-          : (artGroups.length === 0
-            ? h('div', { className: 'fde-hint' }, t('drawerNoArtifacts'))
-            : h('div', null, artGroups.map((g) => h('div', { key: g.key, className: 'fde-group' },
-              h('div', { className: 'fde-group-title' }, g.key, h('span', { className: 'fde-hint' }, '（' + g.files.length + '）')),
-              h('div', { className: 'fde-files' }, g.files.slice(0, 16).map(artFileRow)))))));
+          p.onOpenMaterials && docFiles.length > 6
+            ? h('button', { type: 'button', className: 'fde-textbtn', onClick: p.onOpenMaterials }, '看全部')
+            : null),
+        p.files === null || p.filesLoading
+          ? h(Loading, {})
+          : (docFiles.length === 0
+            ? h('div', { className: 'fde-hint' }, eng.dir ? t('drawerNoArtifacts') : '这个客户还没有文件夹。交给 AI 后会自动建。')
+            : h('div', { className: 'fde-files' }, docFiles.slice(0, 6).map(artFileRow))));
 
-      const tlRow = (e, i) => h('div', { key: 'tl-' + i, className: 'fde-tl-item' },
-        h('div', { className: 'fde-tl-rail' }, h('span', { className: 'fde-tl-dot ' + str(pick(e.by, e.kind)) })),
-        h('div', { className: 'fde-tl-main' },
-          h('div', { className: 'fde-tl-text' }, e.text),
-          h('div', { className: 'fde-tl-time' }, fmtDateTime(e.at) + (e.kind ? ' · ' + e.kind : '') + (e.by ? ' · ' + e.by : ''))));
-
+      /* ---------- 记录 ---------- */
+      const tlRow = (e, i) => {
+        const who = logActor(e.by);
+        return h('div', { key: 'tl-' + i, className: 'fde-tl-item' },
+          h('div', { className: 'fde-tl-rail' }, h('span', { className: 'fde-tl-dot ' + str(pick(e.by, e.kind)) })),
+          h('div', { className: 'fde-tl-main' },
+            h('div', { className: 'fde-tl-text' }, humanizeLog(e.text)),
+            h('div', { className: 'fde-tl-time' }, fmtDateTime(e.at) + (who ? ' · ' + who : ''))));
+      };
       const timelineBlock = h('div', { key: 'tl', className: 'fde-block' },
         h('div', { className: 'fde-block-head' }, h('span', { className: 'fde-block-title' }, t('drawerTimeline'))),
         timeline.length === 0
           ? h('div', { className: 'fde-hint' }, t('drawerNoTimeline'))
           : h('div', { className: 'fde-timeline' }, timeline.map(tlRow)));
 
-      const relatedItemRow = (it) => h('button', {
-        key: it.id, type: 'button', className: 'fde-li',
-        style: { background: 'transparent', border: 0, width: '100%', textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer' },
-        onClick: () => p.onOpenItem && p.onOpenItem(it.id),
-      },
-        h('div', { className: 'fde-li-main' },
-          h('div', { className: 'fde-li-title' }, it.title),
-          h('div', { className: 'fde-li-meta' },
-            Chip({ tone: 'muted', children: laneLabel(meta, it.stage) }),
-            Chip({ tone: 'muted', children: typeLabel(meta, it.type) }),
-            it.due ? h('span', null, fmtDay(it.due)) : null)));
-
-      const itemsBlock = engagementItems.length
-        ? h('div', { key: 'items', className: 'fde-block' },
-          h('div', { className: 'fde-block-head' },
-            h('span', { className: 'fde-block-title' }, '该客户的任务（' + engagementItems.length + '）')),
-          h('div', { className: 'fde-list' }, engagementItems.slice(0, 12).map(relatedItemRow)))
-        : null;
-
-
-      /* ---------- 招采雷达（v1.1）：统计 / 匹配 Top5 / 已关联 / 开关 ---------- */
+      /* ---------- 招采：这家客户的相关公告（没装招采雷达时整块不显示） ---------- */
       const bidsData = p.bids || null;
       const bidsLoading = !!p.bidsLoading;
       const bidsError = str(p.bidsError || '');
@@ -6006,8 +5962,8 @@ window.__ModuleLoader__.load({
               h('span', { className: 'fde-bid-title-text' }, item.title)),
             h('div', { className: 'fde-bid-meta' },
               item.date ? h('span', { className: 'fde-num' }, fmtDay(item.date)) : null,
-              item.buyer ? h('span', { className: 'fde-bid-kv', title: t('bidBuyer') }, t('bidBuyer') + '：' + item.buyer) : null,
-              item.winner ? h('span', { className: 'fde-bid-kv', title: t('bidWinner') }, t('bidWinner') + '：' + item.winner) : null,
+              item.buyer ? h('span', { className: 'fde-bid-kv' }, t('bidBuyer') + '：' + item.buyer) : null,
+              item.winner ? h('span', { className: 'fde-bid-kv' }, t('bidWinner') + '：' + item.winner) : null,
               item.amountText ? h('span', { className: 'fde-bid-kv', title: t('bidAmountTip') }, t('bidAmount') + '：' + item.amountText) : null)),
           h('div', { className: 'fde-bid-actions' },
             h(Btn, {
@@ -6022,7 +5978,7 @@ window.__ModuleLoader__.load({
                 disabled: drawerBidBusy === 'bid-link:' + item.id,
                 onClick: () => p.onBidLink && p.onBidLink(item),
               }, t('bidLink')),
-            item.url
+            isSafeUrl(item.url)
               ? h('a', { className: 'fde-link fde-link-btn', href: item.url, target: '_blank', rel: 'noreferrer noopener' }, t('bidOpenSource'))
               : null));
       };
@@ -6036,62 +5992,55 @@ window.__ModuleLoader__.load({
             h('div', { className: 'fde-bid-meta' },
               link.date ? h('span', { className: 'fde-num' }, fmtDay(link.date)) : null,
               link.note ? h('span', { className: 'fde-bid-kv' }, t('bidNote') + '：' + link.note) : null,
-              link.linkedAt ? h('span', { className: 'fde-dim' }, relTime(link.linkedAt)) : null,
-              link.by ? h('span', { className: 'fde-dim' }, link.by === 'agent' ? 'agent 关联' : '人工关联') : null)),
+              link.by === 'agent' ? h('span', { className: 'fde-dim' }, 'AI 关联') : null)),
           h('div', { className: 'fde-bid-actions' },
-            link.url
+            isSafeUrl(link.url)
               ? h('a', { className: 'fde-link fde-link-btn', href: link.url, target: '_blank', rel: 'noreferrer noopener' }, t('bidOpenSource'))
               : null,
             h(Btn, {
-              small: true, kind: 'danger',
+              small: true,
               disabled: drawerBidBusy === 'bid-unlink:' + link.bidId,
               onClick: () => p.onBidUnlink && p.onBidUnlink(link),
             }, t('bidUnlink'))));
       };
-      const bidsBlock = h('div', { key: 'bids', className: 'fde-block' },
+      const bidsHidden = !!(bidsData && bidsData.available === false);
+      const bidsBlock = bidsHidden ? null : h('div', { key: 'bids', className: 'fde-block' },
         h('div', { className: 'fde-block-head' },
           h('span', { className: 'fde-block-title' }, t('bidTitle')),
-          bidsData && bidsData.available ? h('span', { className: 'fde-hint' },
-            (bidsData.stats ? '相关 ' + bidsData.stats.total + ' 条' : '')) : null,
           h('div', { className: 'fde-spacer' }),
-          h(Btn, {
-            small: true,
-            busy: drawerBidBusy === 'bid-refresh',
+          bidsData ? Checkbox({
+            checked: bidWatchOn,
+            label: t('bidWatchLabel'),
+            title: t('bidWatchHint'),
+            onChange: (v) => p.onToggleBidWatch && p.onToggleBidWatch(v),
+          }) : null,
+          h('button', {
+            type: 'button', className: 'fde-textbtn',
+            disabled: drawerBidBusy === 'bid-refresh',
             onClick: () => p.onBidsRefresh && p.onBidsRefresh(),
-          }, t('bidRefresh'))),
+          }, drawerBidBusy === 'bid-refresh' ? '刷新中…' : t('bidRefresh'))),
         bidsLoading && !bidsData
-          ? h(Loading, { key: 'l', text: '正在匹配招采记录…' })
+          ? h(Loading, { key: 'l' })
           : (bidsError
             ? h(ErrorLine, { key: 'e', title: t('loadFail'), text: bidsError, onRetry: () => p.onBidsRefresh && p.onBidsRefresh() })
-            : (bidsData && bidsData.available === false
-              ? h(BidUnavailable, { key: 'u', reason: bidsData.reason, onRetry: () => p.onBidsRefresh && p.onBidsRefresh() })
-              : (bidsData
-                ? h('div', { key: 'ok' },
-                  h('div', { className: 'fde-row', style: { rowGap: 6 } },
-                    bidStatBadges(bidsData),
-                    h('div', { className: 'fde-spacer' }),
-                    Checkbox({
-                      checked: bidWatchOn,
-                      label: t('bidWatchLabel'),
-                      title: t('bidWatchHint'),
-                      onChange: (v) => p.onToggleBidWatch && p.onToggleBidWatch(v),
-                    })),
-                  asList(bidsData.queries).length
-                    ? h('div', { className: 'fde-hint', style: { marginTop: 4 } }, t('bidQueries') + '：' + asList(bidsData.queries).join('、'))
-                    : null,
-                  h('div', { className: 'fde-bid-subtitle' }, t('bidMatchTop')),
-                  asList(bidsData.items).length
-                    ? h('div', { className: 'fde-bid-list' }, asList(bidsData.items).slice(0, 5).map(bidMatchRow))
-                    : h('div', { className: 'fde-hint' }, t('bidNoMatch')),
-                  h('div', { className: 'fde-bid-subtitle' }, t('bidLinksTitle') + (asList(bidsData.linked).length ? '（' + asList(bidsData.linked).length + '）' : '')),
-                  asList(bidsData.linked).length
-                    ? h('div', { className: 'fde-bid-list' }, asList(bidsData.linked).map(bidLinkedRow))
-                    : h('div', { className: 'fde-hint' }, t('bidNoLinked')),
-                  h('div', { className: 'fde-hint', style: { marginTop: 6 } }, t('bidPageHint')))
-                : h('div', { key: 'idle', className: 'fde-hint' }, t('bidIdle'))))));
+            : (bidsData
+              ? h('div', { key: 'ok' },
+                h('div', { className: 'fde-row', style: { rowGap: 6 } }, bidStatBadges(bidsData)),
+                asList(bidsData.items).length
+                  ? h('div', { className: 'fde-bid-list', style: { marginTop: 8 } }, asList(bidsData.items).slice(0, 5).map(bidMatchRow))
+                  : h('div', { className: 'fde-hint', style: { marginTop: 6 } },
+                    t('bidNoMatch') + (asList(bidsData.queries).length ? t('bidQueries') + '：' + asList(bidsData.queries).join('、') + '。' : '')),
+                asList(bidsData.linked).length
+                  ? h('div', null,
+                    h('div', { className: 'fde-bid-subtitle' }, t('bidLinksTitle')),
+                    h('div', { className: 'fde-bid-list' }, asList(bidsData.linked).map(bidLinkedRow)))
+                  : null,
+                asList(bidsData.items).length || asList(bidsData.linked).length
+                  ? h('div', { className: 'fde-hint', style: { marginTop: 6 } }, t('bidPageHint'))
+                  : null)
+              : h('div', { key: 'idle', className: 'fde-hint' }, t('bidIdle')))));
 
       const footer = [
-        h(Btn, { key: 'handoff', kind: 'primary', onClick: p.onHandoff }, t('drawerStartSession')),
         h(Btn, { key: 'pause', onClick: () => p.onPause && p.onPause(!eng.paused) }, eng.paused ? t('drawerResume') : t('drawerPause')),
         h('div', { key: 'sp', className: 'fde-spacer' }),
         h(Btn, { key: 'archive', kind: 'danger', onClick: p.onArchive }, t('drawerArchive')),
@@ -6099,24 +6048,25 @@ window.__ModuleLoader__.load({
 
       const titleNode = [
         h('span', { key: 'n' }, eng.name || eng.company || eng.dir || '—'),
-        h('span', { key: 's', className: 'fde-chip on' }, stageLabel(meta, eng.stage)),
+        h('span', { key: 's', className: 'fde-chip on' }, stageLabel(meta, eng.stage) + (daysInStage(eng) !== null ? ' · ' + stayText(daysInStage(eng)) : '')),
         eng.paused ? h('span', { key: 'p', className: 'fde-chip warn' }, t('drawerPaused')) : null,
       ];
-      const subtitle = [
-        eng.company && eng.company !== eng.name ? h('span', { key: 'c' }, eng.company) : null,
-        eng.dir ? h('span', { key: 'd', className: 'fde-code' }, eng.dir) : null,
-        h('span', { key: 'id', className: 'fde-dim' }, eng.id),
-      ];
+      const subtitle = eng.company && eng.company !== eng.name ? eng.company : null;
 
       return h(DrawerShell, {
-        titleText: '客户：' + (eng.name || eng.company || eng.dir || ''),
+        titleText: t('drawerEngagement') + '：' + (eng.name || eng.company || eng.dir || ''),
         title: titleNode,
         subtitle,
         onClose: p.onClose,
-        children: [stageBlock, gateBlock, nextBlock, stakeBlock, artBlock, bidsBlock, timelineBlock, itemsBlock],
+        children: [nextBlock, stageBlock, itemsBlock, stakeBlock, artBlock, bidsBlock, timelineBlock],
         footer,
       });
     }
+    /* 进展的几种情况（report.kind）在界面上的说法 */
+    const REPORT_KIND_LABELS = {
+      progress: '有进展', ready: '做完了，等验收', blocked: '卡住了', failed: '没做成', dropped: '不做了',
+    };
+    function reportKindLabel(kind) { return REPORT_KIND_LABELS[str(kind)] || '有进展'; }
 
     function ItemDrawer(props) {
       const p = props || {};
@@ -6131,32 +6081,44 @@ window.__ModuleLoader__.load({
       const [due, setDue] = useState(normDay(it.due));
       const [owner, setOwner] = useState(str(it.owner || 'human'));
       const [engagementId, setEngagementId] = useState(str(it.engagementId));
+      const [reportOpen, setReportOpen] = useState(false);
       const [reportKind, setReportKind] = useState('progress');
       const [reportText, setReportText] = useState('');
       const [reportErr, setReportErr] = useState('');
-      const [savedMsg, setSavedMsg] = useState(null);
+      const [saveErr, setSaveErr] = useState('');
       const [answer, setAnswer] = useState('');
-      const alive = useRef(true);
-      useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+
+      /* 服务端数据变了（保存成功、AI 更新、拖动卡片）时同步表单。
+         一个字段一个同步：AI 把任务改成「待验收」，不能把正在改的标题冲掉。 */
+      useEffect(() => { setTitle(str(it.title)); }, [it.id, str(it.title)]);
+      useEffect(() => { setType(str(it.type)); }, [it.id, str(it.type)]);
+      useEffect(() => { setLane(str(it.stage)); }, [it.id, str(it.stage)]);
+      useEffect(() => { setPriority(str(it.priority || 'normal')); }, [it.id, str(it.priority)]);
+      useEffect(() => { setDue(normDay(it.due)); }, [it.id, normDay(it.due)]);
+      useEffect(() => { setOwner(str(it.owner || 'human')); }, [it.id, str(it.owner)]);
+      useEffect(() => { setEngagementId(str(it.engagementId)); }, [it.id, str(it.engagementId)]);
+
+      /* 保存时标题首尾空格会被去掉，所以只多了空格不算改动 */
+      const dirty = str(title).trim() !== str(it.title).trim() || type !== str(it.type) || lane !== str(it.stage)
+        || priority !== str(it.priority || 'normal') || due !== normDay(it.due)
+        || owner !== str(it.owner || 'human') || engagementId !== str(it.engagementId);
 
       const save = async () => {
         if (!p.onSave) return;
-        /* 宿主契约：改泳道必须用 action=move（update 会拒绝 stage）。 */
+        if (!str(title).trim()) { setSaveErr('标题不能为空'); return; }
+        setSaveErr('');
+        /* 改状态走「移动」，其余字段走「更新」（由根组件分开提交） */
         const r = await p.onSave({
-          patch: {
-            title, type, priority, due: due || '', owner,
-            engagementId: engagementId || '',
-          },
+          patch: { title, type, priority, due: due || '', owner, engagementId: engagementId || '' },
           lane,
         });
-        if (r && r.ok) setSavedMsg({ kind: 'ok', text: '任务已保存' });
-        else setSavedMsg({ kind: 'err', text: (r && r.reason) || t('actionFail') });
+        if (r && r.ok === false && !r.blocked && !r.demoBlocked) setSaveErr(r.reason || t('actionFail'));
       };
       const submitReport = () => {
         if (!str(reportText).trim()) { setReportErr(t('drawerReportRequired')); return; }
         setReportErr('');
         if (p.onReport) p.onReport(reportKind, reportText);
-        setReportText('');
+        setReportText(''); setReportOpen(false);
       };
       const reports = asList(it.reports).slice().reverse();
       const itemTypes = asList(meta && meta.itemTypes);
@@ -6167,125 +6129,122 @@ window.__ModuleLoader__.load({
         { value: 'agent', label: t('drawerItemOwnerAgent') },
         { value: 'both', label: t('drawerItemOwnerBoth') },
       ];
+      /* 负责人可能是自由文本（旧数据里的人名）：保留为一个选项，不丢值 */
+      if (owner && !ownerOptions.some((o) => o.value === owner)) ownerOptions.push({ value: owner, label: owner });
       const attention = it.attention && typeof it.attention === 'object' ? it.attention : null;
+
+      const attentionBlock = attention
+        ? h('div', { key: 'attn', className: 'fde-block' },
+          h('div', { className: 'fde-block-head' },
+            h('span', { className: 'fde-block-title' }, attentionMeta(meta, attention.kind || 'decision').label)),
+          h('div', { className: 'fde-attn-question' }, str(pick(attention.question, attention.text, ''))),
+          h('div', { className: 'fde-row', style: { marginTop: 8 } },
+            h(TextInput, {
+              value: answer, placeholder: t('drawerAnswerPh'), ariaLabel: t('drawerAnswerPh'), style: { flex: '1 1 220px' },
+              onChange: (e) => setAnswer(e.target.value),
+            }),
+            h(Btn, { small: true, kind: 'primary', onClick: () => p.onResolveAttention && p.onResolveAttention('item', it.id, answer) }, t('drawerResolve'))))
+        : null;
 
       const fields = h('div', { key: 'fields', className: 'fde-block' },
         h('div', { className: 'fde-form-grid' },
-          h(Field, { label: t('drawerItemTitle'), full: true }, h(TextInput, { value: title, onChange: (e) => setTitle(e.target.value) })),
-          h(Field, { label: t('drawerItemType') }, h(Select, {
-            value: type, options: itemTypes.map((x) => ({ value: x.key, label: x.label })),
-            onChange: (e) => setType(e.target.value),
-          })),
+          h(Field, { label: t('drawerItemTitle'), full: true },
+            h(TextInput, { value: title, ariaLabel: t('drawerItemTitle'), onChange: (e) => { setSaveErr(''); setTitle(e.target.value); } })),
           h(Field, { label: t('drawerItemLane') }, h(Select, {
-            value: lane, options: lanes.map((x) => ({ value: x.key, label: x.label })),
+            value: lane, ariaLabel: t('drawerItemLane'), options: lanes.map((x) => ({ value: x.key, label: x.label })),
             onChange: (e) => setLane(e.target.value),
           })),
+          h(Field, { label: t('drawerItemDue') },
+            h(TextInput, { type: 'date', value: due, ariaLabel: t('drawerItemDue'), onChange: (e) => setDue(e.target.value) })),
+          h(Field, { label: t('drawerItemOwner') }, h(Select, {
+            value: owner, ariaLabel: t('drawerItemOwner'), options: ownerOptions, onChange: (e) => setOwner(e.target.value),
+          })),
           h(Field, { label: t('drawerItemPriority') }, h(Select, {
-            value: priority, options: priorities.map((x) => ({ value: x.key, label: x.label })),
+            value: priority, ariaLabel: t('drawerItemPriority'), options: priorities.map((x) => ({ value: x.key, label: x.label })),
             onChange: (e) => setPriority(e.target.value),
           })),
-          h(Field, { label: t('drawerItemDue') }, h(TextInput, { type: 'date', value: due, onChange: (e) => setDue(e.target.value) })),
-          h(Field, { label: t('drawerItemOwner') }, h(Select, {
-            value: owner, options: ownerOptions, onChange: (e) => setOwner(e.target.value),
+          h(Field, { label: t('drawerItemType') }, h(Select, {
+            value: type, ariaLabel: t('drawerItemType'), options: itemTypes.map((x) => ({ value: x.key, label: x.label })),
+            onChange: (e) => setType(e.target.value),
           })),
           h(Field, { label: t('drawerItemEngagement') }, h(Select, {
-            value: engagementId,
+            value: engagementId, ariaLabel: t('drawerItemEngagement'),
             options: [{ value: '', label: t('drawerItemIndependent') }].concat(
               asList(board.engagements).map((e) => ({ value: e.id, label: e.shortName || e.name || e.dir }))
             ),
             onChange: (e) => setEngagementId(e.target.value),
           }))),
-        h('div', { className: 'fde-row', style: { marginTop: 8 } },
-          h(Btn, { small: true, kind: 'primary', onClick: save }, t('drawerSaveItem')),
-          h('span', { className: 'fde-hint' }, '修改泳道等同移动卡片；进入 done 仍需要证据。')));
-
-      const attentionBlock = attention
-        ? h('div', { key: 'attn', className: 'fde-block' },
-          h('div', { className: 'fde-block-head' }, h('span', { className: 'fde-block-title' }, t('drawerAttention'))),
-          h('div', { className: 'fde-gate-item' },
-            h('div', { className: 'fde-gate-line' },
-              Chip({ tone: 'warn', children: attentionMeta(meta, attention.kind || 'decision').label }),
-              h('span', null, str(pick(attention.question, attention.text, '—')))),
-            h('div', { className: 'fde-row' },
-              h(TextInput, { value: answer, placeholder: t('drawerAnswerPh'), ariaLabel: t('drawerAnswerPh'), onChange: (e) => setAnswer(e.target.value) }),
-              h(Btn, { small: true, kind: 'primary', onClick: () => p.onResolveAttention && p.onResolveAttention('item', it.id, answer) }, t('drawerResolve')))))
-        : null;
+        saveErr ? h(MsgLine, { kind: 'err', text: saveErr, onClose: () => setSaveErr('') }) : null,
+        dirty
+          ? h('div', { className: 'fde-row', style: { marginTop: 8 } },
+            h(Btn, { small: true, kind: 'primary', onClick: save }, t('drawerSaveItem')))
+          : null);
 
       const reportRow = (r, i) => h('div', { key: 'rp-' + i, className: 'fde-report' },
         h('div', { className: 'fde-report-head' },
-          Chip({ tone: r.kind === 'ready' ? 'ok' : (r.kind === 'blocked' || r.kind === 'failed' ? 'danger' : 'muted'), children: str(r.kind) }),
+          Chip({ tone: r.kind === 'ready' ? 'ok' : (r.kind === 'blocked' || r.kind === 'failed' ? 'danger' : 'muted'), children: reportKindLabel(r.kind) }),
           h('span', { className: 'fde-dim' }, fmtDateTime(r.at))),
         h('div', { className: 'fde-report-text' }, str(r.text)),
-        asList(r.artifacts).length ? h('div', { className: 'fde-hint' }, '产物：' + asList(r.artifacts).join('、')) : null);
+        asList(r.artifacts).length ? h('div', { className: 'fde-hint' }, '文件：' + asList(r.artifacts).join('、')) : null);
 
-      const reportsBlock = h('div', { key: 'reports', className: 'fde-block' },
-        h('div', { className: 'fde-block-head' },
-          h('span', { className: 'fde-block-title' }, t('drawerReports') + (reports.length ? '（' + reports.length + '）' : '')),
-          h('div', { className: 'fde-spacer' }),
-          h('span', { className: 'fde-hint' }, 'agent 通过 fde_item report 回报')),
-        reports.length === 0
-          ? h('div', { className: 'fde-hint' }, t('drawerNoReports'))
-          : h('div', { className: 'fde-stack' }, reports.slice(0, 20).map(reportRow)));
-
-      const reportNowBlock = h('div', { key: 'reportNow', className: 'fde-block' },
-        h('div', { className: 'fde-block-head' }, h('span', { className: 'fde-block-title' }, t('drawerReportNow'))),
-        h(Select, {
-          value: reportKind, ariaLabel: t('drawerReportKind'),
-          options: [
-            { value: 'progress', label: '进度' }, { value: 'ready', label: '完成待审' },
-            { value: 'blocked', label: '受阻' }, { value: 'failed', label: '失败' },
-            { value: 'dropped', label: '放弃' },
-          ],
-          onChange: (e) => setReportKind(e.target.value),
-        }),
+      const reportForm = h('div', { className: 'fde-report-form' },
+        h('div', { className: 'fde-row' },
+          h(Select, {
+            value: reportKind, ariaLabel: t('drawerReportKind'),
+            options: Object.keys(REPORT_KIND_LABELS).map((k) => ({ value: k, label: REPORT_KIND_LABELS[k] })),
+            onChange: (e) => setReportKind(e.target.value),
+          })),
         h(TextArea, {
-          value: reportText, placeholder: t('drawerReportText'), ariaLabel: t('drawerReportText'),
+          value: reportText, placeholder: '做了什么、结果怎样、文件在哪', ariaLabel: t('drawerReportText'),
           onChange: (e) => { setReportText(e.target.value); setReportErr(''); },
         }),
         reportErr ? h('div', { className: 'fde-msg err', role: 'alert' }, reportErr) : null,
         h('div', { className: 'fde-row', style: { marginTop: 6 } },
           h(Btn, { small: true, kind: 'primary', onClick: submitReport }, t('drawerReportSubmit')),
-          h('span', { className: 'fde-hint' }, 'ready 会自动移到「待我审」；blocked 移到「等外部」并生成注意力。')));
+          h(Btn, { small: true, onClick: () => { setReportOpen(false); setReportErr(''); } }, t('cancel'))));
 
-      const sessionBlock = h('div', { key: 'session', className: 'fde-block' },
-        h('div', { className: 'fde-block-head' }, h('span', { className: 'fde-block-title' }, t('drawerSession'))),
-        it.sessionId
-          ? h('div', { className: 'fde-row' },
-            h('span', { className: 'fde-code' }, it.sessionId),
-            h(Btn, { small: true, onClick: () => p.onOpenSession && p.onOpenSession(it.sessionId) }, t('open')))
-          : h('div', { className: 'fde-hint' }, '还没有关联会话；点「启动会话」按阶段模板派发。'));
+      const reportsBlock = h('div', { key: 'reports', className: 'fde-block' },
+        h('div', { className: 'fde-block-head' },
+          h('span', { className: 'fde-block-title' }, t('drawerReports')),
+          h('div', { className: 'fde-spacer' }),
+          reportOpen ? null : h(Btn, { small: true, onClick: () => setReportOpen(true) }, t('drawerReportNow'))),
+        reportOpen ? reportForm : null,
+        reports.length === 0
+          ? (reportOpen ? null : h('div', { className: 'fde-hint' }, t('drawerNoReports')))
+          : h('div', { className: 'fde-stack' }, reports.slice(0, 20).map(reportRow)));
 
       const titleNode = [
         h('span', { key: 't' }, it.title || t('drawerItem')),
         h('span', { key: 'l', className: 'fde-chip on' }, laneLabel(meta, it.stage)),
       ];
-      const subtitle = [
-        eng ? h('span', { key: 'e' }, eng.shortName || eng.name) : h('span', { key: 'e' }, t('drawerItemIndependent')),
-        h('span', { key: 'id', className: 'fde-dim' }, it.id),
-      ];
+      const subtitle = eng ? (eng.shortName || eng.name) : null;
       const footer = [
-        h(Btn, { key: 'handoff', kind: 'primary', onClick: p.onHandoff }, t('drawerStartSession')),
+        h(Btn, {
+          key: 'handoff', kind: 'primary',
+          title: '新开一个会话，让 AI 来做这个任务；做完会回到这里等你验收',
+          onClick: p.onHandoff,
+        }, t('drawerStartSession')),
+        it.sessionId
+          ? h(Btn, { key: 'session', onClick: () => p.onOpenSession && p.onOpenSession(it.sessionId) }, '打开会话')
+          : null,
         h('div', { key: 'sp', className: 'fde-spacer' }),
         h(Btn, { key: 'del', kind: 'danger', onClick: p.onDelete }, t('drawerDelete')),
       ];
 
       return h(DrawerShell, {
-        titleText: '任务：' + it.title,
+        titleText: t('drawerItem') + '：' + it.title,
         title: titleNode,
         subtitle,
         onClose: p.onClose,
-        children: [
-          savedMsg ? h(MsgLine, { key: 'm', kind: savedMsg.kind, text: savedMsg.text, onClose: () => setSavedMsg(null) }) : null,
-          fields, attentionBlock, reportsBlock, reportNowBlock, sessionBlock,
-        ],
+        children: [attentionBlock, fields, reportsBlock],
         footer,
       });
     }
 
     /* ============================================================
-     * 十三之二、Phase 2 页型壳（layout.md §7）
-     * 5 页签只组合既有视图；页内视图切换（客户 3 态 / 资料 2 态 / 流程 3 态）
-     * 与页头设置入口在这里承载，各视图组件保持原有数据与行为。
+     * 十三之二、页面容器
+     * 5 个主页签只组合各视图；页内子页签（客户 3 个 / 情报 2 个 / 流程 3 个）
+     * 与设置页在这里承载。
      * ============================================================ */
     function PageTabs(props) {
       const p = props || {};
@@ -6311,8 +6270,8 @@ window.__ModuleLoader__.load({
           value: tab,
           items: [
             { key: 'board-customer', label: t('customersViewBoardCustomer') },
-            { key: 'board-item', label: t('customersViewBoardTask') },
             { key: 'list', label: t('customersViewList') },
+            { key: 'board-item', label: t('customersViewBoardTask') },
           ],
           onChange: (k) => { if (p.onTab) p.onTab(k); },
         }),
@@ -6334,8 +6293,8 @@ window.__ModuleLoader__.load({
             onMoveEngagement: p.onMoveEngagement,
             onMoveItem: p.onMoveItem,
             onScanNow: p.onScanNow,
-            onOpenCustomers: () => { if (p.onTab) p.onTab('list'); },
             onCreateItem: p.onCreateItem,
+            onCreateEngagement: p.onCreateEngagement,
           }));
     }
 
@@ -6378,6 +6337,7 @@ window.__ModuleLoader__.load({
           ? h(ProcessView, {
             meta: p.meta, board: p.board, copyText: p.copyText,
             onOpenMethod: p.onOpenMethod, onOpenLibrary: p.onOpenLibrary,
+            initialStage: p.initialStage, initialStageSeq: p.initialStageSeq, onInitialStageUsed: p.onInitialStageUsed,
           })
           : h(MethodsView, {
             meta: p.meta, section: tab,
@@ -6427,6 +6387,7 @@ window.__ModuleLoader__.load({
       const [dialog, setDialog] = useState(null);
       const [createForm, setCreateForm] = useState(null); /* 'engagement' | 'item'（§2.1 新建弹层） */
       const [methodJump, setMethodJump] = useState({ name: '', seq: 0 });
+      const [guideJump, setGuideJump] = useState({ stage: '', seq: 0 });
       const [search, setSearch] = useState('');
       const [priority, setPriority] = useState('all');
       const [customerFilter, setCustomerFilter] = useState('');
@@ -6653,7 +6614,7 @@ window.__ModuleLoader__.load({
         if (!alive.current) return;
         setDrawerFilesLoading(false);
         if (r && r.ok !== false && Array.isArray(r.files)) setDrawerFiles(r.files);
-        else { setDrawerFiles([]); notify('warn', '工件读取失败：' + ((r && r.reason) || '未知原因')); }
+        else { setDrawerFiles([]); notify('warn', '没能读取资料' + (r && r.reason ? '：' + r.reason : '')); }
       }, [drawerEngagement, notify]);
 
       useEffect(() => {
@@ -6758,7 +6719,7 @@ window.__ModuleLoader__.load({
         }));
         if (r && r.ok) {
           await refreshAll(true);
-          notify('ok', t('bidWatchLabel') + (enabled ? ' 已开启' : ' 已关闭'));
+          notify('ok', enabled ? '有新公告会提醒你' : '这家客户的新公告不再提醒');
         }
       }, [runAction, refreshAll, notify, drawerBidsTarget]);
 
@@ -6770,6 +6731,23 @@ window.__ModuleLoader__.load({
       })();
 
       /* ---------- 会话交接 ---------- */
+      /* 没能自动新开会话时，把要发给 AI 的那段话交到人手里：
+         能复制就复制；复制不了就摆出来，让人自己选中复制。不能只说「请粘贴」却不给内容。 */
+      const offerPrompt = useCallback(async (prompt) => {
+        const text = str(prompt);
+        if (!text) return false;
+        if (await copyText(text)) { notify('warn', t('handoffFail')); return true; }
+        setDialog({
+          title: '没能自动新开会话',
+          body: '把下面这段话复制到任意会话里，就能继续。',
+          input: { label: '发给 AI 的话', multiline: true },
+          initialValue: text,
+          confirmLabel: '关闭',
+          onConfirm: () => setDialog(null),
+        });
+        return true;
+      }, [copyText, notify]);
+
       const handoff = useCallback(async (type, id) => {
         const r = await runAction('handoff', () => fdePost('/handoff', { target: type, id }));
         if (!r) return;
@@ -6779,10 +6757,11 @@ window.__ModuleLoader__.load({
           gotoSession(r.sessionId);
           return;
         }
-        const prompt = str(r.prompt || '');
-        const copied = prompt ? await copyText(prompt) : false;
-        notify('warn', (r.reason || t('noSession')) + (copied ? ' ' + t('copied') : ''));
-      }, [runAction, notify, copyText, refreshAll, gotoSession]);
+        /* 会话没开成，但任务可能已经建好了：先刷新，再把那段话交给人 */
+        if (!r.demoBlocked) await refreshAll(true);
+        if (await offerPrompt(r.prompt)) return;
+        if (!r.demoBlocked) notify('warn', r.reason || t('noSession'));
+      }, [runAction, notify, offerPrompt, refreshAll, gotoSession]);
 
       /* ---------- 阶段移动 + 门禁 ---------- */
       const doMoveEngagement = useCallback(async (id, toStage, body) => {
@@ -6793,12 +6772,12 @@ window.__ModuleLoader__.load({
         if (toIdx !== -1 && fromIdx !== -1 && toIdx < fromIdx) {
           setDialog({
             title: t('drawerMoveBackConfirm'),
-            body: t('drawerMoveBackBody') + ' 目标：' + stageLabel(metaRef.current, toStage) + '。',
-            confirmLabel: '回退',
+            body: '将退回到「' + stageLabel(metaRef.current, toStage) + '」。' + t('drawerMoveBackBody'),
+            confirmLabel: '退回',
             onConfirm: async () => {
               setDialog(null);
               const r = await runAction('move:' + id, () => fdePost('/engagement', { action: 'move', id, patch: { stage: toStage } }));
-              if (r && r.ok) { await refreshAll(true); notify('ok', '已回退到「' + stageLabel(metaRef.current, toStage) + '」'); }
+              if (r && r.ok) { await refreshAll(true); notify('ok', '已退回到「' + stageLabel(metaRef.current, toStage) + '」'); }
             },
           });
           return null;
@@ -6807,15 +6786,16 @@ window.__ModuleLoader__.load({
         if (!r) return null;
         if (r.ok) {
           await refreshAll(true);
-          notify('ok', '已推进到「' + stageLabel(metaRef.current, toStage) + '」');
+          notify('ok', '已进入「' + stageLabel(metaRef.current, toStage) + '」阶段');
           return r;
         }
         if (r.blocked || asList(r.missing).length) {
           setDialog({
             title: t('drawerGateMissingTitle'),
-            body: '目标阶段：' + stageLabel(metaRef.current, toStage) + '。门禁未通过，是否强制推进？',
+            body: '进入「' + stageLabel(metaRef.current, toStage) + '」还差这些：',
             children: h(MissingList, { items: r.missing }),
-            confirmLabel: '强制推进（填写理由）',
+            confirmLabel: t('drawerGateForce'),
+            cancelLabel: '去补齐',
             danger: true,
             onCancel: () => { setDialog(null); openEngagement(id); },
             onConfirm: () => {
@@ -6823,14 +6803,14 @@ window.__ModuleLoader__.load({
                 title: t('drawerForceTitle'),
                 body: t('drawerForceBody'),
                 danger: true,
-                input: { label: t('drawerForceReason'), placeholder: '写清为什么绕过门禁（会记录在 timeline）', required: true, multiline: true },
-                confirmLabel: '确认强制推进',
+                input: { label: t('drawerForceReason'), placeholder: '为什么现在就要推进', required: true, multiline: true, requiredHint: '写下原因再继续' },
+                confirmLabel: t('drawerGateForce'),
                 onConfirm: async (reason) => {
                   setDialog(null);
                   const r2 = await runAction('force:' + id, () => fdePost('/engagement', {
-                    action: 'move', id, patch: { stage: toStage, force: true, reason: reason || '面板强制推进' },
+                    action: 'move', id, patch: { stage: toStage, force: true, reason: reason || '未写原因' },
                   }));
-                  if (r2 && r2.ok) { await refreshAll(true); notify('warn', '已强制推进到「' + stageLabel(metaRef.current, toStage) + '」，已记录人工覆盖。'); }
+                  if (r2 && r2.ok) { await refreshAll(true); notify('warn', '已破例进入「' + stageLabel(metaRef.current, toStage) + '」阶段，原因已记下。'); }
                 },
               });
             },
@@ -6844,51 +6824,58 @@ window.__ModuleLoader__.load({
         if (!r) return null;
         if (r.ok) {
           await refreshAll(true);
-          notify('ok', '已移动到「' + laneLabel(metaRef.current, laneKey) + '」');
+          notify('ok', '状态改为「' + laneLabel(metaRef.current, laneKey) + '」');
           return r;
         }
-        if (r.blocked || asList(r.missing).length || /证据/.test(str(r.reason))) {
+        if (r.blocked || asList(r.missing).length) {
           setDialog({
             title: t('drawerEvidenceTitle'),
             body: t('drawerEvidenceBody'),
-            input: { label: t('drawerEvidenceLabel'), placeholder: '写清结果与可检查的产物路径', required: true, multiline: true },
-            confirmLabel: '带证据移动',
+            input: { label: t('drawerEvidenceLabel'), placeholder: '例如：方案初稿写完了，文件在 proposal 文件夹', required: true, multiline: true, requiredHint: '写一句结果再继续' },
+            confirmLabel: '标记完成',
             onCancel: () => setDialog(null),
             onConfirm: async (evidence) => {
               setDialog(null);
               const r2 = await runAction('move-item:' + id, () => fdePost('/item', {
                 action: 'move', id, patch: { stage: laneKey, evidence, force: true, reason: evidence },
               }));
-              if (r2 && r2.ok) { await refreshAll(true); notify('ok', '已移动到「' + laneLabel(metaRef.current, laneKey) + '」'); }
+              if (r2 && r2.ok) { await refreshAll(true); notify('ok', '状态改为「' + laneLabel(metaRef.current, laneKey) + '」'); }
             },
           });
         }
         return r;
       }, [runAction, refreshAll, notify]);
 
-      const evaluateGate = useCallback(async (stageKey) => {
+      const evaluateGate = useCallback(async (stageKey, engagementId) => {
+        /* 抽屉一挂载就会调用这里；这时 drawerRef 还没同步（子组件的 effect 先于父组件执行），
+           所以客户 id 由抽屉直接传入，不能只靠 drawerRef——否则打开抽屉时永远不会核对。 */
         const d = drawerRef.current;
-        if (!d || d.type !== 'engagement') return;
+        const id = str(engagementId) || (d && d.type === 'engagement' ? str(d.id) : '');
+        if (!id) return;
         setGateLoading(true); setGateError('');
-        const r = await fdePost('/gate', { engagementId: d.id, stage: stageKey });
+        const r = await fdePost('/gate', { engagementId: id, stage: stageKey });
         if (!alive.current) return;
+        /* 返回时抽屉已换成别的客户：丢弃这次结果 */
+        const now = drawerRef.current;
+        if (now && now.type === 'engagement' && str(now.id) !== id) return;
         setGateLoading(false);
         if (r && (r.gate || r.ok !== false)) {
           setGateInfo({ stage: stageKey, gate: r.gate || null, missing: asList(r.missing), at: Date.now() });
         } else {
-          setGateError((r && r.reason) || '门禁评估失败');
+          setGateError((r && r.reason) || '没能核对推进条件');
         }
       }, []);
 
       const saveGate = useCallback(async (stageKey, checks) => {
         const d = drawerRef.current;
-        if (!d) return;
+        if (!d) return null;
         const r = await runAction('gate', () => fdePost('/gate', { engagementId: d.id, stage: stageKey, checks }));
         if (r && r.ok !== false) {
           setGateInfo({ stage: stageKey, gate: r.gate || null, missing: asList(r.missing), at: Date.now() });
           await refreshAll(true);
-          notify('ok', '人工确认已保存');
+          notify('ok', '已保存确认');
         }
+        return r;
       }, [runAction, refreshAll, notify]);
 
       const forceGate = useCallback((stageKey) => {
@@ -6896,15 +6883,15 @@ window.__ModuleLoader__.load({
         if (!d) return;
         setDialog({
           title: t('drawerForceTitle'),
-          body: t('drawerForceBody') + ' 门禁：' + stageLabel(metaRef.current, stageKey) + '。',
+          body: '将进入「' + stageLabel(metaRef.current, stageKey) + '」。' + t('drawerForceBody'),
           danger: true,
-          input: { label: t('drawerForceReason'), placeholder: '写清为什么绕过门禁（会记录人工覆盖）', required: true, multiline: true },
-          confirmLabel: '强制通过并推进',
+          input: { label: t('drawerForceReason'), placeholder: '为什么现在就要推进', required: true, multiline: true, requiredHint: '写下原因再继续' },
+          confirmLabel: t('drawerGateForce'),
           onCancel: () => setDialog(null),
           onConfirm: async (reason) => {
             setDialog(null);
             const r = await runAction('gate-force', () => fdePost('/gate', {
-              engagementId: d.id, stage: stageKey, force: true, reason: reason || '面板强制通过',
+              engagementId: d.id, stage: stageKey, force: true, reason: reason || '未写原因',
             }));
             if (r && r.ok !== false) {
               const r2 = await runAction('move:' + d.id, () => fdePost('/engagement', {
@@ -6912,7 +6899,7 @@ window.__ModuleLoader__.load({
               }));
               if (r2 && r2.ok) {
                 await refreshAll(true);
-                notify('warn', '已强制通过门禁并推进到「' + stageLabel(metaRef.current, stageKey) + '」。');
+                notify('warn', '已破例进入「' + stageLabel(metaRef.current, stageKey) + '」阶段，原因已记下。');
               }
             }
           },
@@ -6926,14 +6913,14 @@ window.__ModuleLoader__.load({
         const r = await runAction('next', () => fdePost('/engagement', {
           action: 'update', id: d.id, patch: { nextAction: { text: next.text, due: next.due, owner: next.owner } },
         }));
-        if (r && r.ok) { await refreshAll(true); notify('ok', '下一步已保存'); }
+        if (r && r.ok) { await refreshAll(true); notify('ok', '已保存下一步'); }
       }, [runAction, refreshAll, notify]);
 
       const saveStakeholders = useCallback(async (list) => {
         const d = drawerRef.current;
         if (!d) return { ok: false };
         const r = await runAction('stake', () => fdePost('/engagement', { action: 'update', id: d.id, patch: { stakeholders: list } }));
-        if (r && r.ok) { await refreshAll(true); notify('ok', '干系人已保存'); }
+        if (r && r.ok) { await refreshAll(true); notify('ok', '已保存关键人'); }
         return r;
       }, [runAction, refreshAll, notify]);
 
@@ -6941,7 +6928,7 @@ window.__ModuleLoader__.load({
         const d = drawerRef.current;
         if (!d) return;
         const r = await runAction('pause', () => fdePost('/engagement', { action: 'update', id: d.id, patch: { paused: !!paused } }));
-        if (r && r.ok) { await refreshAll(true); notify('ok', paused ? '已暂停' : '已恢复'); }
+        if (r && r.ok) { await refreshAll(true); notify('ok', paused ? '已暂停跟进' : '已恢复跟进'); }
       }, [runAction, refreshAll, notify]);
 
       const archiveEngagement = useCallback(() => {
@@ -6959,7 +6946,7 @@ window.__ModuleLoader__.load({
             if (r && r.ok) {
               setDrawer(null);
               await refreshAll(true);
-              notify('ok', '已归档（目录与文件未删除）');
+              notify('ok', '已归档，文件都还在');
             }
           },
         });
@@ -6986,7 +6973,7 @@ window.__ModuleLoader__.load({
         const d = drawerRef.current;
         if (!d) return;
         const r = await runAction('report', () => fdePost('/item', { action: 'report', id: d.id, kind, text }));
-        if (r && r.ok) { await refreshAll(true); notify('ok', '回报已记录'); }
+        if (r && r.ok) { await refreshAll(true); notify('ok', '已记下进展'); }
       }, [runAction, refreshAll, notify]);
 
       const deleteItem = useCallback(() => {
@@ -7001,14 +6988,14 @@ window.__ModuleLoader__.load({
           onConfirm: async () => {
             setDialog(null);
             const r = await runAction('item-del', () => fdePost('/item', { action: 'delete', id: d.id }));
-            if (r && r.ok) { setDrawer(null); await refreshAll(true); notify('ok', '任务已删除'); }
+            if (r && r.ok) { setDrawer(null); await refreshAll(true); notify('ok', '已删除任务'); }
           },
         });
       }, [runAction, refreshAll, notify]);
 
       const resolveAttention = useCallback(async (target, id, answer) => {
         const r = await runAction('attn', () => fdePost('/attention', { action: 'resolve', target, id, answer: answer || '' }));
-        if (r && r.ok) { await refreshAll(true); notify('ok', '已解决'); }
+        if (r && r.ok) { await refreshAll(true); notify('ok', '已处理'); }
         return r;
       }, [runAction, refreshAll, notify]);
 
@@ -7022,9 +7009,9 @@ window.__ModuleLoader__.load({
       const askAnswer = useCallback((a, target, id) => {
         setDialog({
           title: t('actAnswer'),
-          body: a.text,
-          input: { label: t('drawerAnswerPh'), placeholder: '回答会记录到 attention 记录里', required: false, multiline: true },
-          confirmLabel: t('actResolve'),
+          body: a.question || a.detail || stripKindPrefix(a.text),
+          input: { label: t('drawerAnswerPh'), placeholder: '', required: false, multiline: true },
+          confirmLabel: '提交',
           onCancel: () => setDialog(null),
           onConfirm: async (answer) => { setDialog(null); await resolveAttention(target, id, answer); },
         });
@@ -7043,11 +7030,11 @@ window.__ModuleLoader__.load({
         if (key === 'accept' || key === 'dismiss') {
           if (a.proposalId) {
             const r = await runAction('prp:' + a.proposalId, () => fdePost('/proposal', { id: a.proposalId, action: key }));
-            if (r && r.ok) { await refreshAll(true); notify('ok', key === 'accept' ? '已采纳建议' : '已忽略建议'); }
+            if (r && r.ok) { await refreshAll(true); notify('ok', key === 'accept' ? '已处理' : '不再提醒这一条'); }
             return null;
           }
-          /* 非 proposal 的 accept（如 decision）视为已确认并解决 */
-          if (key === 'accept' && id) return resolveAttention(target, id, '已确认');
+          /* 等你决定的事点「已决定」：视为已有结论并关闭 */
+          if (key === 'accept' && id) return resolveAttention(target, id, '已决定');
           return null;
         }
         if (key === 'resolve') {
@@ -7069,17 +7056,29 @@ window.__ModuleLoader__.load({
           const r = await runAction('pause:' + a.engagementId, () => fdePost('/engagement', {
             action: 'update', id: a.engagementId, patch: { paused: true },
           }));
-          if (r && r.ok) { await refreshAll(true); notify('ok', '已暂停该客户'); }
+          if (r && r.ok) { await refreshAll(true); notify('ok', '已暂停跟进这个客户'); }
           return null;
         }
-        /* return/reschedule/confirm/followup 等：打开抽屉由人处理（不自动改阶段/日期） */
+        /* 退回 / 改期 / 去确认 / 去跟进：打开抽屉由人处理（不自动改阶段或日期） */
         return attentionOpen(a);
       }, [attentionOpen, runAction, refreshAll, notify, resolveAttention, moveItem, moveToDoneLane, askAnswer]);
 
       const proposalAction = useCallback(async (pr, action) => {
         const r = await runAction('prp:' + pr.id, () => fdePost('/proposal', { id: pr.id, action }));
-        if (r && r.ok) { await refreshAll(true); notify('ok', action === 'accept' ? '已采纳建议' : '已忽略建议'); }
-      }, [runAction, refreshAll, notify]);
+        if (!r) return;
+        if (!r.ok) { await offerPrompt(r.prompt); return; }
+        await refreshAll(true);
+        if (action !== 'accept') { notify('ok', '不再提醒这一条'); return; }
+        if (r.sessionId) { notify('ok', t('drawerHandoffPrompt')); gotoSession(r.sessionId); return; }
+        notify('ok', pr.kind === 'create_item' ? t('bidPromoteOk') : '已处理');
+      }, [runAction, refreshAll, notify, gotoSession, offerPrompt]);
+
+      /* 提醒的「去处理」：只打开对应的任务或客户，不改提醒状态（spec §22.2） */
+      const proposalOpen = useCallback((pr) => {
+        if (pr.itemId && findItem(boardRef.current, pr.itemId)) return openItem(pr.itemId);
+        if (pr.engagementId) return openEngagement(pr.engagementId);
+        return null;
+      }, [openItem, openEngagement]);
 
       /* 演示态下所有写入口再包一层 demoGuard（ADR 0006 D1）：点击即给行内提示，
          不弹确认框、不乐观更新；传输层 demoGuard 仍作为最后防线。 */
@@ -7140,6 +7139,15 @@ window.__ModuleLoader__.load({
         setMsg(null);
       }, []);
 
+      /* 客户抽屉 →「这个阶段怎么做」：关抽屉，打开流程页对应阶段的指南 */
+      const openGuide = useCallback((stageKey) => {
+        setDrawer(null);
+        setGuideJump((prev) => ({ stage: str(stageKey), seq: ((prev && prev.seq) || 0) + 1 }));
+        setProcessTab('flow');
+        setView('process');
+        setMsg(null);
+      }, []);
+
       const openLibrary = useCallback(() => {
         setKnowledgeTab('library');
         setView('knowledge');
@@ -7167,7 +7175,7 @@ window.__ModuleLoader__.load({
           dueToday: stats && typeof stats.dueToday === 'number' ? stats.dueToday : localStats.dueToday,
           overdue: stats && typeof stats.overdue === 'number' ? stats.overdue : localStats.overdue,
         };
-      const attentionCount = asList(displayBrief && displayBrief.attention).length;
+      const attentionCount = todoAttention(displayBrief && displayBrief.attention).length;
       const activeCount = todayStats.active || 0;
       const engCount = asList(board && board.engagements).length;
 
@@ -7186,7 +7194,7 @@ window.__ModuleLoader__.load({
 
       const viewNode = () => {
         if (!board) {
-          if (loading) return h(Loading, { text: '正在读取 FDE 看板…' });
+          if (loading) return h(Loading, {});
           return h(ErrorLine, {
             title: t('boardLoadFail'), text: boardError || t('retryHint'),
             onRetry: () => loadBoard(),
@@ -7224,6 +7232,8 @@ window.__ModuleLoader__.load({
             meta, board, copyText,
             onOpenMethod: openMethod, onOpenLibrary: openLibrary,
             initialName: methodJump.name, initialSeq: methodJump.seq,
+            initialStage: guideJump.stage, initialStageSeq: guideJump.seq,
+            onInitialStageUsed: () => setGuideJump((prev) => (prev && prev.stage ? { stage: '', seq: prev.seq } : prev)),
           });
         }
         if (activeView === 'files') {
@@ -7264,6 +7274,7 @@ window.__ModuleLoader__.load({
           onAttentionOpen: attentionOpen,
           onAttentionAction: guarded.attentionAction,
           onProposalAction: guarded.proposalAction,
+          onProposalOpen: proposalOpen,
           onScanNow: startScan,
           onCustomers: openCustomersList,
           onCreate: () => openCreate('engagement'),
@@ -7272,16 +7283,19 @@ window.__ModuleLoader__.load({
       };
 
       /* ---------- 渲染 ---------- */
-      const autonomy = autonomyKey(meta, board);
       return h('div', { className: 'fde-root' },
-        h('div', { className: 'fde-top' },
+        h('div', { className: 'fde-top', 'data-window-drag': '' },
           h('div', { className: 'fde-top-left' },
-            h('div', { className: 'fde-title' }, t('fdeBrand')),
-            /* 页头只留标语；活跃客户/待处理数字由「今日」统计条与页签角标各自承担一处（§2.6） */
-            h('div', { className: 'fde-subtitle' }, t('fdeTagline'))),
+            h('div', { className: 'fde-title' }, t('fdeBrand'))),
           h('div', { className: 'fde-top-right' },
-            AutonomyBadge({ meta, mode: autonomy }),
-            h(Btn, { small: true, onClick: () => refreshAll(false), disabled: !!busy, busy: loading && !board }, t('refresh')),
+            h('button', {
+              type: 'button',
+              className: 'fde-iconbtn' + (loading ? ' spinning' : ''),
+              title: t('refresh'),
+              'aria-label': t('refresh'),
+              disabled: !!busy,
+              onClick: () => refreshAll(false),
+            }, '↻'),
             h('button', {
               type: 'button',
               className: 'fde-iconbtn' + (activeView === 'settings' ? ' on' : ''),
@@ -7291,7 +7305,7 @@ window.__ModuleLoader__.load({
               onClick: activeView === 'settings' ? closeSettings : openSettings,
             }, '⚙'))),
         h('div', { className: 'fde-nav-wrap' },
-          h('div', { className: 'fde-nav', role: 'tablist', 'aria-label': 'FDE 视图' },
+          h('div', { className: 'fde-nav', role: 'tablist', 'aria-label': t('fdeBrand') },
             navItems.map((n) => h('button', {
               key: n.key,
               type: 'button',
@@ -7329,7 +7343,7 @@ window.__ModuleLoader__.load({
             onClose: closeDrawer,
             onMoveStage: (stage) => guarded.moveEngagement(drawerEngagement.id, stage),
             onMoveBack: (stage) => guarded.moveEngagement(drawerEngagement.id, stage),
-            onGateEvaluate: guarded.evaluateGate,
+            onGateEvaluate: (stage) => guarded.evaluateGate(stage, drawerEngagement.id),
             onGateSave: guarded.saveGate,
             onForceGate: guarded.forceGate,
             onSaveNext: guarded.saveNext,
@@ -7340,6 +7354,8 @@ window.__ModuleLoader__.load({
             onArchive: guarded.archiveEngagement,
             onOpenItem: openItem,
             onOpenPath: actions.openPath,
+            onOpenGuide: openGuide,
+            onOpenMaterials: () => { setDrawer(null); goView('files'); },
           })
           : null,
         drawer && drawerItem && drawer.type === 'item'
@@ -7384,13 +7400,11 @@ window.__ModuleLoader__.load({
      * ============================================================ */
     function CompatPage(props) {
       const p = props || {};
+      const reason = str(p.reason);
       return h('div', { className: 'fde-root' },
-        h('div', { className: 'fde-top' },
+        h('div', { className: 'fde-top', 'data-window-drag': '' },
           h('div', { className: 'fde-top-left' },
-            h('div', { className: 'fde-title' }, t('fdeBrand')),
-            h('div', { className: 'fde-subtitle' }, t('fdeTagline'))),
-          h('div', { className: 'fde-top-right' },
-            h(Btn, { small: true, onClick: p.onRetry }, t('compatRetry')))),
+            h('div', { className: 'fde-title' }, t('fdeBrand')))),
         h('div', { className: 'fde-compat' },
           h('div', { className: 'fde-compat-card', role: 'alert' },
             h('div', { className: 'fde-compat-title' },
@@ -7398,20 +7412,18 @@ window.__ModuleLoader__.load({
               h('span', null, t('compatTitle'))),
             h('div', { className: 'fde-compat-body' },
               h('div', null, t('compatBody')),
-              h('div', { style: { marginTop: 10 } },
-                '探测结果：', h('code', null, str(p.reason) || '未知原因')),
-              h('div', { className: 'fde-tip', style: { marginTop: 10 } },
-                '重启方式：退出并重新打开 DSH（宿主半路由与技能注册在启动时加载），随后刷新此页面。')),
+              reason ? h('details', { className: 'fde-compat-detail' },
+                h('summary', null, '详细信息'),
+                h('code', null, reason)) : null),
             h('div', { className: 'fde-compat-actions' },
               h(Btn, { kind: 'primary', onClick: p.onRetry }, t('compatRetry'))))));
     }
 
     function ProbingScreen() {
       return h('div', { className: 'fde-root' },
-        h('div', { className: 'fde-top' },
+        h('div', { className: 'fde-top', 'data-window-drag': '' },
           h('div', { className: 'fde-top-left' },
-            h('div', { className: 'fde-title' }, t('fdeBrand')),
-            h('div', { className: 'fde-subtitle' }, t('fdeTagline')))),
+            h('div', { className: 'fde-title' }, t('fdeBrand')))),
         h('div', { className: 'fde-compat' },
           h('div', { className: 'fde-compat-card' },
             h(Loading, { text: t('probing') }))));
@@ -7435,7 +7447,7 @@ window.__ModuleLoader__.load({
           setReason('');
           setMode('fde');
         } else {
-          setReason((r && r.reason) || '宿主未提供 FDE 路由（HTTP 404）');
+          setReason((r && r.reason) || 'HTTP 404');
           setMode('compat');
         }
       }, []);
@@ -7453,9 +7465,11 @@ window.__ModuleLoader__.load({
       return h(CompatPage, { reason, onRetry: probe });
     }
 
-    const Icon = function () {
+    /* 侧边栏图标：宽栏 16px、窄栏 18px，由 DSH 侧边栏传入 size（缺省 16）。 */
+    const Icon = function (props) {
+      const size = props && Number(props.size) > 0 ? Number(props.size) : 16;
       return h('svg', {
-        width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
+        width: size, height: size, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true',
         stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round',
       },
         h('path', { d: 'M4 4.5h6v6H4z' }),
@@ -7501,7 +7515,7 @@ window.__ModuleLoader__.load({
           const nested = remote && remote.session;
           return nested && typeof nested.openWorkspacePath === 'function' ? nested : undefined;
         };
-        const errTextOf = (e) => String((e && (e.message || e.code)) || e || '未知原因');
+        const errTextOf = (e) => String((e && (e.message || e.code)) || e || '原因不明');
         const fileManagerApp = (() => {
           let plat = '';
           try { plat = String((typeof navigator !== 'undefined' && navigator.platform) || ''); } catch (e) { /* ignore */ }
@@ -7521,7 +7535,7 @@ window.__ModuleLoader__.load({
           } else fails.push('remote：session.openWorkspacePath 不可用');
           if (kind === 'dir') {
             try {
-              const r = await postJSON('/open-in-app/open', { app: fileManagerApp, path: absPath });
+              const r = await postJSON(appUrl('open-in-app/open'), { app: fileManagerApp, path: absPath });
               if (r && r.ok) return { ok: true, how: 'open-in-app' };
               fails.push('open-in-app：' + ((r && (r.message || r.reason)) || '失败'));
             } catch (e) { fails.push('open-in-app：' + errTextOf(e)); }
@@ -7534,12 +7548,12 @@ window.__ModuleLoader__.load({
           return { ok: false, reason: fails.join('；') };
         };
         if (!slots || typeof slots.inject !== 'function') {
-          try { console.error('[research-workbench] slots 服务不可用，面板未注册'); } catch (e) { /* ignore */ }
+          try { console.error('[dsh-fde] slots 服务不可用，面板未注册'); } catch (e) { /* ignore */ }
         }
         let styleEl = null;
         try {
           styleEl = document.createElement('style');
-          styleEl.setAttribute('data-plugin', 'research-workbench');
+          styleEl.setAttribute('data-plugin', 'dsh-fde');
           styleEl.textContent = CSS;
           document.head.appendChild(styleEl);
         } catch (e) { /* ignore */ }
@@ -7557,9 +7571,9 @@ window.__ModuleLoader__.load({
             });
           }
         } catch (e) {
-          try { console.error('[research-workbench] 面板注册失败', e); } catch (e2) { /* ignore */ }
+          try { console.error('[dsh-fde] 面板注册失败', e); } catch (e2) { /* ignore */ }
         }
-        try { if (ctx.effect) ctx.effect(function () { return disposeStyle; }, 'research-workbench: styles'); } catch (e) { /* ignore */ }
+        try { if (ctx.effect) ctx.effect(function () { return disposeStyle; }, 'dsh-fde: styles'); } catch (e) { /* ignore */ }
       },
     };
   },

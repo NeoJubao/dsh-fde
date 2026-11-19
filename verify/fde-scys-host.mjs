@@ -678,6 +678,45 @@ console.log('\n── 12. 生财三路授权：链接 / 环境变量 / 兼容文
 
 /* ---------------- 汇总 ---------------- */
 
+/* ================= 13. 兼容授权目录：SCYS_MCP_STATE_DIR > $DSH_HOME > ~/.dsh ================= */
+console.log('\n── 13. 第三条授权路径的目录：SCYS_MCP_STATE_DIR > DSH_HOME > 默认数据根 ──');
+{
+  const { homedir } = await import('node:os');
+  const prevState = process.env[ENV_KEY];
+  const prevHome = process.env.DSH_HOME;
+  try {
+    const dshHome = newTemp('rw-dsh-home-');
+    delete process.env[ENV_KEY];
+    process.env.DSH_HOME = dshHome;
+    check('设置了 DSH_HOME：授权目录在 $DSH_HOME/mcp/scys-mcp（不再写死默认数据根）',
+      scys.authStateDir() === join(dshHome, 'mcp', 'scys-mcp'), scys.authStateDir());
+    /* 真的从 $DSH_HOME 下读到兼容 token 文件。 */
+    mkdirSync(join(dshHome, 'mcp', 'scys-mcp'), { recursive: true });
+    writeFileSync(join(dshHome, 'mcp', 'scys-mcp', 'tokens.json'), JSON.stringify({
+      access_token: TOKEN, token_type: 'Bearer', scope: 'mcp', expires_at: Date.now() + 3600 * 1000,
+    }), 'utf8');
+    const wsHome = newWs();
+    const prevTok = process.env.FDE_SCYS_TOKEN;
+    delete process.env.FDE_SCYS_TOKEN;
+    const sum = scys.authSummary(wsHome);
+    if (prevTok !== undefined) process.env.FDE_SCYS_TOKEN = prevTok;
+    check('$DSH_HOME 下的兼容 token 文件被识别为已授权（摘要不回显 token）',
+      !!sum && sum.available === true && sum.source === 'compat' && !JSON.stringify(sum).includes(TOKEN), JSON.stringify(sum));
+    const explicit = newTemp('rw-scys-explicit-');
+    process.env[ENV_KEY] = explicit;
+    check('SCYS_MCP_STATE_DIR 的覆盖优先级高于 DSH_HOME', scys.authStateDir() === explicit, scys.authStateDir());
+    delete process.env[ENV_KEY];
+    process.env.DSH_HOME = '   ';
+    check('DSH_HOME 是空白：视为未设置，退回默认数据根（与 DSH 的口径一致）',
+      scys.authStateDir() === join(homedir(), '.dsh', 'mcp', 'scys-mcp'), scys.authStateDir());
+    delete process.env.DSH_HOME;
+    check('都没设置：默认数据根', scys.authStateDir() === join(homedir(), '.dsh', 'mcp', 'scys-mcp'), scys.authStateDir());
+  } finally {
+    if (prevState === undefined) delete process.env[ENV_KEY]; else process.env[ENV_KEY] = prevState;
+    if (prevHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prevHome;
+  }
+}
+
 console.log('\n=== 通过 ' + ok.length + ' 项 ===');
 if (fail.length) {
   console.log('\n=== 失败 ' + fail.length + ' 项 ===');

@@ -765,8 +765,9 @@ const GATE = newRoot('gate');
   check('force move 成功且 gateState.<stage>.forced=true + reason',
     parseBody(forced).ok === true && parseBody(forced).engagement.gateState.discovery.forced === true &&
     String(parseBody(forced).engagement.gateState.discovery.reason).includes('用户明确'), rowBody(forced));
+  /* v2.0（ADR 0010 D1）：记录文本用「破例推进」，不再出现 force 字样。 */
   check('force 记录写入 timeline（含原因）',
-    (parseBody(forced).engagement.timeline || []).some((t) => String(t.text).includes('force') && String(t.text).includes('用户明确')));
+    (parseBody(forced).engagement.timeline || []).some((t) => String(t.text).includes('破例推进') && String(t.text).includes('用户明确')));
   const jump = await fdeCall(HOST, 'engagement', { method: 'POST', root: GATE, body: { action: 'move', id: cr2.id, patch: { stage: 'solution' } } });
   check('非 force 跳阶 → 400 INVALID', jump.status === 400 && parseBody(jump).code === 'INVALID', rowBody(jump));
   const forceJump = await fdeCall(HOST, 'engagement', { method: 'POST', root: GATE, body: { action: 'move', id: cr2.id, patch: { stage: 'solution', force: true, reason: '人确认越级' } } });
@@ -837,7 +838,8 @@ const ITEM = newRoot('item');
   mk('WIP-1', 'doing');
   const wipItem = mk('WIP-2', 'todo');
   const wipMove = await fdeCall(HOST, 'item', { method: 'POST', root: ITEM, body: { action: 'move', id: wipItem.id, patch: { stage: 'doing' } } });
-  check('WIP 超限给 warning（不阻断）', parseBody(wipMove).ok === true && /WIP/.test(String(parseBody(wipMove).warning)), rowBody(wipMove));
+  /* v2.0（ADR 0010 D1）：WIP 对人称「同时进行上限」。 */
+  check('WIP 超限给 warning（不阻断）', parseBody(wipMove).ok === true && /同时进行上限/.test(String(parseBody(wipMove).warning)), rowBody(wipMove));
 
   /* 人工删除任务（HTTP 路由；agent 工具不提供，见 F1 节） */
   const del = mk('待删除任务', 'todo');
@@ -956,28 +958,37 @@ const ADOPT = newRoot('adopt');
 
 const PROP = newRoot('prop');
 {
-  /* stall 建议 + 24h 去重 + accept 执行 payload + dismiss */
-  const e = api.engagement(PROP, { action: 'create', patch: { name: '停滞客户', company: '停滞有限公司', nextAction: { text: '跟进', due: dateStr(30) } } }).engagement;
+  /* v2.0（spec §22.2 / ADR 0010 D4）：stall 是 derived 规则，不再生成提醒（由待我处理·没有进展覆盖）。
+   * 「生成 + 24h 去重 + accept 执行 payload + dismiss」改用仍会生成的 no_next 规则验证同一语义。 */
+  const e = api.engagement(PROP, { action: 'create', patch: { name: '停滞客户', company: '停滞有限公司', nextAction: { text: '', due: '' } } }).engagement;
   {
     const b = store.readBoard(PROP).board;
     const x = b.engagements.find((y) => y.id === e.id);
     x.stageSince = iso(-20); x.createdAt = iso(-20); x.timeline = [];
-    x.nextAction = { text: '跟进', due: dateStr(10), owner: '' };
     store.writeBoard(PROP, b);
   }
   const b1 = api.board(PROP);
-  const stall = b1.board.proposals.filter((p) => p.ruleId === 'stall' && p.engagementId === e.id);
-  check('stall 规则生成 proposal（nudge + payload）', stall.length === 1 && stall[0].kind === 'nudge' &&
+  check('stall 规则不再生成 proposal（derived），没有进展的情形在待我处理里',
+    !b1.board.proposals.some((p) => p.ruleId === 'stall') && b1.attention.some((x) => x.kind === 'stall' && x.engagementId === e.id), b1.board.proposals.map((p) => p.ruleId));
+  const stall = b1.board.proposals.filter((p) => p.ruleId === 'no_next' && p.engagementId === e.id);
+  check('no_next 规则生成 proposal（update_next + payload）', stall.length === 1 && stall[0].kind === 'update_next' &&
     /^prp_[0-9a-f]{6}$/.test(stall[0].id) && !!stall[0].payload, stall.map((p) => p.id));
-  const count1 = api.board(PROP).board.proposals.filter((p) => p.ruleId === 'stall' && p.engagementId === e.id).length;
+  const count1 = api.board(PROP).board.proposals.filter((p) => p.ruleId === 'no_next' && p.engagementId === e.id).length;
   check('同一规则同一对象 24h 内不重复生成', count1 === stall.length, { first: stall.length, second: count1 });
   const acc = await fdeCall(HOST, 'proposal', { method: 'POST', root: PROP, body: { action: 'accept', id: stall[0].id } });
-  check('proposal accept 执行 payload（nextAction.due 改为 +2 天）并标记 accepted',
+  check('proposal accept 执行 payload（补一条待确认的下一步）并标记 accepted',
     parseBody(acc).ok === true && parseBody(acc).proposal.status === 'accepted' &&
-    api.board(PROP).board.engagements.find((x) => x.id === e.id).nextAction.due === dateStr(2), rowBody(acc));
+    String(api.board(PROP).board.engagements.find((x) => x.id === e.id).nextAction.text || '').length > 0, rowBody(acc));
+  /* 条件再次成立（又没有下一步了）：已处理的提醒同样计入 24h 去重窗口。 */
+  api.engagement(PROP, { action: 'update', id: e.id, patch: { nextAction: { text: '', due: '' } } });
+  const count2 = api.board(PROP).board.proposals.filter((p) => p.ruleId === 'no_next' && p.engagementId === e.id).length;
+  check('已处理后条件再次成立：24h 内仍不重复生成', count2 === stall.length, { first: stall.length, again: count2 });
   const again = await fdeCall(HOST, 'proposal', { method: 'POST', root: PROP, body: { action: 'accept', id: stall[0].id } });
   check('已处理建议再次 accept → 409 CONFLICT', again.status === 409 && parseBody(again).code === 'CONFLICT', again.status);
+  /* 给 dismiss 用例准备一条待处理提醒。 */
+  api.engagement(PROP, { action: 'create', patch: { name: '知道了客户', company: '知道了有限公司', nextAction: { text: '', due: '' } } });
   const pendingDismiss = api.board(PROP).board.proposals.find((p) => p.status === 'pending');
+  check('（预置）存在可 dismiss 的待处理提醒', !!pendingDismiss);
   if (pendingDismiss) {
     const dm = await fdeCall(HOST, 'proposal', { method: 'POST', root: PROP, body: { action: 'dismiss', id: pendingDismiss.id } });
     check('proposal dismiss 标记 dismissed', parseBody(dm).ok === true && parseBody(dm).proposal.status === 'dismissed', rowBody(dm));
@@ -998,25 +1009,28 @@ const PROP = newRoot('prop');
     store.writeBoard(wsSess, b);
   }
   const br = api.board(wsSess);
-  const gateReady = br.board.proposals.find((p) => p.ruleId === 'gate_ready' && p.engagementId === se.id);
-  check('gate_ready 生成 start_session 建议', !!gateReady && gateReady.kind === 'start_session', br.board.proposals.map((p) => p.ruleId));
+  /* v2.0（spec §22.2）：gate_ready 是 derived 规则，不再生成提醒（由待我处理·等你确认覆盖）。
+   * start_session 类提醒改用仍会生成的 meeting_soon（会面快到了）验证「accept → 真实建会话」。 */
+  check('gate_ready 不再生成 proposal（derived），材料已齐的情形在待我处理里',
+    !br.board.proposals.some((p) => p.ruleId === 'gate_ready') && br.attention.some((x) => x.kind === 'gate' && x.engagementId === se.id), br.board.proposals.map((p) => p.ruleId));
+  const meetItem = api.item(wsSess, { action: 'create', patch: { title: '和客户见面', type: 'meeting', stage: 'todo', due: dateStr(1), engagementId: se.id } }).item;
+  const br2 = api.board(wsSess);
+  const gateReady = br2.board.proposals.find((p) => p.ruleId === 'meeting_soon' && p.itemId === meetItem.id);
+  check('meeting_soon 生成 start_session 建议', !!gateReady && gateReady.kind === 'start_session', br2.board.proposals.map((p) => p.ruleId));
   if (gateReady) {
     const accepted = await fdeCall(HOST, 'proposal', { method: 'POST', root: wsSess, body: { action: 'accept', id: gateReady.id } });
     check('start_session accept → 创建会话并标记 accepted',
       parseBody(accepted).ok === true && !!parseBody(accepted).sessionId && parseBody(accepted).proposal.status === 'accepted', rowBody(accepted));
-    const after = api.board(wsSess).board.engagements.find((x) => x.id === se.id);
-    check('accept 后会话记录未被旧快照覆盖（sessionId + timeline.session）',
-      after.sessionId === parseBody(accepted).sessionId && (after.timeline || []).some((t) => t.kind === 'session'));
+    const after = api.board(wsSess).board.items.find((x) => x.id === meetItem.id);
+    check('accept 后会话记录未被旧快照覆盖（任务 sessionId + 交给 AI 的记录）',
+      after.sessionId === parseBody(accepted).sessionId && (after.history || []).some((t) => String(t.text).includes('交给 AI')));
   }
 
   /* pending 上限 8 */
   const wsCap = newRoot('cap');
+  /* v2.0：stall 不再生成提醒，上限用 no_next（10 家客户都没定下一步）来撑满。 */
   for (let i = 0; i < 10; i += 1) {
-    const x = api.engagement(wsCap, { action: 'create', patch: { name: '上限客户' + i, company: '上限' + i, nextAction: { text: '跟进', due: dateStr(20) } } }).engagement;
-    const b = store.readBoard(wsCap).board;
-    const y = b.engagements.find((z) => z.id === x.id);
-    y.stageSince = iso(-20); y.createdAt = iso(-20); y.timeline = [];
-    store.writeBoard(wsCap, b);
+    api.engagement(wsCap, { action: 'create', patch: { name: '上限客户' + i, company: '上限' + i, nextAction: { text: '', due: '' } } });
   }
   const capBoard = api.board(wsCap).board;
   const pendingCount = capBoard.proposals.filter((p) => p.status === 'pending').length;
@@ -1217,8 +1231,16 @@ let handoffEngIds = {};
     check('handoff(' + st.key + ') 提示词含编排声明/红线',
       p.includes('编排声明') && p.includes('不要自行推进') && p.includes('对外发送'));
     check('handoff(' + st.key + ') 提示词含客户上下文（名称/目录/阶段/缺口）',
-      p.includes('客户上下文') && p.includes('阶段') && p.includes('门禁缺口') && p.includes('research/'));
-    check('handoff(' + st.key + ') 提示词含该阶段技能 ' + STAGE_SKILL[st.key], p.includes(STAGE_SKILL[st.key]));
+      /* v2.0（ADR 0010 D12）：提示词里的缺口一行对人称「还差什么」，推进条件不再叫门禁。 */
+      p.includes('客户上下文') && p.includes('阶段') && p.includes('还差什么：') && p.includes('推进条件：') && p.includes('research/'));
+    /* spec §22.9（ADR 0010 D16）：做法取自要进入的那个阶段（与推进条件同一个阶段）；最后一个阶段取当前阶段。 */
+    const workKey = schema.nextStage(st.key) || st.key;
+    check('handoff(' + st.key + ') 提示词含要进入阶段的技能 ' + STAGE_SKILL[workKey], p.includes('`' + STAGE_SKILL[workKey] + '`'));
+    if (workKey !== st.key) {
+      check('handoff(' + st.key + ') 不带当前阶段的技能 ' + STAGE_SKILL[st.key], !p.includes('`' + STAGE_SKILL[st.key] + '`'));
+      check('handoff(' + st.key + ') 写明是为进入「' + schema.stageLabel(workKey) + '」准备材料',
+        p.includes('准备进入「' + schema.stageLabel(workKey) + '」阶段需要的材料') && p.includes('当前阶段：' + st.label));
+    }
     check('handoff(' + st.key + ') 提示词含方法文件与产物落盘路径',
       p.includes('methods/') && p.includes('【产物落盘】'));
     check('handoff(' + st.key + ') 提示词含回报要求（fde_item + 300 字 + artifacts）',
@@ -1229,7 +1251,7 @@ let handoffEngIds = {};
         /(先|创建|建立|新建).{0,12}(任务|item)|(任务|item).{0,12}(创建|建立|新建)/i.test(p);
       specCheck('F2', actionable, { excerpt: p.slice(p.indexOf('【回报要求】'), p.indexOf('【回报要求】') + 220) });
     }
-    if (st.key === 'scoping') {
+    if (workKey === 'scoping') {
       check('handoff(scoping) 提示词含 fde-scoping 技能 + fde_scenario + 四条硬门槛（spec §20.4/§21.1）',
         p.includes('fde-scoping') && p.includes('fde_scenario') &&
         ['发起人', '14 天', '90 天', '可测量'].every((k) => p.includes(k)));
@@ -1320,7 +1342,9 @@ sec('11. 一致性 · 客户端路由集合 ⇄ index.js 注册 / meta 单一来
     return methodMap.has(p) && methodMap.get(p) !== c.method;
   });
   check('客户端调用方法与宿主注册方法一致（GET/POST 无错配，含招采/资料库/授权）', wrongMethod.length === 0, wrongMethod);
-  check('面板 API 前缀唯一常量（/research-workbench/api）', (src.match(/'\/research-workbench\/api'/g) || []).length === 1);
+  check('面板 API 前缀唯一常量（research-workbench/api，按文档 base 解析；ADR 0010 / DSH 0.2.1）',
+    (src.match(/'research-workbench\/api'/g) || []).length === 1 && src.includes("const API = appUrl('research-workbench/api')")
+    && !/'\/research-workbench\/api/.test(src));
   check('面板 FDE 前缀由 API 派生（const FDE = API + \'/fde\'）', src.includes("const FDE = API + '/fde'"));
   check('fetch 只出现在统一请求层（3 处：getJSON / sendJSON / readFileAbs）', (src.match(/\bfetch\(/g) || []).length === 3);
 
@@ -1345,7 +1369,7 @@ sec('11. 一致性 · 客户端路由集合 ⇄ index.js 注册 / meta 单一来
   })());
   check('宿主未就绪页：探测 /fde/meta，失败显示重启说明与重试（经典模式已移除）',
     src.includes("getJSON(FDE + '/meta')") && src.includes('function CompatPage(') &&
-    src.includes('宿主需要重启 DSH 后启用 FDE 看板') && src.includes("t('compatRetry')") &&
+    src.includes("compatTitle: '需要重启 DSH'") && src.includes("t('compatRetry')") &&
     !src.includes('function ClassicApp(') && !src.includes("t('classicMode')"));
   /* 5 页签（v1.4 起，ADR 0005）：从 FdeApp 的 tab 定义数组提取（顺序即导航）；设置走页头入口；生财页签不存在 */
   const navBlock = (src.match(/const navItems = \[([\s\S]*?)\];/) || ['', ''])[1];
@@ -1488,8 +1512,10 @@ const LEGACY_SKILLS = ['company-research', 'meeting-prep', 'proposal-forge', 'do
   const emptyHealth = await call(emptyHost, FDE_PREFIX + 'health', { root: MAIN });
   check('skills 目录为空：/fde/health 把技能列为 warn（不 fail）',
     parseBody(emptyHealth).ok === true &&
-    parseBody(emptyHealth).checks.filter((c) => c.name === 'skills 注册').every((c) => c.status === 'warn'),
-    parseBody(emptyHealth).checks && parseBody(emptyHealth).checks.filter((c) => c.name === 'skills 注册'));
+    /* v2.0（ADR 0010 D11）：检查项名称用人话，集中在 api.HEALTH_NAMES；必须真的找到这一项（不允许空集蒙混）。 */
+    parseBody(emptyHealth).checks.filter((c) => c.name === api.HEALTH_NAMES.skills).length === 1 &&
+    parseBody(emptyHealth).checks.filter((c) => c.name === api.HEALTH_NAMES.skills).every((c) => c.status === 'warn'),
+    parseBody(emptyHealth).checks && parseBody(emptyHealth).checks.filter((c) => c.name === api.HEALTH_NAMES.skills));
   /* webServer / tools 缺失：apply 不抛（服务缺失不影响其他能力） */
   const noWeb = await applyMock(join(PLUGIN, 'index.js'), { currentRef, missing: { webServer: true } });
   check('webServer 缺失：apply 不抛且工具仍注册（v1.3 = 16）', noWeb.threw === null && noWeb.tools.length === 16,
@@ -2011,7 +2037,9 @@ sec('§17.6 客户端一致性 · 招采页签/API 路径登记/降级文案/卡
   } else {
     pend17('客户端 bids API 路径 ⊆ 宿主注册（方法一致）', 'routes');
   }
-  spec17('B6', /招采雷达未就绪/.test(clientSrc17), '缺少 spec §17.1 指定的降级文案', 'client');
+  /* §22（ADR 0010）：降级文案改为说清原因和怎么办，不出现内部包名 */
+  spec17('B6', /招采数据暂时用不了：需要安装并启用「招采雷达」插件。/.test(clientSrc17) && !/bid-intel 未装载/.test(clientSrc17),
+    '缺少招采不可用时的降级文案（spec §17.1 / §22.5）', 'client');
   /* 卡片徽章条件：必须由 bids.available / bids.total 驱动（不可无条件渲染） */
   spec17('B6', /bids\.available|bids\?\.available|!.*available/.test(clientSrc17) &&
     /bids\.total|bids\.matches|bids\.latest|bidCount/.test(clientSrc17),
@@ -2903,12 +2931,15 @@ sec('v1.3 · 文档一致性（README / AGENTS / spec 数字，无过期表述�
   const spec = read('docs/01-spec.md');
   const allm = readFileSync(join(PLUGIN, 'verify', 'all.mjs'), 'utf8');
   /* README 在开源改造中重写：版本标识允许 v1.3.x（SemVer 全写）；v1.4 起面板表述为「5 页签 + 页内子页签」（ADR 0005）。 */
-  check('README：版本 / 8 阶段 / 5 页签 / 资料库 / 11 个 fde-* 技能',
-    /v1\.\d/.test(readme) && /8 阶段/.test(readme) && /(?:5 页签|五页签)/.test(readme) &&
-    readme.includes('11 个 `fde-*` 编排技能') && /资料库/.test(readme));
-  check('README 工具口径：FDE 11 + 执行 5（含 fde_library/fde_scenario/fde_quote/scys_fde 兼容保留）',
-    /FDE 11 \+ 执行 5|FDE 编排工具（11）/.test(readme) &&
+  /* v2.0（ADR 0010）README 重写：版本 v2.x；表述为「8 个阶段」「5 个页签」「阶段技能（11）」。 */
+  check('README：版本 / 8 个阶段 / 5 个页签 / 资料库 / 11 个阶段技能',
+    /v2\.\d/.test(readme) && /8 个阶段/.test(readme) && /5 个页签/.test(readme) &&
+    readme.includes('阶段技能（11）') && /资料库/.test(readme));
+  check('README 工具口径：看板与客户工具 11 + 执行 5（含 fde_library/fde_scenario/fde_quote/scys_fde 兼容保留）',
+    /看板与客户工具（11）/.test(readme) && /执行工具（5）/.test(readme) &&
     ['fde_library', 'fde_scenario', 'fde_quote', 'scys_fde'].every((x) => readme.includes(x)));
+  check('README 用界面用词，不出现已淘汰的界面说法',
+    ['注意力', '门禁', '自主性', '启动会话', '干系人', '泳道'].every((w) => !readme.includes(w)));
   check('AGENTS：8 阶段 / 5 页签 / FDE 工具（11）/ 执行工具（5）/ 11 编排技能',
     /8 个阶段/.test(agents) && /(?:5 页签|五页签)/.test(agents) && /FDE 工具（11）/.test(agents) &&
     /执行工具（5）/.test(agents) && agents.includes('11 个 `fde-*` 编排技能'));

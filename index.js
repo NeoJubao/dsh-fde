@@ -25,11 +25,19 @@ import * as fdeBids from './src/host/fde-bids.js';
 import * as fdeScys from './src/host/fde-scys.js';
 import * as fdeLibrary from './src/host/fde-library.js';
 import * as fdeCalc from './src/host/fde-calc.js';
+import * as toolOutput from './src/host/tool-output.js';
 
 const name = 'research-workbench';
-/* webServer 不是必需服务（ADR 0004 / 审查 F-03）：非 Web 组合也要能激活工具/技能/提示词。
- * 路由在 webServer 就绪后条件挂载；拿不到就跳过路由、其余能力照常工作。 */
-const inject = ['tools', 'systemPrompt', 'workspaceRegistry', 'sessionController'];
+/* 硬依赖只有 tools 与 systemPrompt——这是 dsh-base 自带的两个服务，所有载体（web / headless / acp / sdk）都有。
+ * workspaceRegistry 与 sessionController 只在 Web 组合里挂载（DSH 0.2.1：dsh-web-app 才有这两行）；
+ * 把它们写进 inject 会让其它载体下 apply 根本不执行，工具与技能全都没有。
+ * 所以其余服务（workspaceRegistry / sessionController / webServer / skills / connection / bidIntel / subprocess）
+ * 一律在用到时懒取（svcOfImpl），缺失就降级：
+ *   - 没有 webServer：不注册路由（就绪后经 ctx.inject 条件挂载）；
+ *   - 没有 sessionController：handoff 返回任务说明文本，由用户粘贴到对话框；
+ *   - 没有 workspaceRegistry：工作区根退回 cwd 上溯探测；显式 root 只做存在性校验；
+ *   - 没有 skills：系统提示词列出技能路径（就绪后经 ctx.inject 补注册）。 */
+const inject = ['tools', 'systemPrompt'];
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCRIPTS = join(HERE, 'scripts');
@@ -347,14 +355,14 @@ function chooseWorkspace(ctx, opts = {}) {
 async function handoff(ctx, promptText, opts = {}) {
   const sc = svcOfImpl(ctx, 'sessionController');
   if (!sc || typeof sc.create !== 'function' || typeof sc.prompt !== 'function') {
-    return { ok: false, reason: '本部署未挂载 sessionController，无法自动开会话——请在对话框里粘贴任务继续。', prompt: promptText };
+    return { ok: false, reason: '这里没法自动开新对话——请把下面这段话粘贴到对话框里继续。', prompt: promptText };
   }
   const choice = chooseWorkspace(ctx, opts);
   const target = choice.id ? { workspaceId: choice.id } : {};
   try {
     const created = await sc.create(target);
     const sessionId = created && created.sessionId;
-    if (!sessionId) return { ok: false, reason: '会话创建失败：未返回 sessionId', prompt: promptText };
+    if (!sessionId) return { ok: false, reason: '没能开出新对话（没有拿到对话编号），请把下面这段话粘贴到对话框里继续。', prompt: promptText };
     await sc.prompt({
       requestId: `rw-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       sessionId,
@@ -708,14 +716,23 @@ export function apply(ctx) {
       let isDir = false;
       try { isDir = statSync(abs).isDirectory(); } catch { json(res, 404, { ok: false, reason: '路径不存在：' + abs }); return; }
 
-      /* 首选：DSH 原生路径能力（与界面上的「Open In…」按钮同源） */
+      /* 首选：DSH 原生路径能力（与界面上的「Open In…」按钮同源）。
+       * DSH 0.2.1：openWorkspacePath(request, signal) 的第一步就是 signal.throwIfAborted()，
+       * 不传 signal 必抛 TypeError、原生通道恒失败。signal 绑定到这次请求：响应还没写完连接就断了 → 取消。 */
       const sc = svcOfImpl(ctx, 'sessionController');
       if (sc && typeof sc.openWorkspacePath === 'function') {
+        const ac = new AbortController();
+        const onClose = () => { if (!res.writableEnded) ac.abort(); };
+        const canListen = res && typeof res.on === 'function';
+        if (canListen) { try { res.on('close', onClose); } catch { /* 忽略 */ } }
         try {
-          await sc.openWorkspacePath(mode === 'reveal' ? { path: abs, action: 'reveal' } : { path: abs });
+          await sc.openWorkspacePath(mode === 'reveal' ? { path: abs, action: 'reveal' } : { path: abs }, ac.signal);
           json(res, 200, { ok: true, path: abs, isDir, mode, how: 'sessionController' });
           return;
-        } catch { /* 退回系统命令 */ }
+        } catch { /* 退回系统命令 */ } finally {
+          if (canListen && typeof res.off === 'function') { try { res.off('close', onClose); } catch { /* 忽略 */ } }
+        }
+        if (ac.signal.aborted) return; /* 请求方已断开：不再调系统命令 */
       }
       const r = await revealBySystem(ctx, abs, mode, root);
       json(res, r.ok ? 200 : 502, {
@@ -811,8 +828,17 @@ export function apply(ctx) {
 
   /* ---------------- agent 工具 ---------------- */
   const registerTools = () => {
-    const tools = svcOfImpl(ctx, 'tools');
-    if (!tools || typeof tools.register !== 'function') { log('tools 服务不可用'); return; }
+    const toolsSvc = svcOfImpl(ctx, 'tools');
+    if (!toolsSvc || typeof toolsSvc.register !== 'function') { log('tools 服务不可用'); return; }
+    /* 统一出口（DSH 0.2.1）：全部工具的返回值规整为无损 JSON（剔除 undefined 键、非有限数字转 null），
+     * 否则注册表判 INVALID_TOOL_OUTPUT；execute 抛出的异常（如非法工作区根的 PathError）
+     * 也在这里转成 {ok:false, reason}——工具不抛异常。下面每个工具照常写，不必各自处理。 */
+    const toolFailure = (e) => {
+      const invalid = e instanceof paths.PathError;
+      const reason = (invalid ? '路径不合法：' : '操作失败：') + String((e && e.message) || e);
+      return { ok: false, reason, text: reason, code: invalid ? 'INVALID' : 'INTERNAL' };
+    };
+    const tools = { register: (def) => toolsSvc.register(toolOutput.guardTool(def, toolFailure)) };
 
     tools.register({
       name: 'rw_status',
@@ -820,7 +846,7 @@ export function apply(ctx) {
       parameters: { type: 'object', properties: { root: { type: 'string', description: '工作区根目录（可选，默认自动探测）' } } },
       output: { schema: { type: 'object' }, render: (_a, v) => text(v.text) },
       execute(args) {
-        const root = workspaceRoot(ctx, args.root);
+        const root = workspaceRoot(ctx, (args || {}).root);
         const projects = store.scanProjects(join(root, 'research'));
         const lines = [`调研工作台｜工作区：${root}（探测方式：${lastRootHow}）`, `项目数：${projects.length}`];
         const legacy = projects.filter((p) => !p.adopted && p.kind !== 'material');
@@ -861,7 +887,8 @@ export function apply(ctx) {
         required: ['company'],
       },
       output: { schema: { type: 'object' }, render: (_a, v) => text(v.text) },
-      execute(args) {
+      execute(rawArgs) {
+        const args = rawArgs || {};
         const root = workspaceRoot(ctx, args.root);
         const dirName = `${slugify(args.company)}-${fdeStore.localDateStr().replace(/-/g, '')}`;
         const proj = join(root, 'research', dirName);
@@ -976,7 +1003,7 @@ export function apply(ctx) {
           if (!existsSync(dir)) continue;
           for (const f of readdirSync(dir)) if (f.endsWith('.md')) items.push({ kind, name: f, path: join(dir, f) });
         }
-        const key = (args.name || '').trim();
+        const key = String((args && args.name) || '').trim();
         if (!key) {
           return Promise.resolve({
             text: '可用方法/参考文件：\n' + items.map((i) => `- [${i.kind}] ${i.name}`).join('\n') + '\n\n用 rw_method 带上关键词即可读取内容。',
@@ -1002,12 +1029,32 @@ export function apply(ctx) {
       if (!Number.isFinite(t)) return 0;
       return Math.max(0, Math.floor((Date.now() - t) / 86400000));
     };
+    /* 工具返回给模型的文本用界面上的词（ADR 0010 D12）：模型会照着转述给用户。
+     * 分类、状态、优先级一律出中文名；对象 id 只在模型后续调用需要时给出。 */
     const fmtAttentionList = (list, max) => list.slice(0, max).map((a) => {
-      const who = a.engagementName ? '｜' + a.engagementName : (a.itemTitle ? '｜' + a.itemTitle : '');
+      /* 句子里已带客户名或任务名；任务行再补一下所属客户。 */
+      const who = a.itemId && a.engagementName ? '｜' + a.engagementName : '';
       const due = a.due ? '｜到期 ' + a.due : '';
-      return `- [${a.kind}] ${a.text}${who}${due}`;
+      return `- [${fdeSchema.attentionLabel(a.kind)}] ${a.text}${who}${due}`;
     }).join('\n');
-    const fmtMissing = (missing) => (missing || []).map((m) => `- ${m.type === 'auto' ? '自动' : '人工'}：${m.label}${m.detail ? '（' + m.detail + '）' : ''}`).join('\n');
+    const fmtMissing = (missing) => (missing || []).map((m) => (m.type === 'auto' ? `- 材料没齐：${m.detail || m.label}` : `- 等人确认：${m.label}`)).join('\n');
+    /* 待我处理 = 必须有人动作的事，不含提醒（spec §22.3）。 */
+    const todoOf = (list) => (list || []).filter((a) => a && a.kind !== 'proposal');
+    const proposalHint = (pp) => (pp.kind === 'create_item' ? '（可以建跟进任务）' : (pp.kind === 'start_session' ? '（可以交给 AI 准备）' : ''));
+    const fmtProposals = (list, max) => list.slice(0, max).map((pp) => `- [${fdeSchema.ruleLabel(pp.ruleId)}] ${pp.title}${proposalHint(pp)}`).join('\n');
+    const GATE_STATUS_WORDS = { pass: '已满足', forced: '已破例推进', pending: '还没满足', failed: '还没满足' };
+    const ASK_KIND_WORDS = { decision: '等你决定', blocked: '卡住了', answer: '等你回复', question: '提问' };
+    /* 工具卡片标题（对话里给人看）：动作用中文，不露出 action 枚举。 */
+    const ACTION_WORDS = {
+      engagement: { create: '新建', update: '更新', move: '推进阶段', gate: '查看推进条件', archive: '归档' },
+      item: { create: '新建', update: '更新', move: '改状态', report: '记进展' },
+      attention: { ask: '向你提问', resolve: '记下回答', list: '查看待我处理' },
+      bid: { search: '检索公告', match: '客户相关公告', link: '关联公告', unlink: '取消关联', promote: '建跟进任务', timeline: '采购节奏' },
+    };
+    const cardTitle = (prefix, group, action) => {
+      const word = (ACTION_WORDS[group] || {})[String(action || '')];
+      return word ? `${prefix}：${word}` : prefix;
+    };
 
     tools.register({
       name: 'fde_board',
@@ -1034,21 +1081,22 @@ export function apply(ctx) {
             const r = fdeApi.brief(root, { period: a.period || 'today', bidIntel: fdeBids.resolveBidService(ctx) });
             if (!r.ok) return Promise.resolve({ text: '读取今日简报失败：' + r.reason, ok: false, reason: r.reason || '读取今日简报失败', code: r.code });
             const bf = r.brief;
+            const todoList = todoOf(bf.attention);
             const lines = [
               `FDE 今日简报｜工作区：${root}`,
               bf.headline,
               `上下文：${bf.greeting}`,
               '',
-              `【待我处理】${bf.attention.length} 条`,
-              bf.attention.length ? fmtAttentionList(bf.attention, limit) : '（今天没有需要你处理的事）',
+              `【待我处理】${todoList.length} 件`,
+              todoList.length ? fmtAttentionList(todoList, limit) : '（今天没有等你处理的事）',
             ];
             if (bf.proposals.length) {
-              lines.push('', `【建议】${bf.proposals.length} 条`);
-              lines.push(bf.proposals.slice(0, limit).map((p) => `- ${p.title}（${p.ruleId}｜建议动作 ${p.kind}｜id=${p.id}）`).join('\n'));
+              lines.push('', `【提醒】${bf.proposals.length} 条`);
+              lines.push(fmtProposals(bf.proposals, limit));
             }
             if (bf.focus.length) {
               lines.push('', '【今日焦点】');
-              lines.push(bf.focus.map((f) => `- ${f.name}｜${f.stageLabel}｜下一步：${f.nextAction.text || '（未填）'}${f.nextAction.due ? '（' + f.nextAction.due + '）' : ''}｜注意力 ${f.attentionCount}`).join('\n'));
+              lines.push(bf.focus.map((f) => `- ${f.name}｜${f.stageLabel}｜下一步：${f.nextAction.text || '（还没定）'}${f.nextAction.due ? '（' + f.nextAction.due + '）' : ''}｜待处理与提醒 ${f.attentionCount}`).join('\n'));
             }
             return Promise.resolve({ text: lines.join('\n'), ok: true, brief: bf, stats: r.stats });
           }
@@ -1061,9 +1109,9 @@ export function apply(ctx) {
           if (view === 'engagement') {
             if (!a.id) {
               const list = (b.engagements || []).filter((e) => fdeSchema.isStage(e.stage)).filter((e) => !a.stage || e.stage === a.stage);
-              if (!list.length) return Promise.resolve({ text: '看板暂无客户。可用 fde_engagement(action=create) 新建，或用面板「导入现有项目」扫描 research/ 下已有目录。', ok: true, engagements: [] });
+              if (!list.length) return Promise.resolve({ text: '还没有客户。可用 fde_engagement(action=create) 新建，或在面板里导入已有文件夹。', ok: true, engagements: [] });
               return Promise.resolve({
-                text: ['FDE 客户列表：', ...list.slice(0, limit).map((e) => `- ${e.id}｜${e.name}｜${fdeSchema.stageLabel(e.stage)}｜${e.priority}｜停留 ${daysOf(e.stageSince)} 天｜下一步：${(e.nextAction && e.nextAction.text) || '（未填）'}`)].join('\n'),
+                text: ['FDE 客户列表：', ...list.slice(0, limit).map((e) => `- ${e.id}｜${e.name}｜${fdeSchema.stageLabel(e.stage)}｜优先级 ${fdeSchema.priorityLabel(e.priority)}｜在本阶段 ${daysOf(e.stageSince)} 天｜下一步：${(e.nextAction && e.nextAction.text) || '（还没定）'}`)].join('\n'),
                 ok: true, engagements: list,
               });
             }
@@ -1075,7 +1123,7 @@ export function apply(ctx) {
             if (!items.length) return Promise.resolve({ text: '没有匹配的任务。', ok: true, items: [] });
             const lines = items.slice(0, limit).map((i) => {
               const e = i.engagementId ? (b.engagements || []).find((x) => x.id === i.engagementId) : null;
-              return `- ${i.id}｜${fdeSchema.laneLabel(i.stage)}｜${i.title}${e ? '｜' + e.name : ''}${i.due ? '｜到期 ' + i.due : ''}｜回报 ${i.reports.length} 条`;
+              return `- ${i.id}｜${fdeSchema.laneLabel(i.stage)}｜${i.title}${e ? '｜' + e.name : ''}${i.due ? '｜到期 ' + i.due : ''}｜进展 ${i.reports.length} 条`;
             });
             return Promise.resolve({ text: ['FDE 任务列表：', ...lines].join('\n'), ok: true, items });
           }
@@ -1085,30 +1133,31 @@ export function apply(ctx) {
             .sort((x, y) => (fdeSchema.priorityOrder(x.priority) - fdeSchema.priorityOrder(y.priority)) || String((x.nextAction && x.nextAction.due) || '9999').localeCompare(String((y.nextAction && y.nextAction.due) || '9999')));
           const open = (b.items || []).filter((i) => ['inbox', 'todo', 'doing', 'waiting', 'review'].includes(i.stage));
           const pend = (b.proposals || []).filter((p) => p.status === 'pending');
+          const todoList = todoOf(r.attention);
           const lines = [
             `FDE 看板｜工作区：${root}`,
-            `统计：活跃客户 ${st.active}｜客户 ${st.engagements}｜任务 ${st.items}｜待处理 ${r.attention.length}｜逾期 ${st.overdue}｜今天到期 ${st.dueToday}｜待采纳建议 ${pend.length}`,
+            `统计：在跟客户 ${st.active}｜客户 ${st.engagements}｜任务 ${st.items}｜待我处理 ${todoList.length}｜已逾期 ${st.overdue}｜今天到期 ${st.dueToday}｜提醒 ${pend.length}`,
             '阶段分布：' + fdeSchema.ENGAGEMENT_STAGES.map((x) => `${x.label} ${st.byStage[x.key] || 0}`).join('｜'),
             '',
             `【客户】${sorted.length} 个`,
             sorted.length ? sorted.slice(0, limit).map((e) => {
-              const att = r.attention.filter((x) => x.engagementId === e.id).length;
+              const att = todoList.filter((x) => x.engagementId === e.id).length;
               const bb = e.bids && e.bids.available && Number(e.bids.approxTotal) > 0 ? `｜招采 ≈${e.bids.approxTotal}（采样 ${e.bids.total} 条）` : '';
-              return `- ${e.name}｜${fdeSchema.stageLabel(e.stage)}｜${e.priority}｜停留 ${daysOf(e.stageSince)} 天｜下一步：${(e.nextAction && e.nextAction.text) || '（未填）'}${e.nextAction && e.nextAction.due ? '（' + e.nextAction.due + '）' : ''}${att ? '｜注意力 ' + att : ''}${bb}${e.dir ? '' : '｜无客户目录'}`;
-            }).join('\n') : '（暂无；可新建客户或用面板「导入现有项目」扫描 research/ 下已有目录）',
+              return `- ${e.name}｜${fdeSchema.stageLabel(e.stage)}｜优先级 ${fdeSchema.priorityLabel(e.priority)}｜在本阶段 ${daysOf(e.stageSince)} 天｜下一步：${(e.nextAction && e.nextAction.text) || '（还没定）'}${e.nextAction && e.nextAction.due ? '（' + e.nextAction.due + '）' : ''}${att ? '｜待我处理 ' + att : ''}${bb}${e.dir ? '' : '｜还没有客户文件夹'}`;
+            }).join('\n') : '（暂无；可新建客户，或在面板里导入已有文件夹）',
           ];
-          if (r.attention.length) {
-            lines.push('', `【待我处理】${r.attention.length} 条`, fmtAttentionList(r.attention, Math.min(limit, 8)));
+          if (todoList.length) {
+            lines.push('', `【待我处理】${todoList.length} 件`, fmtAttentionList(todoList, Math.min(limit, 8)));
           }
           if (open.length) {
             lines.push('', `【未完成任务】${open.length} 个`);
             lines.push(open.slice(0, limit).map((i) => `- ${fdeSchema.laneLabel(i.stage)}｜${i.title}${i.due ? '｜到期 ' + i.due : ''}`).join('\n'));
           }
           if (pend.length) {
-            lines.push('', `【待采纳建议】${pend.length} 条`);
-            lines.push(pend.slice(0, limit).map((p) => `- ${p.title}（${p.ruleId}｜${p.kind}｜id=${p.id}）`).join('\n'));
+            lines.push('', `【提醒】${pend.length} 条`);
+            lines.push(fmtProposals(pend, limit));
           }
-          lines.push('', 'hint：阶段推进与门禁通过只能由人执行；agent 用 fde_item(action=report) 回报、用 fde_attention(action=ask) 提问。');
+          lines.push('', '提示：推进阶段、确认推进条件只能由人来做；AI 用 fde_item(action=report) 记进展，用 fde_attention(action=ask) 提问。');
           return Promise.resolve({ text: lines.join('\n'), ok: true, board: b, stats: st, attention: r.attention.slice(0, limit), proposals: pend });
         } catch (e) { return Promise.resolve(fdeFail(e)); }
       },
@@ -1118,7 +1167,7 @@ export function apply(ctx) {
     /* 客户详情渲染（fde_board view=engagement&id=… 用；独立函数避免依赖 this 绑定）。 */
     const fdeEngagementDetail = (root, b, r, a, limit) => {
         const e = (b.engagements || []).find((x) => x.id === a.id);
-        if (!e) return { text: '客户不存在：' + a.id, ok: false, reason: '客户不存在：' + a.id, code: 'NOT_FOUND' };
+        if (!e) return { text: '找不到这家客户：' + a.id, ok: false, reason: '找不到这家客户：' + a.id, code: 'NOT_FOUND' };
         const nxt = fdeSchema.nextStage(e.stage);
         const gateStage = a.stage || nxt || e.stage;
         /* 只读工具：直接用 rules.evaluateGate 评估，不经过 api.gate（后者可能在人类路径写 gateState）。 */
@@ -1128,37 +1177,43 @@ export function apply(ctx) {
         const att = r.attention.filter((x) => x.engagementId === e.id);
         const lines = [
           `客户：${e.name}（${e.id}）`,
-          `阶段：${fdeSchema.stageLabel(e.stage)}｜停留 ${daysOf(e.stageSince)} 天｜优先级 ${e.priority}${e.paused ? '｜已暂停' : ''}`,
-          `公司全称：${e.company || '（未填写）'}${e.shortName ? '｜简称 ' + e.shortName : ''}`,
-          `客户目录：${e.dir ? 'research/' + e.dir : '（无）'}`,
-          `下一步：${(e.nextAction && e.nextAction.text) || '（未填）'}${e.nextAction && e.nextAction.due ? '｜到期 ' + e.nextAction.due : ''}${e.nextAction && e.nextAction.owner ? '｜' + e.nextAction.owner : ''}`,
-          `干系人：${(e.stakeholders || []).map((x) => x.name + (x.role ? '（' + x.role + '）' : '')).join('、') || '（未录入）'}`,
+          `阶段：${fdeSchema.stageLabel(e.stage)}｜在本阶段 ${daysOf(e.stageSince)} 天｜优先级 ${fdeSchema.priorityLabel(e.priority)}${e.paused ? '｜已暂停' : ''}`,
+          `公司全称：${e.company || '（还没写）'}${e.shortName ? '｜简称 ' + e.shortName : ''}`,
+          `客户文件夹：${e.dir ? 'research/' + e.dir : '（还没有）'}`,
+          `下一步：${(e.nextAction && e.nextAction.text) || '（还没定）'}${e.nextAction && e.nextAction.due ? '｜到期 ' + e.nextAction.due : ''}${e.nextAction && e.nextAction.owner ? '｜' + e.nextAction.owner : ''}`,
+          `关键人：${(e.stakeholders || []).map((x) => x.name + (x.role ? '（' + x.role + '）' : '')).join('、') || '（还没登记）'}`,
           `招采雷达：${e.bids && e.bids.available ? (Number(e.bids.approxTotal) > 0 ? `相关 ≈${e.bids.approxTotal}（采样 ${e.bids.total} 条）｜招标 ${e.bids.tender}｜中标 ${e.bids.award}｜候选 ${e.bids.candidate}` : '无匹配（0 命中是数据事实）') : '未就绪（bid-intel 未装载或未升级）'}`,
         ];
         if (gateDef) {
-          lines.push('', `【门禁】${gateDef.label}｜${gateDef.status}｜缺 ${gateDef.missing.length} 项`);
+          lines.push('', `【推进条件】${gateDef.label}｜${GATE_STATUS_WORDS[gateDef.status] || GATE_STATUS_WORDS.pending}｜还差 ${gateDef.missing.length} 项`);
           if (gateDef.missing.length) lines.push(fmtMissing(gateDef.missing));
         }
         if (items.length) {
           lines.push('', `【任务】${items.length} 个`);
           lines.push(items.slice(0, limit).map((i) => `- ${i.id}｜${fdeSchema.laneLabel(i.stage)}｜${i.title}${i.due ? '｜到期 ' + i.due : ''}`).join('\n'));
         }
-        if (att.length) {
-          lines.push('', `【注意力】${att.length} 条`);
-          lines.push(fmtAttentionList(att, limit));
+        const attTodo = todoOf(att);
+        const attRemind = att.filter((x) => x.kind === 'proposal');
+        if (attTodo.length) {
+          lines.push('', `【待我处理】${attTodo.length} 件`);
+          lines.push(fmtAttentionList(attTodo, limit));
+        }
+        if (attRemind.length) {
+          lines.push('', `【提醒】${attRemind.length} 条`);
+          lines.push(fmtAttentionList(attRemind, limit));
         }
         const tl = (e.timeline || []).slice(-5).reverse();
         if (tl.length) {
-          lines.push('', '【最近时间线】');
-          lines.push(tl.map((t) => `- ${String(t.at || '').slice(0, 16).replace('T', ' ')}｜${t.kind}｜${t.text}`).join('\n'));
+          lines.push('', '【最近记录】');
+          lines.push(tl.map((t) => `- ${String(t.at || '').slice(0, 16).replace('T', ' ')}｜${t.text}`).join('\n'));
         }
-        lines.push('', 'hint：移动阶段会校验门禁；门禁未过时先补齐缺项或由人 force（需 reason）。');
+        lines.push('', '提示：进入下一阶段前要先满足推进条件；没满足时先补齐，或由人在面板「破例推进」并写明原因。');
         return { text: lines.join('\n'), ok: true, engagement: e, gate: gateDef, missing: gateDef ? gateDef.missing : [], attention: att, items };
     };
 
     tools.register({
       name: 'fde_engagement',
-      description: 'FDE 工作站：客户创建/更新与门禁只读评估。红线：move（推进阶段）、archive（归档）、门禁勾选与 force 放行只能由人在面板执行——本工具调用会被直接拒绝（code=BLOCKED）；gate 只允许只读评估（不要传 checks/force）。创建与更新客户字段可用。',
+      description: 'FDE 工作站：客户创建/更新与推进条件（gate）只读评估。红线：move（推进阶段）、archive（归档）、确认推进条件与破例推进（force）只能由人在面板执行——本工具调用会被直接拒绝（code=BLOCKED）；gate 只允许只读评估（不要传 checks/force）。创建与更新客户字段可用。',
       parameters: {
         type: 'object',
         properties: {
@@ -1188,14 +1243,14 @@ export function apply(ctx) {
           );
           if (action === 'move' || action === 'archive') {
             return Promise.resolve({
-              text: '拒绝：阶段推进与归档只能由人在面板执行（FDE 红线）。agent 可以：补齐门禁证据、写产物、用 fde_attention 提问、给用户操作建议。',
-              ok: false, reason: '阶段推进/归档只能由人在面板执行（agent 红线）', code: 'BLOCKED',
+              text: '拒绝：推进阶段与归档只能由人在面板执行（FDE 红线）。AI 可以：补齐推进条件需要的材料、写产物、用 fde_attention 提问、给用户操作建议。',
+              ok: false, reason: '推进阶段、归档只能由人在面板执行（AI 只能准备、建议、提问）', code: 'BLOCKED',
             });
           }
           if (wantsGateWrite) {
             return Promise.resolve({
-              text: '拒绝：门禁勾选与 force 放行只能由人在面板执行（FDE 红线）。agent 只能做只读评估（gate 不传 checks/force），或提示用户去面板勾选。',
-              ok: false, reason: '门禁勾选与 force 放行只能由人在面板执行（agent 红线）', code: 'BLOCKED',
+              text: '拒绝：确认推进条件与破例推进只能由人在面板执行（FDE 红线）。AI 只能做只读评估（gate 不传 checks/force），或提示用户去面板确认。',
+              ok: false, reason: '确认推进条件、破例推进只能由人在面板执行（AI 只能做只读评估）', code: 'BLOCKED',
             });
           }
           const body = { action, id: a.id || '', by: 'agent' };
@@ -1210,23 +1265,23 @@ export function apply(ctx) {
           if (Object.keys(patch).length) body.patch = patch;
           const r = fdeApi.engagement(root, body);
           if (!r.ok) {
-            const extra = r.blocked && r.missing && r.missing.length ? '\n缺少：\n' + fmtMissing(r.missing) + '\n请由人在面板补齐门禁项，或按用户明确指示带 force+reason 重试。' : '';
+            const extra = r.blocked && r.missing && r.missing.length ? '\n还差：\n' + fmtMissing(r.missing) + '\n请提示用户在面板补齐；确需跳过时由用户在面板「破例推进」并写明原因。' : '';
             return Promise.resolve({ text: `客户操作失败（${r.code || 'ERROR'}）：${r.reason}${extra}`, ok: false, reason: r.reason || '客户操作失败', code: r.code, blocked: !!r.blocked, missing: r.missing || [] });
           }
           const e = r.engagement || {};
           const parts = [`客户操作成功：${action}`];
-          if (e.id) parts.push(`客户：${e.name}（${e.id}）｜阶段 ${fdeSchema.stageLabel(e.stage)}｜优先级 ${e.priority}`);
-          if (e.dir) parts.push(`目录：research/${e.dir}`);
-          if (r.gate && r.gate.missing && r.gate.missing.length) parts.push(`门禁仍缺 ${r.gate.missing.length} 项：` + r.gate.missing.map((m) => m.label).join('、'));
+          if (e.id) parts.push(`客户：${e.name}（${e.id}）｜阶段 ${fdeSchema.stageLabel(e.stage)}｜优先级 ${fdeSchema.priorityLabel(e.priority)}`);
+          if (e.dir) parts.push(`客户文件夹：research/${e.dir}`);
+          if (r.gate && r.gate.missing && r.gate.missing.length) parts.push(`推进条件还差 ${r.gate.missing.length} 项：` + r.gate.missing.map((m) => m.label).join('、'));
           return Promise.resolve({ text: parts.join('\n'), ok: true, engagement: e, board: r.board, gate: r.gate || null, missing: (r.gate && r.gate.missing) || [] });
         } catch (e) { return Promise.resolve(fdeFail(e)); }
       },
-      presentCall: (a) => ({ card: 'generic', title: `FDE 客户：${a.action || ''}`, kind: 'edit' }),
+      presentCall: (a) => ({ card: 'generic', title: cardTitle('FDE 客户', 'engagement', a && a.action), kind: 'edit' }),
     });
 
     tools.register({
       name: 'fde_item',
-      description: 'FDE 工作站：任务增改移与回报。创建/更新/移动泳道；report 回报进度——ready 自动进「待我审」，blocked 进「等外部」并生成注意力，failed 保持进行中并生成注意力，dropped 取消。执行会话完成后必须用 report 回报（≤300 字摘要 + 文件路径）。',
+      description: 'FDE 工作站：任务增改移与进展记录（report）。创建/更新/改状态；report 记进展——ready 自动进「' + fdeSchema.laneLabel('review') + '」，blocked 进「' + fdeSchema.laneLabel('waiting') + '」并出现在「待我处理」，failed 保持进行中并出现在「待我处理」，dropped 取消。执行会话完成后必须用 report 回报（≤300 字摘要 + 文件路径）。',
       parameters: {
         type: 'object',
         properties: {
@@ -1257,7 +1312,7 @@ export function apply(ctx) {
           const action = String(a.action || '');
           const root = fdeToolRoot(a);
           if (action === 'delete') {
-            return Promise.resolve({ text: '拒绝：删除客户或任务只能由人在面板执行（红线）。如确需删除，请提示用户在「客户」或「看板」抽屉里操作。', ok: false, reason: '删除任务只能由人在面板执行（agent 红线）', code: 'BLOCKED' });
+            return Promise.resolve({ text: '拒绝：删除客户或任务只能由人在面板执行（红线）。如确需删除，请提示用户在面板的任务抽屉里操作。', ok: false, reason: '删除任务只能由人在面板执行', code: 'BLOCKED' });
           }
           const body = { action, id: a.id || '', by: 'agent' };
           if (a.patch) body.patch = a.patch;
@@ -1276,19 +1331,19 @@ export function apply(ctx) {
           }
           const it = r.item || {};
           const parts = [`任务操作成功：${action}`];
-          if (it.id) parts.push(`任务：${it.title}（${it.id}）｜泳道 ${fdeSchema.laneLabel(it.stage)}｜优先级 ${it.priority}${it.due ? '｜到期 ' + it.due : ''}`);
-          if (r.attention) parts.push('已生成注意力：' + (r.attention.question || '').slice(0, 120));
+          if (it.id) parts.push(`任务：${it.title}（${it.id}）｜状态 ${fdeSchema.laneLabel(it.stage)}｜优先级 ${fdeSchema.priorityLabel(it.priority)}${it.due ? '｜到期 ' + it.due : ''}`);
+          if (r.attention) parts.push('已进入「待我处理」：' + (r.attention.question || '').slice(0, 120));
           if (r.warning) parts.push('提示：' + r.warning);
-          if (action === 'report') parts.push('回报已记录；如任务需要人决定，用 fde_attention(action=ask) 提问。');
+          if (action === 'report') parts.push('进展已记下；如果需要人决定，用 fde_attention(action=ask) 提问。');
           return Promise.resolve({ text: parts.join('\n'), ok: true, item: it, attention: r.attention || null, board: r.board, warning: r.warning || '' });
         } catch (e) { return Promise.resolve(fdeFail(e)); }
       },
-      presentCall: (a) => ({ card: 'generic', title: `FDE 任务：${a.action || ''}`, kind: a.action === 'report' ? 'read' : 'edit' }),
+      presentCall: (a) => ({ card: 'generic', title: cardTitle('FDE 任务', 'item', a && a.action), kind: a.action === 'report' ? 'read' : 'edit' }),
     });
 
     tools.register({
       name: 'fde_attention',
-      description: 'FDE 工作站：注意力的唯一通道。ask=向人提问（需要决定/受阻/需要回答），resolve=记录回答并清除，list=查看全部派生注意力（受阻/待决定/待审/逾期/门禁/停滞/建议）。需要人决定时用 ask，不要自行替人决定。',
+      description: 'FDE 工作站：向人提问的唯一通道（对用户称「待我处理」）。ask=向人提问（等你决定/卡住了/等你回复），resolve=记录回答并清除，list=查看全部待我处理与提醒（' + fdeSchema.ATTENTION_KINDS.map((x) => x.label).join('/') + '）。需要人决定时用 ask，不要自行替人决定。',
       parameters: {
         type: 'object',
         properties: {
@@ -1309,26 +1364,31 @@ export function apply(ctx) {
           const root = fdeToolRoot(a);
           const body = { action: a.action, target: a.target, id: a.id, question: a.question, kind: a.kind, answer: a.answer, by: 'agent' };
           const r = fdeApi.attention(root, body);
-          if (!r.ok) return Promise.resolve({ text: `注意力操作失败（${r.code || 'ERROR'}）：${r.reason}`, ok: false, reason: r.reason || '注意力操作失败', code: r.code });
+          if (!r.ok) return Promise.resolve({ text: `提问操作失败（${r.code || 'ERROR'}）：${r.reason}`, ok: false, reason: r.reason || '提问操作失败', code: r.code });
           if (String(a.action) === 'list') {
             const list = r.list || [];
+            const todoList = todoOf(list);
+            const remindList = list.filter((x) => x.kind === 'proposal');
+            const out = [];
+            if (todoList.length) out.push(`待我处理 ${todoList.length} 件：`, fmtAttentionList(todoList, 50));
+            if (remindList.length) out.push(`提醒 ${remindList.length} 条：`, fmtAttentionList(remindList, 50));
             return Promise.resolve({
-              text: list.length ? [`FDE 注意力 ${list.length} 条：`, fmtAttentionList(list, 50)].join('\n') : '当前没有需要人处理的注意力。',
+              text: out.length ? out.join('\n') : '现在没有等人处理的事，也没有提醒。',
               ok: true, list,
             });
           }
           if (String(a.action) === 'ask') {
-            return Promise.resolve({ text: `已向人提问（${r.attention.kind}）：${r.attention.question}\n人回答后用 action=resolve 记录。`, ok: true, attention: r.attention, board: r.board });
+            return Promise.resolve({ text: `已向人提问（${ASK_KIND_WORDS[r.attention.kind] || '提问'}）：${r.attention.question}\n人回答后用 action=resolve 记录。`, ok: true, attention: r.attention, board: r.board });
           }
-          return Promise.resolve({ text: `已处理注意力${r.cleared ? '：' + (a.answer || '已清除') : '（本来就没有显式注意力）'}`, ok: true, attention: r.attention, board: r.board });
+          return Promise.resolve({ text: r.cleared ? `已记下回答：${a.answer || '（没有补充说明）'}` : '这里本来就没有等人处理的问题。', ok: true, attention: r.attention, board: r.board });
         } catch (e) { return Promise.resolve(fdeFail(e)); }
       },
-      presentCall: (a) => ({ card: 'generic', title: `FDE 注意力：${a.action || ''}`, kind: a.action === 'ask' ? 'edit' : 'read' }),
+      presentCall: (a) => ({ card: 'generic', title: cardTitle('FDE 待我处理', 'attention', a && a.action), kind: a.action === 'ask' ? 'edit' : 'read' }),
     });
 
     tools.register({
       name: 'fde_brief',
-      description: 'FDE 工作站：今日简报（待处理注意力、待采纳建议、今日焦点、最近活动）。apply=true 时按 settings.autonomy 执行安全动作（建任务/改下一步）；observe 模式只建议不执行。门禁/阶段/对外/删除永不由本工具自动执行。',
+      description: 'FDE 工作站：今日简报（待我处理、提醒、今日焦点、最近动态）。apply=true 时按「AI 权限」设置（settings.autonomy）直接处理小事：给没定下一步的客户补一条待确认的下一步、为新招采公告建跟进任务；observe 档只提醒不处理。推进阶段、确认推进条件、对外发送、删除永不由本工具自动执行。',
       parameters: {
         type: 'object',
         properties: {
@@ -1350,22 +1410,23 @@ export function apply(ctx) {
             const b0 = fdeApi.board(root, { bidIntel });
             if (!b0.ok) return { text: '读取看板失败：' + b0.reason, ok: false, reason: b0.reason || '读取看板失败', code: b0.code };
             applied = fdeApi.applySafeProposals(root);
-            if (!applied.ok) return { text: '执行安全建议失败：' + applied.reason, ok: false, reason: applied.reason || '执行安全建议失败', code: applied.code };
+            if (!applied.ok) return { text: '直接处理小事失败：' + applied.reason, ok: false, reason: applied.reason || '直接处理小事失败', code: applied.code };
           }
           const r = fdeApi.brief(root, { period: a.period || 'today', bidIntel });
           if (!r.ok) return { text: '读取今日简报失败：' + r.reason, ok: false, reason: r.reason || '读取今日简报失败', code: r.code };
           const bf = r.brief;
-          const lines = [`FDE 今日简报（${bf.period === 'week' ? '本周' : '今日'}）`, bf.headline, '', `【待我处理】${bf.attention.length} 条`];
-          lines.push(bf.attention.length ? fmtAttentionList(bf.attention, 20) : '（今天没有需要你处理的事）');
+          const todoList = todoOf(bf.attention);
+          const lines = [`FDE 今日简报（${bf.period === 'week' ? '本周' : '今日'}）`, bf.headline, '', `【待我处理】${todoList.length} 件`];
+          lines.push(todoList.length ? fmtAttentionList(todoList, 20) : '（今天没有等你处理的事）');
           if (bf.proposals.length) {
-            lines.push('', `【建议】${bf.proposals.length} 条`);
-            lines.push(bf.proposals.map((p) => `- ${p.title}（${p.ruleId}｜${p.kind}｜id=${p.id}）`).join('\n'));
+            lines.push('', `【提醒】${bf.proposals.length} 条`);
+            lines.push(fmtProposals(bf.proposals, 50));
           }
           if (applied) {
-            lines.push('', `【自主性执行】模式 ${applied.mode}｜已执行 ${applied.applied.length} 条｜保留待人工 ${applied.skipped.length} 条`);
-            if (applied.mode === 'observe') lines.push('（observe 模式只建议，不自动执行；可在设置里切到 assisted/auto）');
+            lines.push('', `【AI 直接处理】已处理 ${applied.applied.length} 条｜留给人决定 ${applied.skipped.length} 条`);
+            if (applied.mode === 'observe') lines.push('（当前 AI 权限是「' + ((fdeSchema.AUTONOMY_MODES.find((m) => m.key === 'observe') || {}).label || '只提醒') + '」，没有直接处理任何事；用户可以在设置里改成「' + ((fdeSchema.AUTONOMY_MODES.find((m) => m.key === 'assisted') || {}).label || '小事可以直接处理') + '」）');
           }
-          if (bf.focus.length) lines.push('', '【今日焦点】', bf.focus.map((f) => `- ${f.name}｜${f.stageLabel}｜下一步：${f.nextAction.text || '（未填）'}`).join('\n'));
+          if (bf.focus.length) lines.push('', '【今日焦点】', bf.focus.map((f) => `- ${f.name}｜${f.stageLabel}｜下一步：${f.nextAction.text || '（还没定）'}`).join('\n'));
           return { text: lines.join('\n'), ok: true, brief: bf, proposals: bf.proposals, applied: applied || null };
         } catch (e) { return Promise.resolve(fdeFail(e)); }
       },
@@ -1374,7 +1435,7 @@ export function apply(ctx) {
 
     tools.register({
       name: 'fde_harvest',
-      description: 'FDE 工作站：写复盘草稿（项目复盘/事故/方法沉淀）。落 research/.fde/drafts/ 的未审草稿，不是客户卷定稿；给出坑卡/方法/技能三种回流建议。脱敏：不写客户真名到方法论，示例用「某集团」。',
+      description: 'FDE 工作站：写复盘草稿（项目复盘/事故/方法沉淀）。落 research/.fde/drafts/ 的未审草稿，不是客户文件夹里的定稿；给出坑卡/方法/技能三种回流建议。脱敏：不写客户真名到方法论，示例用「某集团」。',
       parameters: {
         type: 'object',
         properties: {
@@ -1471,11 +1532,11 @@ export function apply(ctx) {
           }
           if (action === 'timeline') {
             const r = fdeApi.bidsTimeline(root, { q: a.q, mode: a.mode, from: a.from, to: a.to, source: a.source, limit: a.limit }, bidOpts);
-            if (!r.ok) return { text: '招采时间线查询失败：' + r.reason, ok: false, reason: r.reason, code: r.code };
+            if (!r.ok) return { text: '采购节奏查询失败：' + r.reason, ok: false, reason: r.reason, code: r.code };
             if (!r.available) return unavailable(r);
             const months = Object.entries(r.byMonth || {}).sort((x, y) => String(y[0]).localeCompare(String(x[0]))).slice(0, 24);
             return {
-              text: [`招采时间线「${r.q}」（${r.mode}）：共 ${r.total} 条`, ...months.map(([m, n]) => `- ${m}：${n} 条`)].join('\n'),
+              text: [`采购节奏「${r.q}」（按月）：共 ${r.total} 条`, ...months.map(([m, n]) => `- ${m}：${n} 条`)].join('\n'),
               ok: true, available: true, total: r.total, byMonth: r.byMonth,
             };
           }
@@ -1494,12 +1555,12 @@ export function apply(ctx) {
             const r = fdeApi.bidPromote(root, { engagementId: a.engagementId, bidId: a.bidId, relation: a.relation, note: a.note, by: 'agent' }, bidOpts);
             if (!r.ok) return { text: '提升为跟进任务失败：' + r.reason, ok: false, reason: r.reason, code: r.code };
             if (!r.available) return unavailable(r);
-            return { text: `已创建跟进任务：${r.item.title}（${r.item.id}，泳道 ${fdeSchema.laneLabel(r.item.stage)}）\n已关联公告 ${r.link ? r.link.bidId : a.bidId}。`, ok: true, item: r.item, link: r.link };
+            return { text: `已创建跟进任务：${r.item.title}（${r.item.id}，状态 ${fdeSchema.laneLabel(r.item.stage)}）\n已关联公告 ${r.link ? r.link.bidId : a.bidId}。`, ok: true, item: r.item, link: r.link };
           }
           return { text: `未知 action：${action || '(空)'}（search|match|link|unlink|promote|timeline）`, ok: false, reason: '未知 action：' + (action || '(空)'), code: 'INVALID' };
         } catch (e) { return fdeFail(e); }
       },
-      presentCall: (a) => ({ card: 'generic', title: `FDE 招采：${a.action || ''}`, kind: a.action === 'search' || a.action === 'match' || a.action === 'timeline' ? 'read' : 'edit' }),
+      presentCall: (a) => ({ card: 'generic', title: cardTitle('FDE 招采', 'bid', a && a.action), kind: a.action === 'search' || a.action === 'match' || a.action === 'timeline' ? 'read' : 'edit' }),
     });
 
     /* ---------------- 第 8 个 FDE 工具：scys_fde（生财 FDE 情报，spec §18.6） ----------------
@@ -1507,7 +1568,7 @@ export function apply(ctx) {
      * 未授权/不可达返回 {ok:false, code, reason}，不抛异常；不调用任何生财写接口。 */
     tools.register({
       name: 'scys_fde',
-      description: 'FDE 工作站：生财有术社区的 FDE 情报（只读）。feed=读今天缓存的情报（帖子/公众号/航海与大会/手册，默认 20 条，可按 kind/q 过滤）；refresh=立即抓取一次并写缓存（宿主每天自动更新一次，非必要不用手动刷）。内容为社区公开摘要、非全文，原帖以链接为准；无授权/无网络返回 {ok:false, code}（UNAUTHORIZED/UNAVAILABLE），不抛异常；不调用生财写接口。',
+      description: 'FDE 工作站：生财有术社区的 FDE 情报（只读）。feed=读今天缓存的情报（帖子/公众号/航海与大会/手册，默认 20 条，可按 kind/q 过滤）；refresh=立即抓取一次并写缓存（DSH 每天自动更新一次，非必要不用手动刷）。内容为社区公开摘要、非全文，原帖以链接为准；无授权/无网络返回 {ok:false, code}（UNAUTHORIZED/UNAVAILABLE），不抛异常；不调用生财写接口。',
       parameters: {
         type: 'object',
         properties: {
@@ -1554,7 +1615,7 @@ export function apply(ctx) {
             return {
               text: [
                 '生财 FDE 情报暂无缓存。',
-                st.ok === false ? `上次状态：${st.code}｜${st.reason}` : '宿主会自动在启动后/每天抓取一次；也可用 scys_fde {action:"refresh"} 立即抓取。',
+                st.ok === false ? `上次状态：${st.code}｜${st.reason}` : 'DSH 会在启动后和每天各自动抓取一次；也可用 scys_fde {action:"refresh"} 立即抓取。',
                 '口径：来源生财有术社区 MCP，只读公开摘要；未授权时需在 DSH 中重新授权生财 MCP。',
               ].join('\n'),
               ok: st.ok, code: st.code, reason: st.reason, feed: null, today: st.today, stale: true,
@@ -1563,7 +1624,7 @@ export function apply(ctx) {
           const f = st.feed;
           const s = f.stats || {};
           const lines = [
-            `生财 FDE 情报｜数据日期 ${f.date || '—'}${st.stale ? '（今日尚未更新，宿主会自动更新）' : ''}｜更新于 ${fmtWhen(f.fetchedAt)}｜共 ${s.total || 0} 条（帖子 ${s.post || 0}·公众号 ${s.wechat || 0}·航海 ${s.activity || 0}·大会 ${s.navigator || 0}·手册 ${s.manual || 0}；新 ${s.new || 0}；过滤无关 ${s.filteredOut || 0}）`,
+            `生财 FDE 情报｜数据日期 ${f.date || '—'}${st.stale ? '（今日尚未更新，DSH 会自动更新）' : ''}｜更新于 ${fmtWhen(f.fetchedAt)}｜共 ${s.total || 0} 条（帖子 ${s.post || 0}·公众号 ${s.wechat || 0}·航海 ${s.activity || 0}·大会 ${s.navigator || 0}·手册 ${s.manual || 0}；新 ${s.new || 0}；过滤无关 ${s.filteredOut || 0}）`,
           ];
           if (st.ok === false) lines.push(`⚠ 上次刷新失败（${st.code}）：${st.reason}`);
           if (c.kind || c.q) {
@@ -1597,7 +1658,7 @@ export function apply(ctx) {
      * 不抓取任意网页正文、不调用外部写接口。 */
     tools.register({
       name: 'fde_library',
-      description: 'FDE 工作站：FDE 资料库（只读）。feed=读资料库缓存（权威资料/开源工具/方法模板/社区动态，默认 20 条）；search=按来源组/类型/适用阶段/关键词/仅看重点推荐过滤；refresh=刷新一次（GitHub 指标 + 社区动态，宿主每天自动刷新一次）。资料目录人工策展、A/B/C 分级；GitHub 指标为抓取时快照；社区动态为摘要非全文。不抓任意网页正文，不调用外部写接口。',
+      description: 'FDE 工作站：FDE 资料库（只读）。feed=读资料库缓存（权威资料/开源工具/方法模板/社区动态，默认 20 条）；search=按来源组/类型/适用阶段/关键词/仅看重点推荐过滤；refresh=刷新一次（GitHub 指标 + 社区动态，DSH 每天自动刷新一次）。资料目录人工策展、A/B/C 分级；GitHub 指标为抓取时快照；社区动态为摘要非全文。不抓任意网页正文，不调用外部写接口。',
       parameters: {
         type: 'object',
         properties: {
@@ -1680,7 +1741,7 @@ export function apply(ctx) {
               text: [
                 'FDE 资料库暂无缓存。',
                 catalogText(st),
-                '宿主会在启动后/每天自动刷新一次；也可用 action=refresh 立即刷新。',
+                'DSH 会在启动后和每天各自动刷新一次；也可用 action=refresh 立即刷新。',
                 '口径：资料目录人工策展（A/B/C 分级）；GitHub 指标为抓取时快照；社区动态为摘要非全文。',
               ].join('\n'),
               ok: true, feed: null, today: st.today, stale: true, catalog: st.catalog, warnings: st.warnings || [],
@@ -1689,7 +1750,7 @@ export function apply(ctx) {
           const s = f.stats || {};
           const flags = [c.group ? '来源组=' + groupLabel(c.group) : '', c.kind ? '类型=' + c.kind : '', c.stage ? '阶段=' + fdeSchema.stageLabel(c.stage) : '', c.q ? '关键词=' + c.q : '', c.featured ? '仅看重点推荐' : ''].filter(Boolean);
           const lines = [
-            `FDE 资料库｜数据日期 ${f.date || '—'}${st.stale ? '（今日尚未更新，宿主会自动更新）' : ''}｜更新于 ${fmtWhen(f.fetchedAt)}｜${catalogText(st)}｜共 ${s.total || 0} 条（国外官方 ${s.intlOfficial || 0}·国内官方 ${s.cnOfficial || 0}·开源 ${s.opensource || 0}·方法模板 ${s.method || 0}·社区 ${s.community || 0}；重点推荐 ${s.featured || 0}；新 ${s.new || 0}；更新 ${s.updated || 0}）`,
+            `FDE 资料库｜数据日期 ${f.date || '—'}${st.stale ? '（今日尚未更新，DSH 会自动更新）' : ''}｜更新于 ${fmtWhen(f.fetchedAt)}｜${catalogText(st)}｜共 ${s.total || 0} 条（国外官方 ${s.intlOfficial || 0}·国内官方 ${s.cnOfficial || 0}·开源 ${s.opensource || 0}·方法模板 ${s.method || 0}·社区 ${s.community || 0}；重点推荐 ${s.featured || 0}；新 ${s.new || 0}；更新 ${s.updated || 0}）`,
           ];
           for (const w of (st.warnings || []).concat(f.warnings || [])) lines.push('⚠ ' + w);
           if (flags.length) lines.push(`筛选：${flags.join('｜')}｜命中 ${c.matched} 条，显示 ${c.items.length} 条`);
@@ -1870,11 +1931,15 @@ export function apply(ctx) {
     let n = 0;
     for (const sk of list) {
       try {
+        /* DSH 0.2.1（dsh-skill）：SkillRegistration 的 source 必填；注册时不校验，
+         * 但加载（skills.get）时校验 `source must be a string`，缺了就「能列出、加载必抛」。
+         * 运行时注册的技能取值 'runtime'（SkillSource 的既定取值）。 */
         svc.register({
           name: sk.name,
           description: sk.description,
           content: sk.content,
           path: sk.path,
+          source: sk.source || 'runtime',
           resourceBase: sk.resourceBase,
         });
         n += 1;
@@ -1890,6 +1955,9 @@ export function apply(ctx) {
     if (!sp || typeof sp.section !== 'function') { log('systemPrompt 不可用'); return; }
     let order = 2950;
     try { if (typeof sp.getSectionOrder === 'function') order = sp.getSectionOrder('TOOL_REPORT'); } catch { /* 默认 */ }
+    /* 状态名、分类名、红线从 schema 取（定义单点）：改 schema 的标签，这里自动跟着变。 */
+    const laneWord = (k) => fdeSchema.laneLabel(k);
+    const redLineText = fdeSchema.RED_LINES.map((x, i) => '①②③④⑤⑥⑦⑧⑨'.charAt(i) + ' ' + x).join(' ');
     sp.section({
       name: 'tool:research-workbench',
       order,
@@ -1901,17 +1969,24 @@ export function apply(ctx) {
         '- **阶段顺序（不可跳阶）**：线索 → 研判 → 会面 → **场景** → 方案 → 试点 → 交付 → 采用（终止：归档 / 流失）。阶段与门禁定义以 `fde_board` / `GET /research-workbench/api/fde/meta` 为准，不要凭记忆硬编码。',
         '- **状态落点**：看板状态在 `research/.fde/board.json`，只通过 `fde_*` 工具与面板读写；不要手改该文件，也不要把状态写进客户卷。',
         '',
-        '【何时启用】用户给出「公司名 + 见面对象/职务」并要求调研、出会面材料、写方案，或问「今天该做什么 / 客户到哪一步 / 有什么要处理」时：先用 `fde_board`（或 `fde_brief`）读状态，再按阶段执行。用户也可在左侧「FDE 工作站」面板直接操作看板与今日，并由面板一键发起会话。',
+        '【何时启用】用户给出「公司名 + 见面对象/职务」并要求调研、出会面材料、写方案，或问「今天该做什么 / 客户到哪一步 / 有什么要处理」时：先用 `fde_board`（或 `fde_brief`）读状态，再按阶段执行。用户也可在左侧「FDE 工作站」面板直接操作看板与今日，并在面板里一键「交给 AI」。',
+        '',
+        '【对用户说话的用词】上面和下面出现的内部概念只用于理解规则与调用工具（工具名、参数名照旧）；对用户说话一律换成界面上的词：',
+        '- engagement → 客户；item → 任务；客户卷 / 目录 → 客户文件夹；stakeholders / 干系人 → 关键人；artifacts / 工件 → 资料；时间线 → 记录',
+        '- attention / 注意力 → 待我处理；proposal / 建议 → 提醒；gate / 门禁 → 推进条件（自动检查 → 材料，人工确认 → 需要你确认）；force → 破例推进',
+        '- autonomy / 自主性 → AI 权限；红线 → 只能由你决定的事；handoff / 发起会话 → 交给 AI；report / 回报 → 进展；lane / 泳道 → 状态',
+        '- 任务状态：' + fdeSchema.ITEM_LANES.map((l) => l.label).join(' / ') + '；待我处理的分类：' + fdeSchema.ATTENTION_KINDS.map((x) => x.label).join(' / '),
+        '- 不要对用户说 engagement、item、gate、门禁、注意力、泳道、回报、自主性、工件，也不要念对象编号、规则编号或英文枚举；「招采」「Brief」「A/B/C 分级」是固定说法，可以照用。',
         '',
         '【阶段门禁】进入下一阶段前必须通过门禁：**自动检查**（项目档案 / 事实核查 / KPI 假设 / Brief / 方案 / 试点 / 验收 / 采用证据等文件）+ **人工确认**（人勾选并留证据）。两类都过才算通过；`force` 必须由人给出原因并记录。',
         '',
-        '【红线 · 任何自主性模式都不自动】① 推进客户阶段 ② 通过门禁 ③ 标记交付/验收完成 ④ 导出或发送对外材料 ⑤ 删除客户或任务 ⑥ 修改客户卷定稿文件。这些只能由人执行；agent 只准备、建议、提问、提醒。',
+        '【红线 · 任何自主性模式都不自动】' + redLineText + '。这些只能由人执行；agent 只准备、建议、提问、提醒。',
         '',
-        '【回报协议】执行会话必须用 `fde_item`（action=report）回报：`ready` → 待我审；`blocked` → 等外部并生成注意力；`failed` → 保持进行中并生成注意力；`dropped` → 取消。摘要 ≤300 字 + artifacts 文件路径；长文写文件，不要整段贴进消息。需要人决定时用 `fde_attention`（action=ask）提问，不要自行替人决定。',
+        '【回报协议】执行会话必须用 `fde_item`（action=report）回报：`ready` → ' + laneWord('review') + '；`blocked` → ' + laneWord('waiting') + '，并进入「待我处理」；`failed` → 保持' + laneWord('doing') + '，并进入「待我处理」；`dropped` → ' + laneWord('canceled') + '。摘要 ≤300 字 + artifacts 文件路径；长文写文件，不要整段贴进消息。需要人决定时用 `fde_attention`（action=ask）提问，不要自行替人决定。',
         '',
-        '【自主性】observe（默认，只生成建议）/ assisted（安全动作一键执行）/ auto（安全动作自动执行）。安全动作仅限：建任务、改下一步、提醒；门禁、对外材料、删除归档、阶段推进永远人工。',
+        '【自主性（对用户称「AI 权限」）】observe（默认：只提醒，由人决定）/ assisted 与 auto（行为相同：小事可以直接处理）。「小事」仅限：给没定下一步的客户补一条待确认的下一步、为新招采公告建跟进任务；其余都由人决定。门禁、对外材料、删除归档、阶段推进永远人工。',
         '',
-        '【FDE 工具】`fde_board`（看板 / 简报 / 客户 / 任务）· `fde_engagement`（客户增改移；move/archive/门禁 force 只能人在面板执行，agent 调用会被拒绝）· `fde_item`（任务增改移与回报）· `fde_attention`（注意力唯一通道）· `fde_brief`（今日简报，apply 按自主性执行安全动作）· `fde_harvest`（复盘草稿）· `fde_bid`（招采雷达客户关联层：search/match/link/unlink/promote/timeline）· `fde_library`（FDE 资料库：feed/search/refresh）· `fde_scenario`（场景评估：evaluate/template）· `fde_quote`（成本测算与报价：calculate/template）。',
+        '【FDE 工具】`fde_board`（看板 / 简报 / 客户 / 任务）· `fde_engagement`（客户增改移；move/archive/门禁 force 只能人在面板执行，agent 调用会被拒绝）· `fde_item`（任务增改移与回报）· `fde_attention`（向人提问的唯一通道）· `fde_brief`（今日简报，apply 按 AI 权限直接处理小事）· `fde_harvest`（复盘草稿）· `fde_bid`（招采雷达客户关联层：search/match/link/unlink/promote/timeline）· `fde_library`（FDE 资料库：feed/search/refresh）· `fde_scenario`（场景评估：evaluate/template）· `fde_quote`（成本测算与报价：calculate/template）。',
         '',
         '【招采雷达（v1.1）】`fde_bid` 只做「与客户关联」这一层（检索、匹配、关联公告、提升为跟进任务）；全量深挖用 bid-intel 的 `bid_search` / `bid_timeline` / `bid_batches` / `bid_report`，**不要用 fde_bid 替代**，也不要另写一套检索语义。',
         '- 口径铁律：**候选人 ≠ 中标人**（候选人公示只是评标排序，只有中标/成交公告才算中标）；批次/专项归属是**推断**，不是公告明示；金额只引原文（口径不一，不换算、不求和）。',
@@ -1920,7 +1995,7 @@ export function apply(ctx) {
         '',
         '【生财 FDE 情报（v1.2）】`scys_fde` 是只读社区情报：`action=feed` 读今天缓存（帖子/公众号/航海与大会/手册，含摘要与链接），`action=refresh` 立即抓一次。缓存每天自动更新一次；内容为社区公开摘要、**非全文**，引用前点链接核对；无授权/无网络返回 `code`（`UNAUTHORIZED`/`UNAVAILABLE`），如实告知用户在 DSH 重新授权生财 MCP，不要臆造内容；**不调用任何生财写接口**（点赞/投锚/评论/收藏/发帖/关注）。',
         '',
-        '【FDE 资料库（v1.3）】`fde_library` 是只读资料层：`action=feed` 读缓存，`search` 按来源组/类型/适用阶段/关键词/仅看重点推荐过滤，`refresh` 刷新一次（GitHub 指标 + 社区动态；宿主每天自动刷新一次）。资料目录 `reference/fde-library/catalog.json` 人工策展、A/B/C 分级（A 官方一手 / B 二手 / C 社区未核实）；GitHub 指标为抓取时快照；社区动态为摘要非全文（原帖以链接为准）。**不抓任意网页正文、不调用外部写接口**；catalog 缺失返回 `code=UNAVAILABLE` 时如实说明，不要臆造资料。',
+        '【FDE 资料库（v1.3）】`fde_library` 是只读资料层：`action=feed` 读缓存，`search` 按来源组/类型/适用阶段/关键词/仅看重点推荐过滤，`refresh` 刷新一次（GitHub 指标 + 社区动态；DSH 每天自动刷新一次）。资料目录 `reference/fde-library/catalog.json` 人工策展、A/B/C 分级（A 官方一手 / B 二手 / C 社区未核实）；GitHub 指标为抓取时快照；社区动态为摘要非全文（原帖以链接为准）。**不抓任意网页正文、不调用外部写接口**；catalog 缺失返回 `code=UNAVAILABLE` 时如实说明，不要臆造资料。',
         '',
         '【场景与报价（v1.3）】`fde_scenario` 是纯计算（不写文件/不联网）：4 条硬门槛（有姓名发起人 / 14 天首次集成 / 90 天上线 / 使用可测量）+ 12 维评分（权重合计 101，按 Σ(分×权重)/101 归一化，**不得除以 100**）+ 1–7 否决项，输出档位（≥3.6 进方案 / 3.2–3.6 补证 / <3.2 拒绝）。`fde_quote` 同样是纯计算：三点估算 P80 计价人天 + 数据评测/云 token/合规/运维等 7 项非人力 + 预备费/税/毛利，输出成本/底线/目标/上限/成交价与实现毛利率。**两者结果都是方法默认值，不构成对外报价**；对外报价与场景决策必须由人确认（红线不变）。Markdown 由会话落盘到 `scoping/`、`proposal/`。',
         '',
@@ -1948,7 +2023,7 @@ export function apply(ctx) {
         '',
         '【可用工具】FDE：`fde_board` · `fde_engagement` · `fde_item` · `fde_attention` · `fde_brief` · `fde_harvest` · `fde_bid` · `scys_fde`（生财 FDE 情报：feed/refresh）· `fde_library`（资料库）· `fde_scenario`（场景评估）· `fde_quote`（成本报价）；执行：`rw_status`（项目进展）· `rw_scaffold`（立项）· `rw_export_pdf`（按需导出）· `rw_qa_pdf`（版面质检）· `rw_method`（读取方法论与模板）。',
         '',
-        '【技能与方法】FDE 技能（宿主可用时注册为 runtime skill）：`fde-engagement` / `fde-discovery` / `fde-meeting` / `fde-scoping`（场景选择：四条硬门槛 + 12 维评分 + 数据体检） / `fde-solution` / `fde-pilot` / `fde-delivery` / `fde-adoption` / `fde-board` / `fde-harvest` / `fde-bid-radar`（招采雷达：查采购史/中标情况、找招标机会、补会面采购证据），按阶段加载；技能服务不可用时按 `methods/` 与 `skills/*/SKILL.md` 路径读取。',
+        '【技能与方法】FDE 技能（技能服务可用时注册为 runtime skill）：`fde-engagement` / `fde-discovery` / `fde-meeting` / `fde-scoping`（场景选择：四条硬门槛 + 12 维评分 + 数据体检） / `fde-solution` / `fde-pilot` / `fde-delivery` / `fde-adoption` / `fde-board` / `fde-harvest` / `fde-bid-radar`（招采雷达：查采购史/中标情况、找招标机会、补会面采购证据），按「客户要进入的阶段」加载（推进条件属于要进入的那个阶段：客户在 `lead` 时要补的是 `discovery` 的材料，用 `fde-discovery`；已在最后一个阶段时用当前阶段的技能）；技能服务不可用时按 `methods/` 与 `skills/*/SKILL.md` 路径读取。',
         '',
         '【方法文件】开始调研前，建议先用 `rw_method` 读取「流程」「核查」「KPI」「合作地图」「场景」「成本」「数据源」「雷区」「模板」「对外文档」等文件，避免重复踩坑。',
       ].join('\n'),
@@ -2034,7 +2109,15 @@ export function apply(ctx) {
     } else results.routes = 'skipped:no-webServer';
   } catch (e) { results.routes = 'error:' + String(e?.message || e); }
   try { registerTools(); results.tools = 'ok'; } catch (e) { results.tools = 'error:' + String(e?.message || e); }
-  try { registerSkills(); results.skills = skillsState.available ? 'ok:' + skillsState.registered : 'degraded'; } catch (e) { results.skills = 'error:' + String(e?.message || e); }
+  try {
+    registerSkills();
+    results.skills = skillsState.available ? 'ok:' + skillsState.registered : 'degraded';
+    /* skills 不在硬依赖里：apply 可能早于 skills 服务就绪。此时先降级，等服务出现再补注册（同 webServer 的做法）。 */
+    if (!skillsState.available && typeof ctx.inject === 'function') {
+      results.skills = 'waiting:skills';
+      ctx.inject(['skills'], () => { try { registerSkills(); } catch { /* 降级不报错 */ } });
+    }
+  } catch (e) { results.skills = 'error:' + String(e?.message || e); }
   try { registerPrompt(); results.prompt = 'ok'; } catch (e) { results.prompt = 'error:' + String(e?.message || e); }
   try { startScysTimer(); results.scysTimer = 'ok'; } catch (e) { results.scysTimer = 'error:' + String(e?.message || e); }
   try { startLibraryTimer(); results.libraryTimer = 'ok'; } catch (e) { results.libraryTimer = 'error:' + String(e?.message || e); }
