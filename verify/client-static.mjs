@@ -363,6 +363,19 @@ const checks = [
   ['招采外链只渲染 http(s) 地址',
     (c.match(/isSafeUrl\((?:item|link)\.url\)\s*\? h\('a'/g) || []).length === 4],
 
+  /* ---- 6h. 页面里的区块不被纵向压扁（v2.0.0 安装后发现：阶段条只剩一条边、客户列表被裁掉） ---- */
+  ['页面里的区块默认不收缩；规则写在「占满高度」之前，后者才能盖过它',
+    c.includes('.fde-view > *{flex-shrink:0}')
+    && c.indexOf('.fde-view > *{flex-shrink:0}') < c.indexOf('.fde-view-fill{flex:1 1 auto;min-height:0}')
+    && /\.fde-view\{[^}]*flex-shrink:0\}/.test(c)],
+  ['阶段条自己不收缩（它带横向滚动，最容易被压扁）', /\.fde-flow\{[^}]*overflow-x:auto[^}]*flex:0 0 auto\}/.test(c)],
+  ['在自己里面滚动的区块各自声明占满高度（看板、今日四块、资料双栏）',
+    /\.fde-board\{[^}]*min-height:0;flex:1 1 auto\}/.test(c) && /\.fde-today-grid\{flex:1 1 auto;min-height:0/.test(c)
+    && /\.fde-materials\{[^}]*flex:1 1 auto;min-height:0/.test(c)],
+  ['没有内部滚动区的页面不占满高度，跟着整页滚（流程、情报、客户列表）',
+    c.includes("return h('div', { className: 'fde-view' + (tab === 'list' ? '' : ' fde-view-fill') },")
+    && (c.match(/className: 'fde-view fde-view-fill/g) || []).length === 2],
+
   /* ---- 7. 约束 ---- */
   ['不 import @deepseek-ai/*', !c.includes('@deepseek-ai')],
   ['不写 localStorage 作为事实源', !c.includes('localStorage') && !c.includes('sessionStorage')],

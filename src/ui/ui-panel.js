@@ -246,7 +246,12 @@ window.__ModuleLoader__.load({
 
 /* ---- 主区域 ---- */
 .fde-main{flex:1 1 auto;min-height:0;overflow:auto;padding:2px 18px 24px;display:flex;flex-direction:column;gap:12px}
-.fde-view{display:flex;flex-direction:column;gap:12px;min-height:0}
+/* 页面里的区块默认不被纵向压缩。带横向滚动或裁剪的区块（阶段条、客户列表的表格）
+   在窗口不够高时会被压扁，甚至只剩一条边；内容多了应该是整页往下滚。
+   只有「占满剩余高度、在自己里面滚动」的区块才允许收缩，它们各自声明 flex:1 1 auto;min-height:0
+   （看板、今日四块、资料双栏）。下面三条的先后顺序不能换：后写的同级规则才能盖过前面的。 */
+.fde-view{display:flex;flex-direction:column;gap:12px;min-height:0;flex-shrink:0}
+.fde-view > *{flex-shrink:0}
 .fde-view-fill{flex:1 1 auto;min-height:0}
 
 /* ---- 通用：按钮 / 输入 / 芯片 / 卡片 ---- */
@@ -448,7 +453,7 @@ window.__ModuleLoader__.load({
 .fde-stat-num-sm{font-size:13px;font-weight:600;letter-spacing:0;line-height:1.4;word-break:break-word}
 
 /* ---- 流程 v2（v1.3，spec §20.5）：阶段步进 / 详情 / 工具 chips / 矩阵 ---- */
-.fde-flow{display:flex;gap:8px;overflow-x:auto;padding:4px 0 8px;align-items:stretch}
+.fde-flow{display:flex;gap:8px;overflow-x:auto;padding:4px 0 8px;align-items:stretch;flex:0 0 auto}
 .fde-flow-step{flex:1 1 0;min-width:104px;display:flex;flex-direction:column;gap:3px;padding:9px 10px;
   border-radius:var(--dsw-radius-md,12px);border:0.5px solid var(--fde-border);background:var(--fde-surface-2);
   color:var(--fde-text);cursor:pointer;text-align:left;font:inherit;transition:border-color .15s,background .15s}
@@ -4984,7 +4989,7 @@ drawerAnswerPh: '你的回复（可以不填）', drawerResolve: '已处理',
           h('div', { className: 'fde-hint', style: { marginTop: 8 } }, t('libFootnote')));
       }
 
-      return h('div', { className: 'fde-view fde-view-fill' }, topCard, featuredBlock, listCard);
+      return h('div', { className: 'fde-view' }, topCard, featuredBlock, listCard);
     }
 
     /* ============================================================
@@ -5178,7 +5183,7 @@ drawerAnswerPh: '你的回复（可以不填）', drawerResolve: '已处理',
           ],
         })) : null;
 
-      return h('div', { className: 'fde-view fde-view-fill' },
+      return h('div', { className: 'fde-view' },
         !hasPlaybook && stages.length ? h(MsgLine, { kind: 'warn', text: t('processNoPlaybook') }) : null,
         stages.length
           ? h('div', { className: 'fde-flow', role: 'tablist', 'aria-label': t('processTitle') }, stages.map(stepNode))
@@ -6264,7 +6269,8 @@ drawerAnswerPh: '你的回复（可以不填）', drawerResolve: '已处理',
     function CustomersPage(props) {
       const p = props || {};
       const tab = p.tab === 'board-item' ? 'board-item' : (p.tab === 'list' ? 'list' : 'board-customer');
-      return h('div', { className: 'fde-view fde-view-fill' },
+      /* 看板在自己里面滚动，要占满高度；列表跟着整页滚 */
+      return h('div', { className: 'fde-view' + (tab === 'list' ? '' : ' fde-view-fill') },
         PageTabs({
           ariaLabel: t('customersViews'),
           value: tab,
@@ -6301,7 +6307,7 @@ drawerAnswerPh: '你的回复（可以不填）', drawerResolve: '已处理',
     function KnowledgePage(props) {
       const p = props || {};
       const tab = p.tab === 'bids' ? 'bids' : 'library';
-      return h('div', { className: 'fde-view fde-view-fill' },
+      return h('div', { className: 'fde-view' },
         PageTabs({
           ariaLabel: t('knowledgeTabs'),
           value: tab,
@@ -6322,7 +6328,7 @@ drawerAnswerPh: '你的回复（可以不填）', drawerResolve: '已处理',
     function ProcessPage(props) {
       const p = props || {};
       const tab = p.tab === 'methods' || p.tab === 'skills' ? p.tab : 'flow';
-      return h('div', { className: 'fde-view fde-view-fill' },
+      return h('div', { className: 'fde-view' },
         PageTabs({
           ariaLabel: t('processTabs'),
           value: tab,
