@@ -991,10 +991,10 @@ export function apply(ctx) {
 
     tools.register({
       name: 'rw_method',
-      description: '调研工作台：读取方法论/参考文件（七步流程、事实核查协议、KPI假设法、合作地图构建法、数据源清单、雷区清单、文档模板库、项目档案模板）。开始调研或撰写材料前应先读取相关方法。',
+      description: '调研工作台：读取方法论/参考文件（调研流程、事实核查协议、KPI假设法、合作地图构建法、试点交付与采用、场景选择与数据体检、成本评估与报价、数据源清单、雷区清单、文档模板库、项目档案模板）。开始调研或撰写材料前应先读取相关方法。',
       parameters: {
         type: 'object',
-        properties: { name: { type: 'string', description: '文件名关键词，如"流程""核查""KPI""合作地图""数据源""雷区""模板"；留空则列出全部' } },
+        properties: { name: { type: 'string', description: '文件名关键词，如"流程""核查""KPI""合作地图""试点""场景""成本""数据源""雷区""模板"；留空则列出全部' } },
       },
       output: { schema: { type: 'object' }, render: (_a, v) => text(v.text) },
       execute(args) {
@@ -1990,7 +1990,7 @@ export function apply(ctx) {
         '',
         '【招采雷达（v1.1）】`fde_bid` 只做「与客户关联」这一层（检索、匹配、关联公告、提升为跟进任务）；全量深挖用 bid-intel 的 `bid_search` / `bid_timeline` / `bid_batches` / `bid_report`，**不要用 fde_bid 替代**，也不要另写一套检索语义。',
         '- 口径铁律：**候选人 ≠ 中标人**（候选人公示只是评标排序，只有中标/成交公告才算中标）；批次/专项归属是**推断**，不是公告明示；金额只引原文（口径不一，不换算、不求和）。',
-        '- 数据缺口如实说明：索引以中国航发专区为主，其他平台覆盖有限，0 命中是数据事实不是 bug；`fde_bid` 返回 `code=UNAVAILABLE`（招采雷达未就绪）时提示用户安装/升级 bid-intel，不得臆造数据。',
+        '- 数据缺口如实说明：本机索引只覆盖招采雷达已采集的平台，覆盖范围以 `fde_bid` 返回的来源统计为准，0 命中是数据事实不是 bug；`fde_bid` 返回 `code=UNAVAILABLE`（招采雷达未就绪）时提示用户安装/升级 bid-intel，不得臆造数据。',
         '- `fde_bid` 的 link/unlink/promote 属允许 agent 执行的可逆动作（by=agent 留痕）；推进阶段/过门禁/删除/对外发送仍是人的红线。',
         '',
         '【生财 FDE 情报（v1.2）】`scys_fde` 是只读社区情报：`action=feed` 读今天缓存（帖子/公众号/航海与大会/手册，含摘要与链接），`action=refresh` 立即抓一次。缓存每天自动更新一次；内容为社区公开摘要、**非全文**，引用前点链接核对；无授权/无网络返回 `code`（`UNAUTHORIZED`/`UNAVAILABLE`），如实告知用户在 DSH 重新授权生财 MCP，不要臆造内容；**不调用任何生财写接口**（点赞/投锚/评论/收藏/发帖/关注）。',
@@ -2025,7 +2025,7 @@ export function apply(ctx) {
         '',
         '【技能与方法】FDE 技能（技能服务可用时注册为 runtime skill）：`fde-engagement` / `fde-discovery` / `fde-meeting` / `fde-scoping`（场景选择：四条硬门槛 + 12 维评分 + 数据体检） / `fde-solution` / `fde-pilot` / `fde-delivery` / `fde-adoption` / `fde-board` / `fde-harvest` / `fde-bid-radar`（招采雷达：查采购史/中标情况、找招标机会、补会面采购证据），按「客户要进入的阶段」加载（推进条件属于要进入的那个阶段：客户在 `lead` 时要补的是 `discovery` 的材料，用 `fde-discovery`；已在最后一个阶段时用当前阶段的技能）；技能服务不可用时按 `methods/` 与 `skills/*/SKILL.md` 路径读取。',
         '',
-        '【方法文件】开始调研前，建议先用 `rw_method` 读取「流程」「核查」「KPI」「合作地图」「场景」「成本」「数据源」「雷区」「模板」「对外文档」等文件，避免重复踩坑。',
+        '【方法文件】开始调研前，建议先用 `rw_method` 读取「流程」「核查」「KPI」「合作地图」「场景」「成本」「试点」「数据源」「雷区」「模板」「对外文档」等文件，避免重复踩坑。',
       ].join('\n'),
     });
     log('系统提示词已注册');

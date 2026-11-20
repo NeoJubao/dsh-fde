@@ -157,7 +157,7 @@ export const ENGAGEMENT_STAGES = [
       tools: [
         { kind: 'skill', name: 'fde-solution', label: '方案技能' },
         { kind: 'method', name: '07-成本评估与报价.md', label: '成本评估与报价' },
-        { kind: 'method', name: '04-领域模型合作方法论.md', label: '领域模型合作方法论' },
+        { kind: 'method', name: '03-合作地图构建法.md', label: '合作地图构建法' },
         { kind: 'template', name: '成本测算与报价单.md', label: '成本测算与报价单' },
         { kind: 'tool', name: 'fde_quote', label: '成本与报价测算' },
         { kind: 'tool', name: 'fde_library', label: '资料库' },
@@ -186,6 +186,7 @@ export const ENGAGEMENT_STAGES = [
       outputs: ['pilot/Pilot Charter.md', 'pilot/成功指标与验收口径.md'],
       tools: [
         { kind: 'skill', name: 'fde-pilot', label: '试点技能' },
+        { kind: 'method', name: '04-试点交付与采用.md', label: '试点、交付与采用' },
         { kind: 'method', name: '03-合作地图构建法.md', label: '合作地图构建法' },
         { kind: 'method', name: '07-成本评估与报价.md', label: '成本评估与报价' },
         { kind: 'method', name: '06-场景选择与数据体检.md', label: '场景选择与数据体检' },
@@ -214,6 +215,7 @@ export const ENGAGEMENT_STAGES = [
       outputs: ['delivery/实施计划.md', 'delivery/验收清单.md', 'delivery/风险登记.md'],
       tools: [
         { kind: 'skill', name: 'fde-delivery', label: '交付技能' },
+        { kind: 'method', name: '04-试点交付与采用.md', label: '试点、交付与采用' },
         { kind: 'method', name: '05-正式对外文档交付（DOCX·公文版式）.md', label: '正式对外文档交付' },
         { kind: 'tool', name: 'rw_export_pdf', label: '导出 PDF' },
         { kind: 'tool', name: 'rw_qa_pdf', label: 'PDF 版面检查' },
@@ -242,6 +244,7 @@ export const ENGAGEMENT_STAGES = [
       outputs: ['adoption/使用证据.md', 'adoption/价值证明.md', 'adoption/扩展地图.md'],
       tools: [
         { kind: 'skill', name: 'fde-adoption', label: '采用技能' },
+        { kind: 'method', name: '04-试点交付与采用.md', label: '试点、交付与采用' },
         { kind: 'method', name: '01-事实核查协议.md', label: '事实核查协议' },
         { kind: 'tool', name: 'fde_harvest', label: '复盘草稿' },
         { kind: 'tool', name: 'fde_library', label: '资料库' },

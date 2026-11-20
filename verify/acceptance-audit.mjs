@@ -1451,18 +1451,19 @@ sec('11. 一致性 · 客户端路由集合 ⇄ index.js 注册 / meta 单一来
 
 /* ============================ 12. skills 与降级 ============================ */
 
-sec('12. skills · 16 个技能（11 个 fde-* + 4 方法库 + 1 通用）frontmatter / 注册 / 服务与目录降级（spec §10 / §16.9）');
+sec('12. skills · 15 个技能（11 个 fde-* + 3 方法库 + 1 通用）frontmatter / 注册 / 服务与目录降级（spec §10 / §16.9 / §22.10）');
 const SKILLS_DIR = join(PLUGIN, 'skills');
 const EXPECTED_SKILLS = ['fde-engagement', 'fde-discovery', 'fde-meeting', 'fde-scoping', 'fde-solution',
   'fde-pilot', 'fde-delivery', 'fde-adoption', 'fde-board', 'fde-harvest', 'fde-bid-radar'];
-const LEGACY_SKILLS = ['company-research', 'meeting-prep', 'proposal-forge', 'domain-model-partnership'];
+/* ADR 0010 D17：领域模型合作不具备通用性，方法与技能一并移出；方法库技能 4 → 3。 */
+const LEGACY_SKILLS = ['company-research', 'meeting-prep', 'proposal-forge'];
 {
   const found = api.discoverSkills(SKILLS_DIR);
-  check('discoverSkills 共 16 个（11 FDE（v1.3 新增 fde-scoping）+ 4 方法库 + 1 通用）',
-    found.length === 16 && found.filter((s) => s.name.startsWith('fde-')).length === 11, found.map((s) => s.name));
+  check('discoverSkills 共 15 个（11 FDE（v1.3 新增 fde-scoping）+ 3 方法库 + 1 通用）',
+    found.length === 15 && found.filter((s) => s.name.startsWith('fde-')).length === 11, found.map((s) => s.name));
   check('11 个 FDE 技能名与 spec §10 / §17.8 / §20.4 一一对应',
     JSON.stringify(found.filter((s) => s.name.startsWith('fde-')).map((s) => s.name).sort()) === JSON.stringify(EXPECTED_SKILLS.slice().sort()));
-  check('4 个方法库技能保留', LEGACY_SKILLS.every((n) => found.some((s) => s.name === n)));
+  check('3 个方法库技能保留；已移出的领域模型技能不再注册', LEGACY_SKILLS.every((n) => found.some((s) => s.name === n)) && !found.some((s) => s.name === 'domain-model-partnership'));
   check('1 个通用技能 longdoc-brief 保留', found.some((s) => s.name === 'longdoc-brief'));
   for (const sk of found) {
     const dir = basename(dirname(sk.path));
@@ -1478,7 +1479,7 @@ const LEGACY_SKILLS = ['company-research', 'meeting-prep', 'proposal-forge', 'do
     check('FDE 技能 ' + n + ' 正文含 触发/输入/步骤/产物/边界',
       ['触发', '输入', '步骤', '产物', '边界'].every((k) => body.includes(k)));
   }
-  check('宿主 mock 已注册全部 16 个技能（v1.3：11 FDE + 4 方法库 + 1 通用）', HOST.skills.length === 16 && HOST.skills.filter((x) => String(x.name).startsWith('fde-')).length === 11, HOST.skills.length);
+  check('宿主 mock 已注册全部 15 个技能（11 FDE + 3 方法库 + 1 通用）', HOST.skills.length === 15 && HOST.skills.filter((x) => String(x.name).startsWith('fde-')).length === 11, HOST.skills.length);
   check('注册项字段齐全（name/description/content/path/resourceBase）且无重名',
     HOST.skills.every((s) => s.name && s.description && typeof s.content === 'string' && s.path && s.resourceBase) &&
     new Set(HOST.skills.map((s) => s.name)).size === HOST.skills.length);

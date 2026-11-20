@@ -8,7 +8,7 @@
 
 - 宿主半：`index.js` + `src/host/`（工具、路由、提示词、技能注册、看板状态、资料库刷新、两个计算工具）。
 - 客户端半：`src/ui/ui-panel.js`（**5 页签 + 页头设置入口**面板：今日/客户/资料/流程/情报；v2 的界面契约见 `docs/01-spec.md` §22，界面用词见 `docs/adr/0010-v2-可交付版.md` D1）→ `node build.mjs` 生成 `client.js`。
-- 方法论与技能：`methods/`（8 篇）、`reference/`、`templates/`、`skills/`（**11 个 `fde-*` 编排技能**，含 v1.3 新增 `fde-scoping`；另 4 个方法库技能 + 1 个通用技能 `longdoc-brief`，长文一页纸（brief））。
+- 方法论与技能：`methods/`（8 篇）、`reference/`、`templates/`、`skills/`（**11 个 `fde-*` 编排技能**，含 v1.3 新增 `fde-scoping`；另 3 个方法库技能 + 1 个通用技能 `longdoc-brief`，长文一页纸（brief））。
 - 状态：`research/.fde/board.json`（看板，属于**工作区**）；`research/.fde/fde-library.json`（资料库每日缓存）；`research/.fde/scys-fde.json`（生财社区缓存）；`research/.fde/scys-auth.json`（生财链接授权，0600，可由面板清除）。
 
 ## 技术栈
@@ -27,7 +27,7 @@
 | FDE 工具（11） | `fde_board` · `fde_engagement` · `fde_item` · `fde_attention` · `fde_brief` · `fde_harvest` · `fde_bid` · **`fde_library`**（feed/search/refresh）· **`fde_scenario`**（evaluate/template）· **`fde_quote`**（calculate/template）· `scys_fde`（生财情报，**兼容保留**） |
 | 执行工具（5） | `rw_status` · `rw_scaffold` · `rw_export_pdf` · `rw_qa_pdf` · `rw_method`（只读/执行，不承担编排） |
 | 编排技能（11） | `fde-engagement` / `fde-discovery` / `fde-meeting` / **`fde-scoping`** / `fde-solution` / `fde-pilot` / `fde-delivery` / `fde-adoption` / `fde-board` / `fde-harvest` / `fde-bid-radar` |
-| 方法库技能（4） | `company-research` / `meeting-prep` / `proposal-forge` / `domain-model-partnership`（不独立触发） |
+| 方法库技能（3） | `company-research` / `meeting-prep` / `proposal-forge`（不独立触发） |
 | 通用技能（1） | `longdoc-brief`（长文一页纸（brief）：阅读版 HTML + 传阅版；非 FDE 阶段技能，由 `fde-solution` / `fde-delivery` 长文产物引用） |
 
 > 生财授权：三条路径按优先级——链接授权（面板保存到 `research/.fde/scys-auth.json`）→ `FDE_SCYS_TOKEN` → 兼容旧 token 文件；token 不写日志/不回显。
@@ -72,7 +72,7 @@
 | `docs/ui-contract/` | **UI 契约 v1**：`layout.md` 结构 / `design.md` 视觉 / `tokens.md` 取值 / `region-ids.mjs` 区域 id / `audit-ui-contract.mjs` 8 项体检（迁移中，advisory） |
 | `docs/RELEASE.md` | 发布手册：发布前清单、npm/git 命令、回滚、人工确认项 |
 | `docs/research/` | 侦察底稿，只读参考（`fde-library/` 四路研究 + 目录 JSON） |
-| `methods/` | 00 流程 · 01 核查 · 02 KPI · 03 合作地图 · 04 领域模型 · 05 对外文档 · 06 场景选择 · 07 成本报价 |
+| `methods/` | 00 流程 · 01 核查 · 02 KPI · 03 合作地图 · 04 试点交付与采用 · 05 对外文档 · 06 场景选择 · 07 成本报价 |
 | `templates/` | 项目档案 · 场景评估表 · 成本测算与报价单 |
 | `reference/` | 数据源 · 雷区 · 文档模板 · PDF 核查 · `fde-pricing.json` · `fde-library/catalog.json` |
 | `skills/` | `fde-*` 编排技能；旧 4 个技能是方法库，不独立触发 |
@@ -101,6 +101,7 @@
 17. **提醒口径（spec §22.2）**：与「待我处理」重复的四条规则（`stall` / `overdue` / `gate_ready` / `review_lag`）标 `derived`，不生成提醒；条件不成立的提醒自动失效；无变化时读取不写盘。
 18. **阶段口径（spec §22.9）**：推进条件属于**要进入的那个阶段**——客户停在某一列，表示这一列的材料已经有了。抽屉里的推进条件、看板卡片的「待确认」、交给 AI 用的做法与技能、指南链接，四处都取要进入的阶段（最后一个阶段取当前阶段）；改其中一处要同时核对另外三处。
 19. **布局口径**：页面里的区块默认不被纵向压缩，内容多了整页往下滚；只有「占满剩余高度、在自己里面滚动」的区块（看板、今日四块、资料双栏）自己声明 `flex:1 1 auto;min-height:0`，所在页面才用 `fde-view-fill`。改布局后在矮窗口（1440×620、900×520）下看过再提交，说明见 `docs/DEVELOPING.md` §6。
+20. **方法库口径（spec §22.10）**：方法要通用——只适用于某一类客户或某一次合作的内容不进 `methods/`。例子不带可识别的日期、地名、地方平台域名、行业称呼和真实数字，举例数字标「例」；时间门限、判定规则这类经验值标「方法默认值（待验证）」。
 
 ## 禁区（CRITICAL）
 

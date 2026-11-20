@@ -85,5 +85,5 @@ description: 当用户问「今天该做什么」「客户到哪一步了」、�
 - `methods/00-调研执行流程.md` —— 端到端流程与落盘；`methods/06`（场景选择）、`methods/07`（成本报价）分别对应 `scoping` 与 `solution`。
 - `reference/雷区清单.md` —— 已踩过的坑（按主体归属、称谓、数字口径、方案商务、排版、现场纪律、插件开发分类）与交付前终检。
 - `docs/01-spec.md` §2 阶段与门禁、§5 注意力模型、§6 自主性策略（这三节用的是代码与数据里的叫法）；§22 是 v2.0 的界面用词与结构。
-- 旧技能 `company-research` / `meeting-prep` / `proposal-forge` / `domain-model-partnership` 是**方法库**，由本技能与下层阶段技能引用，不独立自动触发。
+- 旧技能 `company-research` / `meeting-prep` / `proposal-forge` 是**方法库**，由本技能与下层阶段技能引用，不独立自动触发。
 - 11 个编排技能（`fde-*`）由本技能按阶段分流；工具口径见 `docs/01-spec.md` §7、§19–§21。

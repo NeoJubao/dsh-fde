@@ -14,7 +14,7 @@
 - **今日**只放两类事：**待我处理**（卡住了、等你决定、待验收、已逾期……每条都有处理动作）和**提醒**（快到期、没定下一步、会面快到了、客户有新招采公告）。
 - **交给 AI**：在客户或任务上点一下，新开一个会话，AI 按要进入的那个阶段的做法，准备还差的材料，做完回到面板等你验收。
 - **任务**在 5 个状态间流转：待开始 / 进行中 / 等对方 / 待验收 / 已完成。
-- **方法和技能随插件带着**：8 篇方法、16 个技能，离线可读。
+- **方法和技能随插件带着**：8 篇方法、15 个技能，离线可读。
 
 推进阶段、确认推进条件、标记验收完成、对外发送材料、删除客户或任务，这些事**只能由你来做**，AI 做不了。
 
@@ -91,7 +91,7 @@ python3 tools/install_profiles.py --run    # 检查后执行安装
 | 看板与客户工具（11） | `fde_board` · `fde_engagement` · `fde_item` · `fde_attention` · `fde_brief` · `fde_harvest` · `fde_bid` · `fde_library` · `fde_scenario` · `fde_quote` · `scys_fde` |
 | 执行工具（5） | `rw_status` · `rw_scaffold` · `rw_export_pdf` · `rw_qa_pdf` · `rw_method` |
 | 阶段技能（11） | `fde-engagement` / `fde-discovery` / `fde-meeting` / `fde-scoping` / `fde-solution` / `fde-pilot` / `fde-delivery` / `fde-adoption` / `fde-board` / `fde-harvest` / `fde-bid-radar` |
-| 方法库技能（4） | `company-research` / `meeting-prep` / `proposal-forge` / `domain-model-partnership` |
+| 方法库技能（3） | `company-research` / `meeting-prep` / `proposal-forge` |
 | 通用技能（1） | `longdoc-brief`：把长文压成一页纸 |
 
 `fde_scenario`（场景评估）和 `fde_quote`（成本与报价测算）是两个可复算的计算工具：同样的输入得到同样的数字，不写文件、不联网。
@@ -112,7 +112,7 @@ python3 tools/install_profiles.py --run    # 检查后执行安装
 
 | 项 | 要求 |
 |---|---|
-| DSH | `engines.dsh: >=0.2.0-rc.2 <0.3.0-0`；已在 `0.2.1-rc.5` 上核对技能加载、工具返回值与界面地址解析；桌面端 `0.2.2-rc.5` 的官方实现实测 16 个工具可注册可执行、16 个技能可加载 |
+| DSH | `engines.dsh: >=0.2.0-rc.2 <0.3.0-0`；已在 `0.2.1-rc.5` 上核对技能加载、工具返回值与界面地址解析；桌面端 `0.2.2-rc.5` 的官方实现实测 16 个工具可注册可执行、全部技能可加载 |
 | Node | 20 或更新 |
 | 运行时依赖 | 无（不引入 `@deepseek-ai/*`；只硬性依赖 DSH 的工具与系统提示词两项服务，其余服务没有时对应功能降级） |
 | 可选：招采雷达 | 独立插件，提供只读的招采数据 |

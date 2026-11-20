@@ -73,7 +73,7 @@ export const STAGE_GUIDES = {
   },
   solution: {
     skill: 'fde-solution',
-    methods: ['methods/03-合作地图构建法.md', 'methods/04-领域模型合作方法论.md', 'methods/07-成本评估与报价.md', 'reference/文档模板库.md'],
+    methods: ['methods/03-合作地图构建法.md', 'methods/07-成本评估与报价.md', 'reference/文档模板库.md'],
     goal: '方案：能对外讲清「做什么、怎么落地、边界在哪、要多少钱」的正式方案',
     steps: [
       '从场景评估表收敛为方案：目标 → 范围（含明确不做）→ 分阶段路径 → 双方分工 → 验收口径 → 风险',
@@ -90,7 +90,7 @@ export const STAGE_GUIDES = {
     skill: 'fde-pilot',
     /* 07：里程碑付款、试点（低价/免费）与「转正式的条件」；06：四条硬门槛里的 14 天 / 90 天。
      * （原先指向 reference/文档模板库.md，那里没有试点相关内容。） */
-    methods: ['methods/03-合作地图构建法.md', 'methods/07-成本评估与报价.md', 'methods/06-场景选择与数据体检.md'],
+    methods: ['methods/04-试点交付与采用.md', 'methods/03-合作地图构建法.md', 'methods/07-成本评估与报价.md', 'methods/06-场景选择与数据体检.md'],
     goal: '试点：范围受控、指标可验收的 POC 方案',
     steps: [
       '写 Pilot Charter 三条时间门限：首次集成 ≤14 天、生产上线 ≤90 天、撤出 ≤120 天',
@@ -105,7 +105,7 @@ export const STAGE_GUIDES = {
     skill: 'fde-delivery',
     /* 07：变更单机制、验收与质保、风险清单；成本测算与报价单模板：里程碑与付款、验收方式、变更机制。
      * （原先指向 methods/00-调研执行流程.md，那里只到方案生成，没有交付内容。） */
-    methods: ['methods/07-成本评估与报价.md', 'templates/成本测算与报价单.md', 'methods/05-正式对外文档交付（DOCX·公文版式）.md'],
+    methods: ['methods/04-试点交付与采用.md', 'methods/07-成本评估与报价.md', 'templates/成本测算与报价单.md', 'methods/05-正式对外文档交付（DOCX·公文版式）.md'],
     goal: '交付：可检查的实施计划、验收清单与风险登记',
     steps: [
       '实施计划：里程碑、依赖、责任人、变更走确认流程',
@@ -119,7 +119,7 @@ export const STAGE_GUIDES = {
     skill: 'fde-adoption',
     /* 01：证据分级（A/B/C）与数字自检——使用证据与价值证明都要过这一关。
      * （原先指向 methods/00-调研执行流程.md，那里没有采用阶段的内容。） */
-    methods: ['methods/01-事实核查协议.md', 'reference/数据源清单.md'],
+    methods: ['methods/04-试点交付与采用.md', 'methods/01-事实核查协议.md', 'reference/数据源清单.md'],
     goal: '采用：使用证据、培训完成、价值证明与扩展地图',
     steps: [
       '收集使用证据（A/B/C 分级，注明来源与时间）',
