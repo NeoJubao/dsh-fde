@@ -1,6 +1,6 @@
 {
   "name": "dsh-fde",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "description": "FDE 工作站：DeepSeek Harness 插件。一屏看清每个客户到哪一步、今天要处理什么、还差什么才能往下走，并把活交给 AI 去做。含 8 阶段指南、方法库、资料库与招采关联。",
   "license": "MIT",

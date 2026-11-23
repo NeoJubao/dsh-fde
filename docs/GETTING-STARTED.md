@@ -1,6 +1,6 @@
 # 10 分钟上手：FDE 工作站（`dsh-fde`）
 
-> 适用版本：**v2.0.0**（DSH `0.2.0-rc.2` 起，已在 `0.2.1-rc.5` 上核对，桌面端 `0.2.2-rc.5` 实测通过）
+> 适用版本：**v2.1.0**（DSH `0.2.0-rc.2` 起，已在 `0.2.1-rc.5` 上核对，桌面端 `0.2.2-rc.5` 实测通过）
 > 给第一次安装的人：装好 → 建第一个客户 → 走通一轮「线索到采用」。
 > 能力与边界见 [README](../README.md)；规格见 [docs/01-spec.md](01-spec.md)。
 
@@ -30,7 +30,7 @@ dsh plugin --profile web add ./dsh-fde
 
 # C. 压缩包
 npm pack ./dsh-fde
-dsh plugin --profile web add ./dsh-fde-2.0.0.tgz
+dsh plugin --profile web add ./dsh-fde-2.1.0.tgz
 ```
 
 **装完重启 DSH。** 重启后侧栏出现「FDE 工作站」（四个方块的图标）。

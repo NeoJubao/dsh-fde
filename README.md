@@ -4,7 +4,7 @@
 
 > 一屏看清每个客户到哪一步、今天要处理什么、还差什么才能往下走，并把活交给 AI 去做。
 > 跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里，中文界面，纯 JS，零运行时依赖。
-> **版本：v2.0.0** ｜ DSH：`0.2.0-rc.2` 起，已在 `0.2.1-rc.5` 上核对，桌面端 `0.2.2-rc.5` 实测通过 ｜ 许可：代码 MIT / 内容 CC BY 4.0
+> **版本：v2.1.0** ｜ DSH：`0.2.0-rc.2` 起，已在 `0.2.1-rc.5` 上核对，桌面端 `0.2.2-rc.5` 实测通过 ｜ 许可：代码 MIT / 内容 CC BY 4.0
 
 ![今日](https://raw.githubusercontent.com/NeoJubao/dsh-fde/main/assets/screenshot-today.png)
 
@@ -31,7 +31,7 @@ git clone https://github.com/NeoJubao/dsh-fde.git
 dsh plugin --profile web add ./dsh-fde
 
 # 方式三：压缩包
-npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-2.0.0.tgz
+npm pack ./dsh-fde && dsh plugin --profile web add ./dsh-fde-2.1.0.tgz
 ```
 
 装好后**重启 DSH**，侧栏出现「FDE 工作站」。第一次用，先看 [10 分钟上手教程](https://github.com/NeoJubao/dsh-fde/blob/main/docs/GETTING-STARTED.md)。
